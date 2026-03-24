@@ -32,6 +32,9 @@ async function bootstrap() {
   // Подключаем cookie parser
   app.use(cookieParser());
 
+  // Глобальный префикс для всех роутов
+  app.setGlobalPrefix('api');
+
   // Глобальная валидация
   app.useGlobalPipes(
     new ValidationPipe({
