@@ -35,10 +35,11 @@ export class AuthResolver {
     );
 
     // Устанавливаем refresh token в httpOnly cookie
+    const isProduction = process.env.NODE_ENV === 'production';
     context.res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true, // Всегда true (для sameSite: 'none' обязательно)
+      sameSite: isProduction ? 'lax' : 'none', // 'none' в dev для cross-origin
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
       path: '/',
     });
@@ -61,10 +62,11 @@ export class AuthResolver {
       await this.authService.refreshTokens(refreshToken);
 
     // Обновляем refresh token в cookie
+    const isProduction = process.env.NODE_ENV === 'production';
     context.res.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true, // Всегда true (для sameSite: 'none' обязательно)
+      sameSite: isProduction ? 'lax' : 'none', // 'none' в dev для cross-origin
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });

@@ -41,10 +41,11 @@ export class AuthController {
     );
 
     // Устанавливаем refresh token в httpOnly cookie
+    const isProduction = process.env.NODE_ENV === 'production';
     response.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // только HTTPS в продакшене
-      sameSite: 'lax',
+      secure: true, // Всегда true (для sameSite: 'none' обязательно)
+      sameSite: isProduction ? 'lax' : 'none', // 'none' в dev для cross-origin
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
       path: '/',
     });
@@ -71,10 +72,11 @@ export class AuthController {
       await this.authService.refreshTokens(refreshToken);
 
     // Обновляем refresh token в cookie
+    const isProduction = process.env.NODE_ENV === 'production';
     response.cookie('refreshToken', newRefreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true, // Всегда true (для sameSite: 'none' обязательно)
+      sameSite: isProduction ? 'lax' : 'none', // 'none' в dev для cross-origin
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });
