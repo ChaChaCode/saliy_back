@@ -1,5 +1,5 @@
 import { Resolver, Mutation, Query, Args, Context } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, UnauthorizedException } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { User } from './entities/user.entity';
@@ -54,7 +54,7 @@ export class AuthResolver {
     const refreshToken = context.req.cookies?.refreshToken;
 
     if (!refreshToken) {
-      throw new Error('Refresh token не найден');
+      throw new UnauthorizedException('Refresh token не найден');
     }
 
     const { accessToken, refreshToken: newRefreshToken } =
