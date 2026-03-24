@@ -99,11 +99,12 @@ export class AuthController {
       await this.authService.logout(refreshToken);
     }
 
-    // Удаляем cookie
+    // Удаляем cookie (настройки должны совпадать с установкой)
+    const isProduction = process.env.NODE_ENV === 'production';
     response.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: true,
+      sameSite: isProduction ? 'lax' : 'none',
       path: '/',
     });
 
