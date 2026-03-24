@@ -21,6 +21,25 @@ export class AuthService {
   }
 
   async sendVerificationCode(email: string): Promise<void> {
+    // Проверяем последний отправленный код для этого email
+    const lastCode = await this.prisma.verificationCode.findFirst({
+      where: { email },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Если код был отправлен менее минуты назад, возвращаем ошибку
+    if (lastCode) {
+      const timeSinceLastCode = Date.now() - lastCode.createdAt.getTime();
+      const oneMinute = 60 * 1000; // 1 минута в миллисекундах
+
+      if (timeSinceLastCode < oneMinute) {
+        const secondsLeft = Math.ceil((oneMinute - timeSinceLastCode) / 1000);
+        throw new BadRequestException(
+          `Код уже был отправлен. Повторная отправка возможна через ${secondsLeft} секунд`,
+        );
+      }
+    }
+
     // Генерируем 6-значный код
     const code = this.generateCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
