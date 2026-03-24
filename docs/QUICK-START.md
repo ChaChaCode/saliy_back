@@ -2,8 +2,8 @@
 
 ## Базовая информация
 
-**API URL:** `https://api.saliy-shop.ru`
-**GraphQL Playground:** `https://api.saliy-shop.ru/graphql`
+**API URL:** `https://saliy-shop.ru/api`
+**GraphQL Playground:** `https://saliy-shop.ru/api/graphql`
 
 ---
 
@@ -52,7 +52,7 @@ new ApolloClient({
 
 **REST:**
 ```
-POST https://api.saliy-shop.ru/auth/send-code
+POST https://saliy-shop.ru/api/auth/send-code
 Content-Type: application/json
 
 {
@@ -84,7 +84,7 @@ mutation {
 
 **REST:**
 ```
-POST https://api.saliy-shop.ru/auth/verify-code
+POST https://saliy-shop.ru/api/auth/verify-code
 Content-Type: application/json
 
 {
@@ -124,7 +124,7 @@ mutation {
 
 **REST:**
 ```
-GET https://api.saliy-shop.ru/auth/me
+GET https://saliy-shop.ru/api/auth/me
 Authorization: Bearer <accessToken>
 ```
 
@@ -159,7 +159,7 @@ query {
 
 **REST:**
 ```
-POST https://api.saliy-shop.ru/auth/refresh
+POST https://saliy-shop.ru/api/auth/refresh
 Content-Type: application/json
 ```
 
@@ -191,7 +191,7 @@ mutation {
 
 **REST:**
 ```
-POST https://api.saliy-shop.ru/auth/logout
+POST https://saliy-shop.ru/api/auth/logout
 ```
 
 **GraphQL:**
@@ -335,7 +335,7 @@ mutation {
 
 ### GraphQL (Playground)
 
-1. Открыть https://api.saliy-shop.ru/graphql
+1. Открыть https://saliy-shop.ru/api/graphql
 2. Включить "Request Credentials" в настройках (шестеренка)
 3. Писать и тестировать запросы визуально
 
@@ -358,8 +358,8 @@ mutation {
 ## Полезные ссылки
 
 - [Полная документация API](./API-DOCUMENTATION.md)
-- [GraphQL Playground](https://api.saliy-shop.ru/graphql)
-- [Production API](https://api.saliy-shop.ru)
+- [GraphQL Playground](https://saliy-shop.ru/api/graphql)
+- [Production API](https://saliy-shop.ru/api)
 
 ---
 

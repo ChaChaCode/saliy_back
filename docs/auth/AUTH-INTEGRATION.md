@@ -35,7 +35,7 @@
 ### Для Fetch API
 
 ```javascript
-const API_URL = 'https://api.saliy-shop.ru';
+const API_URL = 'https://saliy-shop.ru/api';
 
 const fetchWithCredentials = (url, options = {}) => {
   return fetch(url, {
@@ -55,7 +55,7 @@ const fetchWithCredentials = (url, options = {}) => {
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://api.saliy-shop.ru',
+  baseURL: 'https://saliy-shop.ru/api',
   withCredentials: true, // Отправка cookies
   headers: {
     'Content-Type': 'application/json',
@@ -72,7 +72,7 @@ import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 
 const httpLink = createHttpLink({
-  uri: 'https://api.saliy-shop.ru/graphql',
+  uri: 'https://saliy-shop.ru/api/graphql',
   credentials: 'include', // Отправка cookies
 });
 
@@ -114,7 +114,7 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       // Попытка получить профиль
-      const response = await fetch('https://api.saliy-shop.ru/auth/me', {
+      const response = await fetch('https://saliy-shop.ru/api/auth/me', {
         credentials: 'include',
       });
 
@@ -134,7 +134,7 @@ export const AuthProvider = ({ children }) => {
 
   const refreshAccessToken = async () => {
     try {
-      const response = await fetch('https://api.saliy-shop.ru/auth/refresh', {
+      const response = await fetch('https://saliy-shop.ru/api/auth/refresh', {
         method: 'POST',
         credentials: 'include',
       });
@@ -158,7 +158,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const sendCode = async (email) => {
-    const response = await fetch('https://api.saliy-shop.ru/auth/send-code', {
+    const response = await fetch('https://saliy-shop.ru/api/auth/send-code', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -174,7 +174,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const verifyCode = async (email, code) => {
-    const response = await fetch('https://api.saliy-shop.ru/auth/verify-code', {
+    const response = await fetch('https://saliy-shop.ru/api/auth/verify-code', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -197,7 +197,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await fetch('https://api.saliy-shop.ru/auth/logout', {
+      await fetch('https://saliy-shop.ru/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
       });
@@ -237,7 +237,7 @@ export const useAuth = () => {
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://api.saliy-shop.ru',
+  baseURL: 'https://saliy-shop.ru/api',
   withCredentials: true,
 });
 

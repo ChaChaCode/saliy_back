@@ -2,8 +2,8 @@
 
 Документация GraphQL API для модуля авторизации.
 
-**Endpoint:** `https://api.saliy-shop.ru/graphql`
-**Playground:** `https://api.saliy-shop.ru/graphql` (открыть в браузере)
+**Endpoint:** `https://saliy-shop.ru/api/graphql`
+**Playground:** `https://saliy-shop.ru/api/graphql` (открыть в браузере)
 
 ---
 
@@ -397,7 +397,7 @@ import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 
 const httpLink = createHttpLink({
-  uri: 'https://api.saliy-shop.ru/graphql',
+  uri: 'https://saliy-shop.ru/api/graphql',
   credentials: 'include', // Важно для cookies
 });
 
@@ -424,7 +424,7 @@ import { createClient, fetchExchange } from 'urql';
 import { authExchange } from '@urql/exchange-auth';
 
 const client = createClient({
-  url: 'https://api.saliy-shop.ru/graphql',
+  url: 'https://saliy-shop.ru/api/graphql',
   fetchOptions: {
     credentials: 'include', // Важно для cookies
   },
@@ -443,7 +443,7 @@ const client = createClient({
 
 **Query:**
 ```javascript
-fetch('https://api.saliy-shop.ru/graphql', {
+fetch('https://saliy-shop.ru/api/graphql', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -468,7 +468,7 @@ fetch('https://api.saliy-shop.ru/graphql', {
 
 **Mutation:**
 ```javascript
-fetch('https://api.saliy-shop.ru/graphql', {
+fetch('https://saliy-shop.ru/api/graphql', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -497,7 +497,7 @@ fetch('https://api.saliy-shop.ru/graphql', {
 
 **Query:**
 ```bash
-curl -X POST https://api.saliy-shop.ru/graphql \
+curl -X POST https://saliy-shop.ru/api/graphql \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   --cookie "refreshToken=YOUR_REFRESH_TOKEN" \
@@ -508,7 +508,7 @@ curl -X POST https://api.saliy-shop.ru/graphql \
 
 **Mutation:**
 ```bash
-curl -X POST https://api.saliy-shop.ru/graphql \
+curl -X POST https://saliy-shop.ru/api/graphql \
   -H "Content-Type: application/json" \
   -d '{
     "query": "mutation { sendCode(input: { email: \"test@example.com\" }) { message } }"
@@ -520,7 +520,7 @@ curl -X POST https://api.saliy-shop.ru/graphql \
 ## GraphQL Playground
 
 Для тестирования API откройте в браузере:
-**https://api.saliy-shop.ru/graphql**
+**https://saliy-shop.ru/api/graphql**
 
 ### Настройка Playground для работы с cookies:
 

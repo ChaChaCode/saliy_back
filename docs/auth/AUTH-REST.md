@@ -2,7 +2,7 @@
 
 Документация REST endpoints для модуля авторизации.
 
-**Base URL:** `https://api.saliy-shop.ru`
+**Base URL:** `https://saliy-shop.ru/api`
 
 ---
 
@@ -334,14 +334,14 @@ Authorization: Bearer <access_token>
 
 ### Отправка кода
 ```bash
-curl -X POST https://api.saliy-shop.ru/auth/send-code \
+curl -X POST https://saliy-shop.ru/api/auth/send-code \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
 ```
 
 ### Верификация кода
 ```bash
-curl -X POST https://api.saliy-shop.ru/auth/verify-code \
+curl -X POST https://saliy-shop.ru/api/auth/verify-code \
   -H "Content-Type: application/json" \
   -c cookies.txt \
   -d '{"email": "test@example.com", "code": "1234"}'
@@ -349,13 +349,13 @@ curl -X POST https://api.saliy-shop.ru/auth/verify-code \
 
 ### Получить профиль
 ```bash
-curl https://api.saliy-shop.ru/auth/me \
+curl https://saliy-shop.ru/api/auth/me \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ### Обновить токен
 ```bash
-curl -X POST https://api.saliy-shop.ru/auth/refresh \
+curl -X POST https://saliy-shop.ru/api/auth/refresh \
   -H "Content-Type: application/json" \
   -b cookies.txt \
   -c cookies.txt
@@ -363,7 +363,7 @@ curl -X POST https://api.saliy-shop.ru/auth/refresh \
 
 ### Выход
 ```bash
-curl -X POST https://api.saliy-shop.ru/auth/logout \
+curl -X POST https://saliy-shop.ru/api/auth/logout \
   -H "Content-Type: application/json" \
   -b cookies.txt
 ```

@@ -4,8 +4,8 @@
 
 ## Базовая информация
 
-**Production API:** `https://api.saliy-shop.ru`
-**GraphQL Playground:** `https://api.saliy-shop.ru/graphql`
+**Production API:** `https://saliy-shop.ru/api`
+**GraphQL Playground:** `https://saliy-shop.ru/api/graphql`
 **API Version:** 0.0.1
 
 ---
@@ -102,7 +102,7 @@ API настроен для работы с:
 - curl
 
 ### GraphQL API
-- [GraphQL Playground](https://api.saliy-shop.ru/graphql) - встроенный
+- [GraphQL Playground](https://saliy-shop.ru/api/graphql) - встроенный
 - [Apollo Studio](https://studio.apollographql.com/)
 - [Altair GraphQL Client](https://altairgraphql.dev/)
 
