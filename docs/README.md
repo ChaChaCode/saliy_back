@@ -22,10 +22,9 @@
 
 ### 🔐 Аутентификация
 
-Система авторизации через email с кодом верификации.
+Система авторизации через email с кодом верификации (только REST API).
 
-- **[REST API для авторизации](./auth/AUTH-REST.md)** - REST endpoints
-- **[GraphQL API для авторизации](./auth/AUTH-GRAPHQL.md)** - GraphQL queries и mutations
+- **[REST API для авторизации](./auth/AUTH-REST.md)** - все endpoints авторизации
 - **[Гайд по интеграции авторизации](./auth/AUTH-INTEGRATION.md)** - пошаговое руководство
 
 ---
@@ -46,7 +45,6 @@ docs/
 │
 ├── auth/                       # Модуль авторизации
 │   ├── AUTH-REST.md           # REST endpoints
-│   ├── AUTH-GRAPHQL.md        # GraphQL API
 │   └── AUTH-INTEGRATION.md    # Гайд по интеграции
 │
 └── common/                     # Общая документация
@@ -77,34 +75,16 @@ API настроен для работы с:
 
 ---
 
-## Что использовать: REST или GraphQL?
-
-**REST API:**
-- ✅ Проще интегрировать
-- ✅ Стандартные HTTP методы
-- ✅ Привычная структура
-
-**GraphQL API:**
-- ✅ Гибкость в выборе полей
-- ✅ Один endpoint для всех запросов
-- ✅ Типизация из коробки
-- ✅ GraphQL Playground для тестирования
-
-**Оба API предоставляют одинаковый функционал - выбирайте что удобнее!**
-
----
-
 ## Тестирование API
 
-### REST API
+**Инструменты для тестирования REST API:**
 - [Postman](https://www.postman.com/)
 - [Insomnia](https://insomnia.rest/)
 - curl
 
-### GraphQL API
-- [GraphQL Playground](https://saliy-shop.ru/api/graphql) - встроенный
-- [Apollo Studio](https://studio.apollographql.com/)
-- [Altair GraphQL Client](https://altairgraphql.dev/)
+**GraphQL доступен для других модулей:**
+- [GraphQL Playground](https://saliy-shop.ru/api/graphql) - встроенный (для продуктов, заказов и т.д.)
+- Авторизация работает только через REST API
 
 ---
 

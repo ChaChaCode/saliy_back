@@ -372,7 +372,6 @@ curl -X POST https://saliy-shop.ru/api/auth/logout \
 
 ## См. также
 
-- [GraphQL API для авторизации](./AUTH-GRAPHQL.md)
 - [Гайд по интеграции](./AUTH-INTEGRATION.md)
 - [Типы данных](../common/TYPES.md)
 - [Коды ошибок](../common/ERRORS.md)
