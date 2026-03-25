@@ -1,7 +1,7 @@
 // Тестирование API пользователя
 const axios = require('axios');
 
-const BASE_URL = 'http://localhost:3000/api';
+const BASE_URL = process.env.API_URL || 'https://saliy-shop.ru/api';
 let accessToken = '';
 
 // Цвета для вывода

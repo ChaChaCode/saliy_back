@@ -1,0 +1,185 @@
+# API категорий
+
+## Структура категории
+
+```typescript
+{
+  id: number;              // ID категории
+  name: string;            // Название (уникальное)
+  slug: string;            // URL slug (уникальный)
+  type: category_type;     // Тип категории
+  isActive: boolean;       // Активна ли категория
+  createdAt: Date;         // Дата создания
+  updatedAt: Date;         // Дата обновления
+}
+```
+
+### Типы категорий (category_type)
+- `TOP` - Верхняя одежда (толстовки, футболки)
+- `BOTTOM` - Нижняя одежда (штаны)
+- `ACCESSORIES` - Аксессуары (кепки, сумки)
+- `SPORT` - Спортивная одежда
+- `OTHER` - Другое
+
+---
+
+## Эндпоинты
+
+### 1. Получить все категории
+
+**GET** `/api/categories`
+
+**Пример запроса:**
+```bash
+curl -X GET https://saliy-shop.ru/api/categories
+```
+
+**Пример ответа:**
+```json
+[
+  {
+    "id": 1,
+    "name": "Толстовки",
+    "slug": "hoodies",
+    "type": "TOP",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "name": "Футболки",
+    "slug": "tshirts",
+    "type": "TOP",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  },
+  {
+    "id": 3,
+    "name": "Штаны",
+    "slug": "pants",
+    "type": "BOTTOM",
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  }
+]
+```
+
+---
+
+### 2. Получить категорию по slug
+
+**GET** `/api/categories/:slug`
+
+**Пример запроса:**
+```bash
+curl -X GET https://saliy-shop.ru/api/categories/hoodies
+```
+
+**Пример ответа:**
+```json
+{
+  "id": 1,
+  "name": "Толстовки",
+  "slug": "hoodies",
+  "type": "TOP",
+  "isActive": true,
+  "createdAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T10:00:00.000Z"
+}
+```
+
+**Ошибки:**
+- `404` - Категория не найдена
+
+---
+
+### 3. Получить товары категории
+
+**GET** `/api/categories/:slug/products`
+
+**Query параметры:**
+- `limit` - Количество товаров (по умолчанию 20)
+- `offset` - Смещение для пагинации
+
+**Пример запроса:**
+```bash
+curl -X GET "https://saliy-shop.ru/api/categories/hoodies/products?limit=10&offset=0"
+```
+
+**Пример ответа:**
+```json
+{
+  "category": {
+    "id": 1,
+    "name": "Толстовки",
+    "slug": "hoodies",
+    "type": "TOP"
+  },
+  "products": [
+    {
+      "id": 1,
+      "name": "Чёрная толстовка оверсайз",
+      "slug": "black-oversized-hoodie",
+      "description": "Премиальная толстовка из плотного хлопка 380 г/м²",
+      "cardStatus": "NEW",
+      "gender": "unisex",
+      "color": "black",
+      "weight": 650,
+      "price": 6300,
+      "discount": 0,
+      "images": [
+        {
+          "url": "products/hoodie-black/front.jpg",
+          "isPreview": true,
+          "previewOrder": 1
+        }
+      ],
+      "stock": {
+        "XS": 5,
+        "S": 10,
+        "M": 15
+      },
+      "isActive": true,
+      "viewCount": 0,
+      "salesCount": 0,
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      "updatedAt": "2024-01-15T10:00:00.000Z"
+    }
+  ],
+  "total": 1,
+  "limit": 10,
+  "offset": 0
+}
+```
+
+---
+
+## Примеры использования
+
+### Получить все активные категории
+```bash
+curl -X GET https://saliy-shop.ru/api/categories
+```
+
+### Получить товары категории "Толстовки"
+```bash
+curl -X GET https://saliy-shop.ru/api/categories/hoodies/products
+```
+
+### Получить товары категории с пагинацией
+```bash
+curl -X GET "https://saliy-shop.ru/api/categories/tshirts/products?limit=20&offset=20"
+```
+
+---
+
+## Коды ошибок
+
+| Код | Описание |
+|-----|----------|
+| 200 | Успешно |
+| 404 | Категория не найдена |
+| 500 | Ошибка сервера |
