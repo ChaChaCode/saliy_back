@@ -462,4 +462,25 @@ export class ProductsService {
 
     this.logger.log(`Продажи обновлены: товар ${productId}, +${quantity}`);
   }
+
+  // ==================== КАТЕГОРИИ ====================
+
+  /**
+   * Получить все активные категории
+   */
+  async getCategories() {
+    return this.prisma.category.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /**
+   * Получить категорию по slug
+   */
+  async getCategoryBySlug(slug: string) {
+    return this.prisma.category.findUnique({
+      where: { slug },
+    });
+  }
 }

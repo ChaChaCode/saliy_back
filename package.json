@@ -40,6 +40,7 @@
     "cookie-parser": "^1.4.7",
     "dotenv": "^17.3.1",
     "graphql": "^16.13.2",
+    "graphql-type-json": "^0.3.2",
     "i18n-iso-countries": "^7.14.0",
     "nodemailer": "^8.0.3",
     "passport": "^0.7.0",

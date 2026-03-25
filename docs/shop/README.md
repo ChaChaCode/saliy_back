@@ -4,25 +4,31 @@
 
 ## Модули
 
-### [🔐 Авторизация](./auth.md)
+### [🔐 Авторизация](./auth.md) (REST)
 - Авторизация по email с кодом подтверждения
 - Access и Refresh токены
 
-### [👤 Профиль пользователя](./user.md)
+### [👤 Профиль пользователя](./user.md) (REST)
 - Управление профилем пользователя
 - Адрес доставки
 
-### [📁 Категории](./categories.md)
-- Получение списка категорий
-- Товары категории
-
-### [🛍️ Товары](./products.md)
+### [🛍️ Товары и категории](./graphql.md) (GraphQL)
+- **GraphQL API** для получения данных
 - Каталог товаров с фильтрацией
 - Поиск товаров
 - Популярные, новинки, распродажа
-- Проверка наличия и цены
+- Категории
 
-### [📦 Заказы](./orders.md)
+### [📁 Категории](./categories.md) (REST - устаревшее)
+- Получение списка категорий (REST)
+- Рекомендуется использовать GraphQL
+
+### [🛍️ Товары](./products.md) (REST - устаревшее)
+- Каталог товаров (REST)
+- Рекомендуется использовать GraphQL
+- REST оставлен для админки и проверки остатков
+
+### [📦 Заказы](./orders.md) (в разработке)
 - Создание заказа
 - История заказов
 - Отслеживание статуса
@@ -47,20 +53,33 @@ curl -X POST https://saliy-shop.ru/api/auth/verify-code \
 # Сохранить accessToken из ответа
 ```
 
-### 2. Получить товары
+### 2. Получить товары (GraphQL)
 
 ```bash
-# Все товары
-curl https://saliy-shop.ru/api/products
+# Через GraphQL
+curl -X POST https://saliy-shop.ru/api/graphql \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "query { products(categorySlug: \"hoodies\", limit: 10) { products { id name slug price finalPrice images } total } }"
+  }'
+```
 
-# Товары категории
-curl https://saliy-shop.ru/api/products?categorySlug=hoodies
+Или открой GraphQL Playground: https://saliy-shop.ru/api/graphql
 
-# Популярные
-curl https://saliy-shop.ru/api/products/popular
-
-# Поиск
-curl "https://saliy-shop.ru/api/products/search?q=толстовка"
+```graphql
+query {
+  products(categorySlug: "hoodies", limit: 10) {
+    products {
+      id
+      name
+      slug
+      price
+      finalPrice
+      images
+    }
+    total
+  }
+}
 ```
 
 ### 3. Обновить профиль
