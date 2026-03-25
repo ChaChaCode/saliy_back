@@ -166,6 +166,79 @@ export class AuthService {
         id: true,
         email: true,
         name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        phone: true,
+        street: true,
+        apartment: true,
+        postalCode: true,
+        cdekCityCode: true,
+        cdekCountryCode: true,
+        cdekRegionCode: true,
+        cityName: true,
+        countryName: true,
+        regionName: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updateProfile(userId: string, data: any) {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        phone: true,
+        street: true,
+        apartment: true,
+        postalCode: true,
+        cdekCityCode: true,
+        cdekCountryCode: true,
+        cdekRegionCode: true,
+        cityName: true,
+        countryName: true,
+        regionName: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updateDeliveryLocation(userId: string, cdekCityCode: number) {
+    // Здесь должна быть интеграция с CDEK API для получения информации о городе
+    // Пока просто сохраняем код города
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        cdekCityCode,
+        // TODO: Получить из CDEK API:
+        // cdekCountryCode, cdekRegionCode, cityName, countryName, regionName
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        phone: true,
+        street: true,
+        apartment: true,
+        postalCode: true,
+        cdekCityCode: true,
+        cdekCountryCode: true,
+        cdekRegionCode: true,
+        cityName: true,
+        countryName: true,
+        regionName: true,
         createdAt: true,
         updatedAt: true,
       },

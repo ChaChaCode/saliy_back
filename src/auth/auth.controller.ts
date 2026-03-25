@@ -8,12 +8,16 @@ import {
   HttpStatus,
   UseGuards,
   Get,
+  Put,
   UnauthorizedException,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { Response, Request } from 'express';
 import { AuthService } from './auth.service';
 import { SendCodeDto } from './dto/send-code.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -117,5 +121,26 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async getProfile(@Req() request: any) {
     return request.user;
+  }
+
+  @Put('profile')
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(
+    @Req() request: any,
+    @Body(ValidationPipe) dto: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(request.user.id, dto);
+  }
+
+  @Put('delivery-location')
+  @UseGuards(JwtAuthGuard)
+  async updateDeliveryLocation(
+    @Req() request: any,
+    @Body(ValidationPipe) dto: UpdateDeliveryLocationDto,
+  ) {
+    return this.authService.updateDeliveryLocation(
+      request.user.id,
+      dto.cdekCityCode,
+    );
   }
 }
