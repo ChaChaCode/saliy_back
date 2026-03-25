@@ -1,0 +1,50 @@
+// Перечисления для системы заказов
+
+enum DeliveryType {
+  CDEK_PICKUP  // Самовывоз из пункта выдачи CDEK
+  CDEK_COURIER // Курьерская доставка CDEK
+  STANDARD     // Стандартная доставка
+}
+
+enum PaymentMethod {
+  CARD_ONLINE  // Онлайн оплата картой
+  CARD_MANUAL  // Оплата картой через менеджера
+  CRYPTO       // Криптовалюта
+  PAYPAL       // PayPal
+}
+
+enum OrderStatus {
+  PENDING      // Ожидает оплаты
+  PAYMENT_FAILED // Ошибка оплаты
+  CONFIRMED    // Подтверждён
+  PROCESSING   // В обработке
+  SHIPPED      // Отправлен
+  DELIVERED    // Доставлен
+  CANCELLED    // Отменён
+  REFUNDED     // Возвращён
+}
+
+// Перечисления для товаров
+
+enum card_status {
+  NONE         // Без статуса
+  NEW          // Новинка
+  SALE         // Распродажа
+  SOLD_OUT     // Распродано
+  PRE_ORDER    // Предзаказ
+  COMING_SOON  // Скоро в продаже
+}
+
+enum gender_type {
+  male         // Мужской
+  female       // Женский
+  unisex       // Унисекс
+}
+
+enum category_type {
+  TOP          // Верхняя одежда
+  BOTTOM       // Нижняя одежда
+  ACCESSORIES  // Аксессуары
+  SPORT        // Спортивная одежда
+  OTHER        // Другое
+}

@@ -1,0 +1,92 @@
+// Модель заказа
+
+model Order {
+  id           String   @id @default(uuid())
+  orderNumber  String   @unique @map("order_number")
+
+  // Связь с пользователем
+  userId       String?  @map("user_id")
+  user         User?    @relation(fields: [userId], references: [id])
+
+  // Информация о клиенте
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  phone        String
+  email        String
+
+  // Адрес доставки (снэпшот на момент заказа)
+  countryName  String?  @map("country_name")
+  regionName   String?  @map("region_name")
+  cityName     String?  @map("city_name")
+  cdekCityCode Int?     @map("cdek_city_code")
+  street       String?
+  apartment    String?
+  postalCode   String?  @map("postal_code")
+
+  // Тип и стоимость доставки
+  deliveryType  DeliveryType  @map("delivery_type")
+  deliveryPrice Float         @default(0) @map("delivery_price")
+  pickupPoint   String?       @map("pickup_point") // Код ПВЗ CDEK
+
+  // Оплата
+  paymentMethod PaymentMethod @map("payment_method")
+  currency      String        @default("RUB")
+  isPaid        Boolean       @default(false) @map("is_paid")
+  paymentId     String?       @map("payment_id")
+
+  // Суммы
+  subtotal       Float @default(0)
+  deliveryTotal  Float @default(0) @map("delivery_total")
+  discountAmount Float @default(0) @map("discount_amount")
+  total          Float
+
+  // Статус заказа
+  status    OrderStatus @default(PENDING)
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  // CDEK интеграция
+  cdekNumber     String?   @map("cdek_number")
+  cdekUuid       String?   @map("cdek_uuid")
+  cdekStatus     String?   @map("cdek_status")
+  cdekStatusDate DateTime? @map("cdek_status_date")
+  cdekStatusName String?   @map("cdek_status_name")
+
+  // Товары в заказе
+  items OrderItem[]
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([createdAt])
+  @@index([cdekUuid])
+  @@index([cdekNumber])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+
+  // Информация о товаре
+  productId Int?     @map("product_id")
+  name      String   // Название товара (снэпшот)
+  sku       String?  // Артикул
+  color     String?
+  size      String?
+
+  // Количество и цены
+  quantity Int
+  price    Float
+  discount Float   @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Связи
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}

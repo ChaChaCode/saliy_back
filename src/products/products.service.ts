@@ -1,0 +1,465 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  FilterProductsDto,
+} from './products.dto';
+
+@Injectable()
+export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  // ==================== CRUD ОПЕРАЦИИ ====================
+
+  /**
+   * Создать товар
+   */
+  async createProduct(dto: CreateProductDto) {
+    const { categoryIds, ...productData } = dto;
+
+    // Проверяем уникальность slug
+    const existing = await this.prisma.product.findUnique({
+      where: { slug: dto.slug },
+    });
+
+    if (existing) {
+      throw new BadRequestException(`Товар с slug "${dto.slug}" уже существует`);
+    }
+
+    // Создаём товар со связями с категориями
+    return this.prisma.product.create({
+      data: {
+        ...productData,
+        ...(categoryIds && {
+          categories: {
+            create: categoryIds.map((categoryId) => ({ categoryId })),
+          },
+        }),
+      },
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Получить товар по ID
+   */
+  async getProductById(id: number) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException(`Товар с ID ${id} не найден`);
+    }
+
+    return product;
+  }
+
+  /**
+   * Получить товар по slug
+   */
+  async getProductBySlug(slug: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { slug },
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+    });
+
+    if (!product) {
+      throw new NotFoundException(`Товар "${slug}" не найден`);
+    }
+
+    // Увеличиваем счётчик просмотров
+    await this.incrementViewCount(product.id);
+
+    return product;
+  }
+
+  /**
+   * Обновить товар
+   */
+  async updateProduct(id: number, dto: UpdateProductDto) {
+    // Проверяем существование
+    await this.getProductById(id);
+
+    const { categoryIds, ...productData } = dto;
+
+    // Если slug изменился, проверяем уникальность
+    if (dto.slug) {
+      const existing = await this.prisma.product.findUnique({
+        where: { slug: dto.slug },
+      });
+
+      if (existing && existing.id !== id) {
+        throw new BadRequestException(`Товар с slug "${dto.slug}" уже существует`);
+      }
+    }
+
+    // Обновляем товар
+    return this.prisma.product.update({
+      where: { id },
+      data: {
+        ...productData,
+        ...(categoryIds && {
+          categories: {
+            deleteMany: {}, // Удаляем старые связи
+            create: categoryIds.map((categoryId) => ({ categoryId })),
+          },
+        }),
+      },
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Удалить товар
+   */
+  async deleteProduct(id: number) {
+    // Проверяем существование
+    await this.getProductById(id);
+
+    return this.prisma.product.delete({
+      where: { id },
+    });
+  }
+
+  // ==================== ПОЛУЧЕНИЕ ТОВАРОВ ====================
+
+  /**
+   * Получить список товаров с фильтрацией
+   */
+  async getProducts(filters: FilterProductsDto = {}) {
+    const {
+      categorySlug,
+      gender,
+      status,
+      minPrice,
+      maxPrice,
+      inStock,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      limit = 20,
+      offset = 0,
+    } = filters;
+
+    // Строим WHERE условие
+    const where: any = {
+      isActive: true,
+    };
+
+    // Фильтр по категории
+    if (categorySlug) {
+      where.categories = {
+        some: {
+          category: {
+            slug: categorySlug,
+          },
+        },
+      };
+    }
+
+    // Фильтр по полу
+    if (gender) {
+      where.gender = gender;
+    }
+
+    // Фильтр по статусу
+    if (status) {
+      where.cardStatus = status;
+    }
+
+    // Фильтр по цене (теперь это обычное поле)
+    if (minPrice !== undefined) {
+      where.price = { ...where.price, gte: minPrice };
+    }
+    if (maxPrice !== undefined) {
+      where.price = { ...where.price, lte: maxPrice };
+    }
+
+    // Получаем товары
+    const products = await this.prisma.product.findMany({
+      where,
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+      orderBy: {
+        [sortBy]: sortOrder,
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    // Фильтрация по наличию (после запроса, т.к. stock это JSON)
+    let filteredProducts = products;
+
+    if (inStock) {
+      filteredProducts = products.filter((product) => {
+        const stock = product.stock as any;
+        const hasStock = Object.values(stock || {}).some((qty: any) => qty > 0);
+        return hasStock;
+      });
+    }
+
+    // Получаем общее количество
+    const total = await this.prisma.product.count({ where });
+
+    return {
+      products: filteredProducts,
+      total,
+      limit,
+      offset,
+    };
+  }
+
+  /**
+   * Поиск товаров
+   */
+  async searchProducts(query: string) {
+    if (!query || query.trim().length < 2) {
+      throw new BadRequestException('Запрос должен содержать минимум 2 символа');
+    }
+
+    return this.prisma.product.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { name: { contains: query, mode: 'insensitive' } },
+          { description: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+      take: 20,
+    });
+  }
+
+  /**
+   * Популярные товары (топ продаж)
+   */
+  async getPopularProducts(limit: number = 10) {
+    return this.prisma.product.findMany({
+      where: { isActive: true },
+      orderBy: { salesCount: 'desc' },
+      take: limit,
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Товары в распродаже
+   */
+  async getSaleProducts(limit: number = 20) {
+    return this.prisma.product.findMany({
+      where: {
+        isActive: true,
+        cardStatus: 'SALE',
+      },
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Новинки
+   */
+  async getNewProducts(limit: number = 20) {
+    return this.prisma.product.findMany({
+      where: {
+        isActive: true,
+        cardStatus: 'NEW',
+      },
+      include: {
+        categories: {
+          include: {
+            category: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  // ==================== РАБОТА С ОСТАТКАМИ ====================
+
+  /**
+   * Проверить наличие товара
+   */
+  async isInStock(
+    productId: number,
+    size: string,
+  ): Promise<boolean> {
+    const quantity = await this.getStockQuantity(productId, size);
+    return quantity > 0;
+  }
+
+  /**
+   * Получить количество на складе
+   */
+  async getStockQuantity(
+    productId: number,
+    size: string,
+  ): Promise<number> {
+    const product = await this.getProductById(productId);
+    const stock = product.stock as any;
+
+    return stock?.[size] || 0;
+  }
+
+  /**
+   * Уменьшить остатки после продажи
+   */
+  async decreaseStock(
+    productId: number,
+    size: string,
+    quantity: number,
+  ) {
+    const product = await this.getProductById(productId);
+    const stock = product.stock as any;
+
+    const currentStock = stock?.[size] || 0;
+
+    if (currentStock < quantity) {
+      throw new BadRequestException(
+        `Недостаточно товара на складе. Доступно: ${currentStock}, запрошено: ${quantity}`,
+      );
+    }
+
+    // Обновляем остатки
+    const newStock = { ...stock };
+    newStock[size] = currentStock - quantity;
+
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: { stock: newStock },
+    });
+
+    this.logger.log(
+      `Остатки обновлены: товар ${productId}, размер ${size}: ${currentStock} -> ${newStock[size]}`,
+    );
+
+    return newStock;
+  }
+
+  /**
+   * Увеличить остатки (возврат товара)
+   */
+  async increaseStock(
+    productId: number,
+    size: string,
+    quantity: number,
+  ) {
+    const product = await this.getProductById(productId);
+    const stock = product.stock as any;
+
+    const currentStock = stock?.[size] || 0;
+
+    // Обновляем остатки
+    const newStock = { ...stock };
+    newStock[size] = currentStock + quantity;
+
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: { stock: newStock },
+    });
+
+    this.logger.log(
+      `Остатки увеличены: товар ${productId}, размер ${size}: ${currentStock} -> ${newStock[size]}`,
+    );
+
+    return newStock;
+  }
+
+  // ==================== РАБОТА С ЦЕНАМИ ====================
+
+  /**
+   * Получить итоговую цену товара со скидкой
+   */
+  async getFinalPrice(productId: number): Promise<number> {
+    const product = await this.getProductById(productId);
+    const finalPrice = Math.floor(product.price - (product.price * product.discount) / 100);
+    return finalPrice;
+  }
+
+  // ==================== СЧЁТЧИКИ ====================
+
+  /**
+   * Увеличить счётчик просмотров
+   */
+  async incrementViewCount(productId: number) {
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        viewCount: { increment: 1 },
+      },
+    });
+  }
+
+  /**
+   * Увеличить счётчик продаж
+   */
+  async incrementSalesCount(productId: number, quantity: number = 1) {
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: {
+        salesCount: { increment: quantity },
+      },
+    });
+
+    this.logger.log(`Продажи обновлены: товар ${productId}, +${quantity}`);
+  }
+}

@@ -9,6 +9,8 @@ import { AppResolver } from './app.resolver';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './common/email/email.module';
+import { DeliveryModule } from './delivery/delivery.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { EmailModule } from './common/email/email.module';
     PrismaModule,
     EmailModule,
     AuthModule,
+    DeliveryModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService, AppResolver],

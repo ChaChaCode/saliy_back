@@ -1,0 +1,80 @@
+// Модели для товаров и категорий
+
+model Category {
+  id        Int               @id @default(autoincrement())
+  name      String            @unique
+  slug      String            @unique
+  type      category_type     @default(OTHER)
+  isActive  Boolean           @default(true) @map("is_active")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  products  ProductCategory[]
+
+  @@index([isActive])
+  @@index([slug])
+  @@index([type])
+  @@index([isActive, slug])
+  @@index([isActive, type])
+  @@map("categories")
+}
+
+model Product {
+  id          Int           @id @default(autoincrement())
+  name        String
+  slug        String        @unique
+
+  description String?
+
+  // Статусы и характеристики
+  cardStatus  card_status   @default(NONE) @map("card_status")
+  gender      gender_type   @default(unisex)
+  color       String?       // Цвет товара (например: black, white, red)
+  weight      Float?        // Вес товара в граммах
+
+  // Цена (только RUB)
+  price       Float         @default(0)     // Цена в рублях
+  discount    Int           @default(0)     // Скидка в процентах (0-100)
+
+  // JSON поля
+  images      Json          @default("[]")  // [{"url": "...", "isPreview": true, "previewOrder": 1}, ...]
+  stock       Json          @default("{}")  // {"S": 10, "M": 5, "L": 0}
+
+  // Счётчики
+  isActive    Boolean       @default(true) @map("is_active")
+  viewCount   Int           @default(0) @map("view_count")
+  salesCount  Int           @default(0) @map("sales_count")
+
+  // Даты
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Связи
+  categories  ProductCategory[]
+  orderItems  OrderItem[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@index([cardStatus, isActive])
+  @@index([gender, isActive])
+  @@index([salesCount, isActive])
+  @@index([viewCount])
+  @@index([createdAt])
+  @@map("products")
+}
+
+model ProductCategory {
+  id         Int      @id @default(autoincrement())
+  productId  Int      @map("product_id")
+  categoryId Int      @map("category_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, categoryId])
+  @@index([productId])
+  @@index([categoryId])
+  @@index([productId, categoryId])
+  @@map("product_categories")
+}

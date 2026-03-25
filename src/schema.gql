@@ -2,44 +2,6 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
-type AuthResponse {
-  accessToken: String!
-  message: String!
-}
-
-"""
-A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
-"""
-scalar DateTime
-
-type MessageResponse {
-  message: String!
-}
-
-type Mutation {
-  logout: MessageResponse!
-  refreshToken: AuthResponse!
-  sendCode(input: SendCodeInput!): MessageResponse!
-  verifyCode(input: VerifyCodeInput!): AuthResponse!
-}
-
 type Query {
-  me: User!
-}
-
-input SendCodeInput {
-  email: String!
-}
-
-type User {
-  createdAt: DateTime!
-  email: String!
-  id: ID!
-  name: String
-  updatedAt: DateTime!
-}
-
-input VerifyCodeInput {
-  code: String!
-  email: String!
+  health: String!
 }
