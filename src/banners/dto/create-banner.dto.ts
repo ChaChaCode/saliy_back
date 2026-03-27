@@ -14,10 +14,6 @@ export class CreateBannerDto {
 
   @IsOptional()
   @IsInt()
-  categoryId?: number; // ID категории (null = баннер для главной страницы)
-
-  @IsOptional()
-  @IsInt()
   @Min(0)
   order?: number;
 

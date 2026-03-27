@@ -16,16 +16,10 @@ model Banner {
   // Ссылка при клике
   link String? @map("link") // URL для перехода при клике (опционально)
 
-  // Связь с категорией (опционально)
-  categoryId Int?      @map("category_id") // ID категории (null = баннер для главной страницы)
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-
   // Настройки отображения
   order    Int     @default(0) @map("order") // Порядок отображения (меньше = выше)
   isActive Boolean @default(true) @map("is_active") // Активен ли баннер
 
-  @@index([categoryId])
   @@index([isActive])
-  @@index([categoryId, isActive])
   @@map("banners")
 }

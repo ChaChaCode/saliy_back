@@ -61,30 +61,12 @@ export class BannersController {
   }
 
   /**
-   * Получить только активные баннеры (для клиентского сайта)
+   * Получить только активные баннеры главной страницы (для клиентского сайта)
    * GET /banners/active
    */
   @Get('active')
   async findActive() {
     return this.bannersService.findActive();
-  }
-
-  /**
-   * Получить активные баннеры для главной страницы
-   * GET /banners/active/main
-   */
-  @Get('active/main')
-  async findActiveMainPage() {
-    return this.bannersService.findActiveMainPage();
-  }
-
-  /**
-   * Получить активные баннеры для категории
-   * GET /banners/active/category/:categoryId
-   */
-  @Get('active/category/:categoryId')
-  async findActiveByCategory(@Param('categoryId') categoryId: string) {
-    return this.bannersService.findActiveByCategory(parseInt(categoryId, 10));
   }
 
   /**

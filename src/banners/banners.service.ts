@@ -52,7 +52,6 @@ export class BannersService {
         desktopImageUrl,
         mobileImageUrl,
         link: dto.link,
-        categoryId: dto.categoryId,
         order: dto.order || 0,
         isActive: dto.isActive ?? true,
       },
@@ -69,37 +68,11 @@ export class BannersService {
   }
 
   /**
-   * Получить только активные баннеры
+   * Получить только активные баннеры (для главной страницы)
    */
   async findActive() {
     return this.prisma.banner.findMany({
       where: { isActive: true },
-      orderBy: { order: 'asc' },
-    });
-  }
-
-  /**
-   * Получить активные баннеры для главной страницы (без категории)
-   */
-  async findActiveMainPage() {
-    return this.prisma.banner.findMany({
-      where: {
-        isActive: true,
-        categoryId: null,
-      },
-      orderBy: { order: 'asc' },
-    });
-  }
-
-  /**
-   * Получить активные баннеры для конкретной категории
-   */
-  async findActiveByCategory(categoryId: number) {
-    return this.prisma.banner.findMany({
-      where: {
-        isActive: true,
-        categoryId,
-      },
       orderBy: { order: 'asc' },
     });
   }

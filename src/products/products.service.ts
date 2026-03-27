@@ -10,6 +10,8 @@ import {
   UpdateProductDto,
   FilterProductsDto,
 } from './products.dto';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 @Injectable()
 export class ProductsService {
@@ -516,6 +518,78 @@ export class ProductsService {
   async getCategoryBySlug(slug: string) {
     return this.prisma.category.findUnique({
       where: { slug },
+    });
+  }
+
+  /**
+   * Обновить баннеры категории
+   */
+  async updateCategoryBanners(
+    categoryId: number,
+    desktopBanner?: Express.Multer.File,
+    mobileBanner?: Express.Multer.File,
+  ) {
+    // Проверяем что категория существует
+    const category = await this.prisma.category.findUnique({
+      where: { id: categoryId },
+    });
+
+    if (!category) {
+      throw new NotFoundException(`Category with ID ${categoryId} not found`);
+    }
+
+    const updateData: any = {};
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'categories');
+
+    // Создаем директорию если её нет
+    await fs.mkdir(uploadsDir, { recursive: true });
+
+    // Обновляем десктопный баннер
+    if (desktopBanner) {
+      // Удаляем старый файл если есть
+      if (category.desktopBannerUrl) {
+        try {
+          const oldFile = path.join(process.cwd(), category.desktopBannerUrl.replace(/^\//, ''));
+          await fs.unlink(oldFile);
+        } catch (error) {
+          this.logger.warn(`Failed to delete old desktop banner: ${error.message}`);
+        }
+      }
+
+      // Сохраняем новый файл
+      const timestamp = Date.now();
+      const ext = path.extname(desktopBanner.originalname);
+      const filename = `desktop-cat${categoryId}-${timestamp}${ext}`;
+      const filepath = path.join(uploadsDir, filename);
+      await fs.writeFile(filepath, desktopBanner.buffer);
+      updateData.desktopBannerUrl = `/uploads/categories/${filename}`;
+    }
+
+    // Обновляем мобильный баннер
+    if (mobileBanner) {
+      // Удаляем старый файл если есть
+      if (category.mobileBannerUrl) {
+        try {
+          const oldFile = path.join(process.cwd(), category.mobileBannerUrl.replace(/^\//, ''));
+          await fs.unlink(oldFile);
+        } catch (error) {
+          this.logger.warn(`Failed to delete old mobile banner: ${error.message}`);
+        }
+      }
+
+      // Сохраняем новый файл
+      const timestamp = Date.now();
+      const ext = path.extname(mobileBanner.originalname);
+      const filename = `mobile-cat${categoryId}-${timestamp}${ext}`;
+      const filepath = path.join(uploadsDir, filename);
+      await fs.writeFile(filepath, mobileBanner.buffer);
+      updateData.mobileBannerUrl = `/uploads/categories/${filename}`;
+    }
+
+    // Обновляем категорию в БД
+    return this.prisma.category.update({
+      where: { id: categoryId },
+      data: updateData,
     });
   }
 }
