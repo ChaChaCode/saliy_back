@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { S3UrlInterceptor } from './common/interceptors';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -51,6 +52,9 @@ async function bootstrap() {
       transform: true, // Автоматически преобразует типы
     }),
   );
+
+  // Глобальный interceptor для преобразования относительных путей в S3 URL
+  app.useGlobalInterceptors(new S3UrlInterceptor());
 
   await app.listen(process.env.PORT ?? 3000);
   console.log(`Приложение запущено на порту ${process.env.PORT ?? 3000}`);
