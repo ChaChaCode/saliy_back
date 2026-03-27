@@ -257,7 +257,7 @@ export class AuthService {
     // Если указан город CDEK
     if (dto.cdekCityCode !== undefined) {
       // Ищем город в обеих странах CDEK (RU и BY)
-      let city = null;
+      let city: any = null;
 
       // Сначала ищем в России
       const citiesRU = await this.deliveryService.getCdekCities('RU', undefined, undefined);
