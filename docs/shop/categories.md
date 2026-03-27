@@ -12,6 +12,8 @@
   slug: string;            // URL slug (уникальный)
   type: category_type;     // Тип категории
   isActive: boolean;       // Активна ли категория
+  desktopBannerUrl?: string; // URL баннера для десктопа
+  mobileBannerUrl?: string;  // URL баннера для мобильной версии
   createdAt: Date;         // Дата создания
   updatedAt: Date;         // Дата обновления
 }
@@ -46,6 +48,8 @@ curl -X GET https://saliy-shop.ru/api/categories
     "slug": "hoodies",
     "type": "TOP",
     "isActive": true,
+    "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
+    "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
     "createdAt": "2024-01-15T10:00:00.000Z",
     "updatedAt": "2024-01-15T10:00:00.000Z"
   },
@@ -55,6 +59,8 @@ curl -X GET https://saliy-shop.ru/api/categories
     "slug": "tshirts",
     "type": "TOP",
     "isActive": true,
+    "desktopBannerUrl": null,
+    "mobileBannerUrl": null,
     "createdAt": "2024-01-15T10:00:00.000Z",
     "updatedAt": "2024-01-15T10:00:00.000Z"
   },
@@ -64,6 +70,8 @@ curl -X GET https://saliy-shop.ru/api/categories
     "slug": "pants",
     "type": "BOTTOM",
     "isActive": true,
+    "desktopBannerUrl": null,
+    "mobileBannerUrl": null,
     "createdAt": "2024-01-15T10:00:00.000Z",
     "updatedAt": "2024-01-15T10:00:00.000Z"
   }
@@ -89,6 +97,8 @@ curl -X GET https://saliy-shop.ru/api/categories/hoodies
   "slug": "hoodies",
   "type": "TOP",
   "isActive": true,
+  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
+  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
   "createdAt": "2024-01-15T10:00:00.000Z",
   "updatedAt": "2024-01-15T10:00:00.000Z"
 }
@@ -99,7 +109,66 @@ curl -X GET https://saliy-shop.ru/api/categories/hoodies
 
 ---
 
-### 3. Получить товары категории
+### 3. Загрузить/обновить баннеры категории
+
+**PUT** `/api/categories/:id/banners`
+
+Загружает или обновляет баннеры для категории.
+
+**Параметры (multipart/form-data):**
+- `desktopBanner` (file, опционально) - Изображение для десктопа
+- `mobileBanner` (file, опционально) - Изображение для мобильной версии
+
+**⚠️ Важно:** Минимум одно из двух изображений обязательно!
+
+**Пример запроса:**
+```bash
+# Загрузить оба баннера
+curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
+  -F "desktopBanner=@hoodies-desktop.jpg" \
+  -F "mobileBanner=@hoodies-mobile.jpg"
+
+# Обновить только десктопный баннер
+curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
+  -F "desktopBanner=@new-desktop.jpg"
+
+# Обновить только мобильный баннер
+curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
+  -F "mobileBanner=@new-mobile.jpg"
+```
+
+**Пример ответа:**
+```json
+{
+  "id": 1,
+  "name": "Толстовки",
+  "slug": "hoodies",
+  "type": "TOP",
+  "isActive": true,
+  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1711234567890.jpg",
+  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1711234567890.jpg",
+  "createdAt": "2024-01-15T10:00:00.000Z",
+  "updatedAt": "2024-01-15T12:30:00.000Z"
+}
+```
+
+**Ошибки:**
+- `400` - Не передано ни одно изображение
+- `404` - Категория не найдена
+
+**Примечания:**
+- При загрузке нового баннера старый автоматически удаляется
+- Файлы сохраняются в `uploads/categories/`
+- Формат имени: `desktop-cat{id}-{timestamp}.ext` или `mobile-cat{id}-{timestamp}.ext`
+- Поддерживаемые форматы: JPG, PNG, WebP
+- Рекомендуемые размеры:
+  - Desktop: 1920x600px
+  - Mobile: 768x768px
+- Максимальный размер файла: 5MB
+
+---
+
+### 4. Получить товары категории
 
 **GET** `/api/categories/:slug/products`
 
@@ -167,6 +236,18 @@ curl -X GET "https://saliy-shop.ru/api/categories/hoodies/products?limit=10&offs
 curl -X GET https://saliy-shop.ru/api/categories
 ```
 
+### Получить категорию с баннерами
+```bash
+curl -X GET https://saliy-shop.ru/api/categories/hoodies
+```
+
+### Загрузить баннеры для категории
+```bash
+curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
+  -F "desktopBanner=@hoodies-desktop.jpg" \
+  -F "mobileBanner=@hoodies-mobile.jpg"
+```
+
 ### Получить товары категории "Толстовки"
 ```bash
 curl -X GET https://saliy-shop.ru/api/categories/hoodies/products
@@ -184,5 +265,13 @@ curl -X GET "https://saliy-shop.ru/api/categories/tshirts/products?limit=20&offs
 | Код | Описание |
 |-----|----------|
 | 200 | Успешно |
+| 400 | Некорректные данные (например, не передано ни одно изображение) |
 | 404 | Категория не найдена |
 | 500 | Ошибка сервера |
+
+---
+
+## См. также
+
+- [API баннеров](./banners.md) - Баннеры главной страницы
+- [API товаров](./products.md) - Работа с товарами
