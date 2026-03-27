@@ -94,7 +94,6 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
   "cityName": "Москва",
   "countryName": "Россия",
   "regionName": "Москва",
-  "postalCode": "101000",
   "createdAt": "2024-01-15T10:30:00.000Z",
   "updatedAt": "2024-01-20T14:25:00.000Z"
 }
@@ -159,8 +158,7 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
 {
   "deliveryType": "CDEK",
   "cdekCityCode": 44,
-  "cdekPickupPointCode": "MSK123",
-  "postalCode": "101000"
+  "cdekPickupPointCode": "MSK123"
 }
 ```
 
@@ -181,8 +179,7 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -d '{
     "deliveryType": "CDEK",
     "cdekCityCode": 44,
-    "cdekPickupPointCode": "MSK123",
-    "postalCode": "101000"
+    "cdekPickupPointCode": "MSK123"
   }'
 ```
 
@@ -201,9 +198,9 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   "cityName": "Москва",
   "countryName": "Россия",
   "regionName": "Москва",
-  "postalCode": "101000",
   "deliveryCountryCode": null,
-  "fullAddress": null
+  "fullAddress": null,
+  "postalCode": null
 }
 ```
 
@@ -266,7 +263,7 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 ### Адрес доставки
 - **deliveryType** - обязательно ("CDEK" или "POST")
 - **CDEK**: обязательны cdekCityCode и cdekPickupPointCode
-- **POST**: обязательны deliveryCountryCode и fullAddress
+- **POST**: обязательны deliveryCountryCode, fullAddress и postalCode
 
 ---
 
@@ -318,8 +315,7 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -d '{
     "deliveryType": "CDEK",
     "cdekCityCode": 44,
-    "cdekPickupPointCode": "MSK123",
-    "postalCode": "101000"
+    "cdekPickupPointCode": "MSK123"
   }'
 
 # === Вариант Б: POST ===

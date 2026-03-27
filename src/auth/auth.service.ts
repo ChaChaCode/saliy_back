@@ -255,10 +255,10 @@ export class AuthService {
           cityName: city.name,
           countryName: city.countryCode === 'RU' ? 'Россия' : 'Беларусь',
           regionName: city.region,
-          postalCode: dto.postalCode,
           // Очищаем поля для почтовой доставки
           deliveryCountryCode: null,
           fullAddress: null,
+          postalCode: null,
         },
         select: {
           id: true,
@@ -286,9 +286,9 @@ export class AuthService {
 
     // Вариант POST: Почтовая доставка (любая страна)
     if (dto.deliveryType === 'POST') {
-      if (!dto.deliveryCountryCode || !dto.fullAddress) {
+      if (!dto.deliveryCountryCode || !dto.fullAddress || !dto.postalCode) {
         throw new BadRequestException(
-          'Для почтовой доставки обязательны: deliveryCountryCode и fullAddress',
+          'Для почтовой доставки обязательны: deliveryCountryCode, fullAddress и postalCode',
         );
       }
 

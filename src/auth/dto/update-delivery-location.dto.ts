@@ -37,10 +37,8 @@ export class UpdateDeliveryLocationDto {
   @MaxLength(500)
   fullAddress?: string; // Полный адрес одной строкой
 
-  // === Общие поля ===
-
-  @IsOptional()
+  @ValidateIf((o) => o.deliveryType === 'POST')
   @IsString()
   @MaxLength(20)
-  postalCode?: string; // Почтовый индекс (опционально для обоих вариантов)
+  postalCode?: string; // Почтовый индекс (обязательно только для POST)
 }
