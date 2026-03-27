@@ -220,15 +220,42 @@ export class AuthService {
   }
 
   async updateDeliveryLocation(userId: string, dto: UpdateDeliveryLocationDto) {
-    // Вариант CDEK: Самовывоз из ПВЗ (только RU/BY)
-    if (dto.deliveryType === 'CDEK') {
-      if (!dto.cdekCityCode || !dto.cdekPickupPointCode) {
-        throw new BadRequestException(
-          'Для CDEK доставки обязательны: cdekCityCode и cdekPickupPointCode',
-        );
-      }
+    // Получаем текущего пользователя
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
 
-      // Получаем информацию о городе через CDEK API
+    if (!currentUser) {
+      throw new BadRequestException('Пользователь не найден');
+    }
+
+    // Объект для обновления
+    const updateData: any = {};
+
+    // Если меняется тип доставки, очищаем поля другого типа
+    if (dto.deliveryType && dto.deliveryType !== currentUser.deliveryType) {
+      updateData.deliveryType = dto.deliveryType;
+
+      if (dto.deliveryType === 'CDEK') {
+        // Очищаем поля POST
+        updateData.deliveryCountryCode = null;
+        updateData.fullAddress = null;
+        updateData.postalCode = null;
+      } else if (dto.deliveryType === 'POST') {
+        // Очищаем поля CDEK
+        updateData.cdekCityCode = null;
+        updateData.cdekCountryCode = null;
+        updateData.cdekRegionCode = null;
+        updateData.cdekPickupPointCode = null;
+        updateData.cityName = null;
+        updateData.regionName = null;
+      }
+    }
+
+    // === Обработка CDEK полей ===
+
+    // Если указан город CDEK
+    if (dto.cdekCityCode !== undefined) {
       const cities = await this.deliveryService.getCdekCities('RU', undefined, undefined);
       const city = cities.cities.find((c) => c.code === dto.cdekCityCode);
 
@@ -236,108 +263,84 @@ export class AuthService {
         throw new BadRequestException('Город не найден в CDEK');
       }
 
-      // Можно также проверить что ПВЗ существует
-      const pickupPoints = await this.deliveryService.getCdekPickupPoints(dto.cdekCityCode);
+      updateData.cdekCityCode = city.code;
+      updateData.cdekCountryCode = city.countryCode;
+      updateData.cdekRegionCode = city.regionCode;
+      updateData.cityName = city.name;
+      updateData.countryName = city.countryCode === 'RU' ? 'Россия' : 'Беларусь';
+      updateData.regionName = city.region;
+    }
+
+    // Если указан пункт выдачи CDEK
+    if (dto.cdekPickupPointCode !== undefined) {
+      // Проверяем что город уже выбран
+      const cityCode = dto.cdekCityCode || currentUser.cdekCityCode;
+
+      if (!cityCode) {
+        throw new BadRequestException(
+          'Сначала выберите город (cdekCityCode)',
+        );
+      }
+
+      const pickupPoints = await this.deliveryService.getCdekPickupPoints(cityCode);
       const pickupPoint = pickupPoints.points.find((p) => p.code === dto.cdekPickupPointCode);
 
       if (!pickupPoint) {
         throw new BadRequestException('Пункт выдачи не найден');
       }
 
-      return this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          deliveryType: 'CDEK',
-          cdekCityCode: city.code,
-          cdekCountryCode: city.countryCode,
-          cdekRegionCode: city.regionCode,
-          cdekPickupPointCode: dto.cdekPickupPointCode,
-          cityName: city.name,
-          countryName: city.countryCode === 'RU' ? 'Россия' : 'Беларусь',
-          regionName: city.region,
-          // Очищаем поля для почтовой доставки
-          deliveryCountryCode: null,
-          fullAddress: null,
-          postalCode: null,
-        },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          phone: true,
-          deliveryType: true,
-          cdekCityCode: true,
-          cdekCountryCode: true,
-          cdekRegionCode: true,
-          cdekPickupPointCode: true,
-          cityName: true,
-          countryName: true,
-          regionName: true,
-          postalCode: true,
-          deliveryCountryCode: true,
-          fullAddress: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+      updateData.cdekPickupPointCode = dto.cdekPickupPointCode;
     }
 
-    // Вариант POST: Почтовая доставка (любая страна)
-    if (dto.deliveryType === 'POST') {
-      if (!dto.deliveryCountryCode || !dto.fullAddress || !dto.postalCode) {
-        throw new BadRequestException(
-          'Для почтовой доставки обязательны: deliveryCountryCode, fullAddress и postalCode',
-        );
-      }
+    // === Обработка POST полей ===
 
+    // Если указана страна для почтовой доставки
+    if (dto.deliveryCountryCode !== undefined) {
       const countryInfo = this.deliveryService.getCountryInfo(dto.deliveryCountryCode, 'ru');
 
       if (!countryInfo) {
         throw new BadRequestException('Страна не найдена');
       }
 
-      return this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          deliveryType: 'POST',
-          deliveryCountryCode: dto.deliveryCountryCode,
-          countryName: countryInfo.name,
-          fullAddress: dto.fullAddress,
-          postalCode: dto.postalCode,
-          // Очищаем поля CDEK
-          cdekCityCode: null,
-          cdekCountryCode: null,
-          cdekRegionCode: null,
-          cdekPickupPointCode: null,
-          cityName: null,
-          regionName: null,
-        },
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          phone: true,
-          deliveryType: true,
-          cdekCityCode: true,
-          cdekCountryCode: true,
-          cdekRegionCode: true,
-          cdekPickupPointCode: true,
-          cityName: true,
-          countryName: true,
-          regionName: true,
-          postalCode: true,
-          deliveryCountryCode: true,
-          fullAddress: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+      updateData.deliveryCountryCode = dto.deliveryCountryCode;
+      updateData.countryName = countryInfo.name;
     }
 
-    throw new BadRequestException('Неизвестный тип доставки');
+    // Полный адрес
+    if (dto.fullAddress !== undefined) {
+      updateData.fullAddress = dto.fullAddress;
+    }
+
+    // Почтовый индекс
+    if (dto.postalCode !== undefined) {
+      updateData.postalCode = dto.postalCode;
+    }
+
+    // Обновляем пользователя
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        phone: true,
+        deliveryType: true,
+        cdekCityCode: true,
+        cdekCountryCode: true,
+        cdekRegionCode: true,
+        cdekPickupPointCode: true,
+        cityName: true,
+        countryName: true,
+        regionName: true,
+        postalCode: true,
+        deliveryCountryCode: true,
+        fullAddress: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
   }
 }

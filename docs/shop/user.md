@@ -62,6 +62,18 @@
    - Вводит полный адрес (одна строка)
    - Вводит почтовый индекс
 
+### Частичное сохранение:
+✅ **Можно сохранять адрес доставки частями:**
+- Сначала только тип доставки: `{ "deliveryType": "CDEK" }`
+- Потом добавить город: `{ "cdekCityCode": 44 }`
+- Затем пункт выдачи: `{ "cdekPickupPointCode": "MSK123" }`
+- Или всё сразу в одном запросе
+
+⚠️ **Важно:**
+- При смене типа доставки (CDEK ↔ POST) автоматически очищаются поля другого типа
+- Для выбора пункта выдачи CDEK сначала нужно выбрать город
+- Все поля опциональны, можно обновлять по одному
+
 ---
 
 ## Эндпоинты
@@ -141,19 +153,19 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
 
 ---
 
-### 3. Установить адрес доставки
+### 3. Обновить адрес доставки
 
 **PUT** `/api/auth/delivery-location`
 
 **Требуется авторизация:** Да
 
-**Шаг 1:** Пользователь выбирает тип доставки: **CDEK** или **POST**
+**Все поля опциональны** - можно обновлять частями или всё сразу.
 
 ---
 
 #### Вариант CDEK: Самовывоз из ПВЗ (только RU/BY)
 
-**Тело запроса:**
+**Тело запроса (полное):**
 ```json
 {
   "deliveryType": "CDEK",
@@ -208,7 +220,7 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 
 #### Вариант POST: Почтовая доставка (любая страна)
 
-**Тело запроса:**
+**Тело запроса (полное):**
 ```json
 {
   "deliveryType": "POST",
@@ -250,6 +262,68 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 
 ---
 
+#### Частичное сохранение адреса
+
+**Все поля опциональны** - можно обновлять по одному или группами.
+
+**Пример 1: Сначала выбрать тип доставки**
+```bash
+curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deliveryType": "CDEK"
+  }'
+```
+
+**Пример 2: Затем добавить город (CDEK)**
+```bash
+curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cdekCityCode": 44
+  }'
+```
+
+**Пример 3: Добавить пункт выдачи (CDEK)**
+```bash
+curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cdekPickupPointCode": "MSK123"
+  }'
+```
+
+**Пример 4: Частичное обновление для POST**
+```bash
+# Сначала тип и страна
+curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deliveryType": "POST",
+    "deliveryCountryCode": "PL"
+  }'
+
+# Потом адрес и индекс
+curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
+    "postalCode": "00-001"
+  }'
+```
+
+**⚠️ Важно:**
+- При смене `deliveryType` (CDEK → POST или наоборот) автоматически очищаются поля другого типа
+- Для добавления `cdekPickupPointCode` сначала нужно выбрать `cdekCityCode`
+- Можно обновлять одно поле или несколько сразу
+
+---
+
 ## Валидация
 
 ### Телефон
@@ -261,9 +335,11 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 - Максимум: 100 символов
 
 ### Адрес доставки
-- **deliveryType** - обязательно ("CDEK" или "POST")
-- **CDEK**: обязательны cdekCityCode и cdekPickupPointCode
-- **POST**: обязательны deliveryCountryCode, fullAddress и postalCode
+- **deliveryType** - опционально ("CDEK" или "POST")
+- **CDEK**: cdekCityCode, cdekPickupPointCode (все опциональны, можно сохранять частями)
+- **POST**: deliveryCountryCode, fullAddress, postalCode (все опциональны, можно сохранять частями)
+- Для выбора пункта выдачи CDEK сначала нужно выбрать город
+- При смене типа доставки поля другого типа очищаются
 
 ---
 
