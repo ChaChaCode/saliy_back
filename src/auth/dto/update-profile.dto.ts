@@ -23,19 +23,4 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(20)
   phone?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  street?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  apartment?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  postalCode?: string;
 }
