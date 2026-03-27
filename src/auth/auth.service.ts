@@ -256,8 +256,18 @@ export class AuthService {
 
     // Если указан город CDEK
     if (dto.cdekCityCode !== undefined) {
-      const cities = await this.deliveryService.getCdekCities('RU', undefined, undefined);
-      const city = cities.cities.find((c) => c.code === dto.cdekCityCode);
+      // Ищем город в обеих странах CDEK (RU и BY)
+      let city = null;
+
+      // Сначала ищем в России
+      const citiesRU = await this.deliveryService.getCdekCities('RU', undefined, undefined);
+      city = citiesRU.cities.find((c) => c.code === dto.cdekCityCode);
+
+      // Если не нашли в России, ищем в Беларуси
+      if (!city) {
+        const citiesBY = await this.deliveryService.getCdekCities('BY', undefined, undefined);
+        city = citiesBY.cities.find((c) => c.code === dto.cdekCityCode);
+      }
 
       if (!city) {
         throw new BadRequestException('Город не найден в CDEK');
