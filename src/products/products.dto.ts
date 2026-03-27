@@ -146,34 +146,6 @@ export class FilterProductsDto {
   categorySlug?: string;
 
   @IsOptional()
-  @IsEnum(GenderType)
-  gender?: GenderType;
-
-  @IsOptional()
-  @IsEnum(CardStatus)
-  status?: CardStatus;
-
-  @IsOptional()
-  @IsNumber()
-  minPrice?: number;
-
-  @IsOptional()
-  @IsNumber()
-  maxPrice?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  inStock?: boolean;
-
-  @IsOptional()
-  @IsString()
-  sortBy?: 'createdAt' | 'salesCount' | 'viewCount' | 'name';
-
-  @IsOptional()
-  @IsString()
-  sortOrder?: 'asc' | 'desc';
-
-  @IsOptional()
   @IsInt()
   @Min(1)
   limit?: number;

@@ -7,33 +7,15 @@ import { Category } from './models/category.model';
 export class ProductsResolver {
   constructor(private readonly productsService: ProductsService) {}
 
-  // Получить список товаров с фильтрацией
+  // Получить список товаров
   @Query(() => ProductsResponse, { name: 'products' })
   async getProducts(
-    @Args('categorySlug', { type: () => String, nullable: true })
-    categorySlug?: string,
-    @Args('gender', { type: () => String, nullable: true }) gender?: string,
-    @Args('status', { type: () => String, nullable: true }) status?: string,
-    @Args('minPrice', { type: () => Int, nullable: true }) minPrice?: number,
-    @Args('maxPrice', { type: () => Int, nullable: true }) maxPrice?: number,
-    @Args('inStock', { type: () => Boolean, nullable: true }) inStock?: boolean,
-    @Args('sortBy', { type: () => String, nullable: true }) sortBy?: string,
-    @Args('sortOrder', { type: () => String, nullable: true })
-    sortOrder?: string,
     @Args('limit', { type: () => Int, nullable: true, defaultValue: 20 })
     limit?: number,
     @Args('offset', { type: () => Int, nullable: true, defaultValue: 0 })
     offset?: number,
   ) {
     return this.productsService.getProducts({
-      categorySlug,
-      gender: gender as any,
-      status: status as any,
-      minPrice,
-      maxPrice,
-      inStock,
-      sortBy: sortBy as any,
-      sortOrder: sortOrder as any,
       limit,
       offset,
     });

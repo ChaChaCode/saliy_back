@@ -86,20 +86,12 @@
 **GET** `/api/products`
 
 **Query параметры:**
-- `categorySlug` - Фильтр по категории
-- `gender` - Фильтр по полу (male/female/unisex)
-- `status` - Фильтр по статусу (NEW/SALE/etc)
-- `minPrice` - Минимальная цена
-- `maxPrice` - Максимальная цена
-- `inStock` - Только товары в наличии (true/false)
-- `sortBy` - Сортировка (createdAt/salesCount/viewCount/name)
-- `sortOrder` - Порядок сортировки (asc/desc)
 - `limit` - Количество товаров (по умолчанию 20)
 - `offset` - Смещение для пагинации
 
 **Пример запроса:**
 ```bash
-curl -X GET "https://saliy-shop.ru/api/products?categorySlug=hoodies&gender=unisex&limit=10"
+curl -X GET "https://saliy-shop.ru/api/products"
 ```
 
 **Пример ответа:**
@@ -396,24 +388,9 @@ curl -X GET https://saliy-shop.ru/api/products/2/price
 
 ## Примеры использования
 
-### Получить все товары категории "Толстовки"
+### Получить все товары
 ```bash
-curl -X GET "https://saliy-shop.ru/api/products?categorySlug=hoodies"
-```
-
-### Получить товары унисекс в распродаже
-```bash
-curl -X GET "https://saliy-shop.ru/api/products?gender=unisex&status=SALE"
-```
-
-### Получить товары в ценовом диапазоне
-```bash
-curl -X GET "https://saliy-shop.ru/api/products?minPrice=1000&maxPrice=5000"
-```
-
-### Получить только товары в наличии
-```bash
-curl -X GET "https://saliy-shop.ru/api/products?inStock=true"
+curl -X GET "https://saliy-shop.ru/api/products"
 ```
 
 ### Поиск по названию
@@ -421,9 +398,19 @@ curl -X GET "https://saliy-shop.ru/api/products?inStock=true"
 curl -X GET "https://saliy-shop.ru/api/products/search?q=толстовка"
 ```
 
-### Получить топ-10 популярных товаров
+### Получить популярные товары
 ```bash
-curl -X GET "https://saliy-shop.ru/api/products/popular?limit=10"
+curl -X GET "https://saliy-shop.ru/api/products/popular"
+```
+
+### Получить товары в распродаже
+```bash
+curl -X GET "https://saliy-shop.ru/api/products/sale"
+```
+
+### Получить новинки
+```bash
+curl -X GET "https://saliy-shop.ru/api/products/new"
 ```
 
 ### Получить детальную информацию о товаре
@@ -433,7 +420,7 @@ curl -X GET https://saliy-shop.ru/api/products/black-oversized-hoodie
 
 ### Проверить наличие размера M
 ```bash
-curl -X GET "https://saliy-shop.ru/api/products/1/stock?size=M"
+curl -X GET "https://saliy-shop.ru/api/products/13/stock?size=M"
 ```
 
 ---

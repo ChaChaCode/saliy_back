@@ -195,18 +195,11 @@ export class ProductsService {
   // ==================== ПОЛУЧЕНИЕ ТОВАРОВ ====================
 
   /**
-   * Получить список товаров с фильтрацией
+   * Получить список товаров
    */
   async getProducts(filters: FilterProductsDto = {}) {
     const {
       categorySlug,
-      gender,
-      status,
-      minPrice,
-      maxPrice,
-      inStock,
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
       limit = 20,
       offset = 0,
     } = filters;
@@ -227,24 +220,6 @@ export class ProductsService {
       };
     }
 
-    // Фильтр по полу
-    if (gender) {
-      where.gender = gender;
-    }
-
-    // Фильтр по статусу
-    if (status) {
-      where.cardStatus = status;
-    }
-
-    // Фильтр по цене (теперь это обычное поле)
-    if (minPrice !== undefined) {
-      where.price = { ...where.price, gte: minPrice };
-    }
-    if (maxPrice !== undefined) {
-      where.price = { ...where.price, lte: maxPrice };
-    }
-
     // Получаем товары
     const products = await this.prisma.product.findMany({
       where,
@@ -256,28 +231,17 @@ export class ProductsService {
         },
       },
       orderBy: {
-        [sortBy]: sortOrder,
+        createdAt: 'desc',
       },
       take: limit,
       skip: offset,
     });
 
-    // Фильтрация по наличию (после запроса, т.к. stock это JSON)
-    let filteredProducts = products;
-
-    if (inStock) {
-      filteredProducts = products.filter((product) => {
-        const stock = product.stock as any;
-        const hasStock = Object.values(stock || {}).some((qty: any) => qty > 0);
-        return hasStock;
-      });
-    }
-
     // Получаем общее количество
     const total = await this.prisma.product.count({ where });
 
     return {
-      products: filteredProducts,
+      products,
       total,
       limit,
       offset,
