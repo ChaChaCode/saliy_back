@@ -1,18 +1,15 @@
 # API баннеров
 
-API для управления баннерами магазина.
+API для получения баннеров магазина.
 
 ---
 
-## Структура
-
-### 1. Баннеры главной страницы
-Хранятся в таблице `banners`.
+## Структура баннера
 
 ```typescript
 {
   id: string;                  // UUID
-  title: string;               // Название баннера (для админки)
+  title: string;               // Название баннера
   description?: string;        // Описание (опционально)
   desktopImageUrl: string;     // URL изображения для десктопа
   mobileImageUrl: string;      // URL изображения для мобильной версии
@@ -24,188 +21,82 @@ API для управления баннерами магазина.
 }
 ```
 
-### 2. Баннеры категорий
-Хранятся **внутри таблицы `categories`** как поля.
-
-```typescript
-{
-  id: number;
-  name: string;
-  slug: string;
-  type: string;
-  isActive: boolean;
-  desktopBannerUrl?: string;   // URL десктопного баннера категории
-  mobileBannerUrl?: string;    // URL мобильного баннера категории
-  createdAt: Date;
-  updatedAt: Date;
-}
-```
-
 ---
 
-## Эндпоинты для баннеров главной страницы
+## Эндпоинты
 
-### 1. Создать баннер главной страницы
-
-**POST** `/api/banners`
-
-**Параметры (multipart/form-data):**
-- `title` (string, обязательно) - Название баннера
-- `description` (string, опционально) - Описание
-- `link` (string, опционально) - Ссылка при клике
-- `order` (number, опционально) - Порядок отображения (по умолчанию 0)
-- `isActive` (boolean, опционально) - Активен ли (по умолчанию true)
-- `desktopImage` (file, обязательно) - Изображение для десктопа
-- `mobileImage` (file, обязательно) - Изображение для мобильной версии
-
-**Пример:**
-```bash
-curl -X POST https://saliy-shop.ru/api/banners \
-  -F "title=Новая коллекция" \
-  -F "link=/catalog" \
-  -F "order=0" \
-  -F "desktopImage=@desktop.jpg" \
-  -F "mobileImage=@mobile.jpg"
-```
-
-### 2. Получить все баннеры главной
-
-**GET** `/api/banners`
-
-Возвращает все баннеры (для админки).
-
-### 3. Получить активные баннеры главной
+### Получить активные баннеры главной страницы
 
 **GET** `/api/banners/active`
 
-Возвращает только активные баннеры для главной страницы.
+Возвращает только активные баннеры для главной страницы, отсортированные по полю `order`.
 
-**Пример:**
+**Пример запроса:**
 ```bash
 curl https://saliy-shop.ru/api/banners/active
 ```
 
-### 4. Обновить баннер
-
-**PUT** `/api/banners/:id`
-
-Можно обновить любые поля, включая изображения (опционально).
-
-### 5. Удалить баннер
-
-**DELETE** `/api/banners/:id`
-
----
-
-## Эндпоинты для баннеров категорий
-
-### 1. Загрузить/обновить баннеры категории
-
-**PUT** `/api/categories/:id/banners`
-
-Загружает или обновляет баннеры для конкретной категории.
-
-**Параметры (multipart/form-data):**
-- `desktopBanner` (file, опционально) - Изображение для десктопа
-- `mobileBanner` (file, опционально) - Изображение для мобильной версии
-
-**⚠️ Важно:** Минимум одно из двух изображений обязательно!
-
-**Пример:**
-```bash
-# Загрузить баннеры для категории "Куртки" (ID = 1)
-curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
-  -F "desktopBanner=@kurtki-desktop.jpg" \
-  -F "mobileBanner=@kurtki-mobile.jpg"
-
-# Обновить только десктопный баннер
-curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
-  -F "desktopBanner=@new-desktop.jpg"
-
-# Обновить только мобильный баннер
-curl -X PUT https://saliy-shop.ru/api/categories/2/banners \
-  -F "mobileBanner=@new-mobile.jpg"
-```
-
-### 2. Получить категорию с баннерами
-
-**GET** `/api/categories/:slug`
-
-Возвращает информацию о категории, включая URL баннеров.
-
-**Пример:**
-```bash
-curl https://saliy-shop.ru/api/categories/kurtki
-```
-
-**Ответ:**
+**Пример ответа:**
 ```json
-{
-  "id": 1,
-  "name": "Куртки",
-  "slug": "kurtki",
-  "type": "TOP",
-  "isActive": true,
-  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
-  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
-  "createdAt": "2024-03-28T10:00:00.000Z",
-  "updatedAt": "2024-03-28T11:00:00.000Z"
-}
+[
+  {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "title": "Новая зимняя коллекция",
+    "description": "Скидки до 50%",
+    "desktopImageUrl": "/uploads/banners/desktop-1234567890.jpg",
+    "mobileImageUrl": "/uploads/banners/mobile-1234567890.jpg",
+    "link": "/new-collection",
+    "order": 0,
+    "isActive": true,
+    "createdAt": "2024-01-15T10:00:00.000Z",
+    "updatedAt": "2024-01-15T10:00:00.000Z"
+  },
+  {
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "title": "Распродажа",
+    "description": null,
+    "desktopImageUrl": "/uploads/banners/desktop-9876543210.jpg",
+    "mobileImageUrl": "/uploads/banners/mobile-9876543210.jpg",
+    "link": "/sale",
+    "order": 1,
+    "isActive": true,
+    "createdAt": "2024-01-15T11:00:00.000Z",
+    "updatedAt": "2024-01-15T11:00:00.000Z"
+  }
+]
 ```
 
 ---
 
-## Примеры использования
+## Баннеры категорий
 
-### Сценарий 1: Настроить баннеры главной страницы
+Баннеры категорий хранятся **внутри таблицы `categories`** как поля `desktopBannerUrl` и `mobileBannerUrl`.
 
-```bash
-# Баннер 1 - Новая коллекция
-curl -X POST https://saliy-shop.ru/api/banners \
-  -F "title=Новая зимняя коллекция" \
-  -F "link=/new-collection" \
-  -F "order=0" \
-  -F "desktopImage=@banner1-desktop.jpg" \
-  -F "mobileImage=@banner1-mobile.jpg"
+Получить баннеры категории можно через:
+- `GET /api/categories/:slug` - получить категорию с баннерами
+- `GET /api/categories` - получить все категории с баннерами
 
-# Баннер 2 - Скидки
-curl -X POST https://saliy-shop.ru/api/banners \
-  -F "title=Скидка 30%" \
-  -F "link=/sale" \
-  -F "order=1" \
-  -F "desktopImage=@banner2-desktop.jpg" \
-  -F "mobileImage=@banner2-mobile.jpg"
-```
+См. [API категорий](./categories.md) для подробностей.
 
-### Сценарий 2: Настроить баннеры для категорий
+---
 
-```bash
-# Баннеры для категории "Куртки" (ID = 1)
-curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
-  -F "desktopBanner=@kurtki-desktop.jpg" \
-  -F "mobileBanner=@kurtki-mobile.jpg"
-
-# Баннеры для категории "Штаны" (ID = 2)
-curl -X PUT https://saliy-shop.ru/api/categories/2/banners \
-  -F "desktopBanner=@shtany-desktop.jpg" \
-  -F "mobileBanner=@shtany-mobile.jpg"
-```
-
-### Сценарий 3: Отображение на фронтенде
+## Пример использования на фронтенде
 
 ```javascript
-// Главная страница
+// Получить баннеры главной страницы
 fetch('https://saliy-shop.ru/api/banners/active')
   .then(res => res.json())
   .then(banners => {
     banners.forEach(banner => {
+      console.log(banner.title);
       console.log(banner.desktopImageUrl); // Для десктопа
       console.log(banner.mobileImageUrl);  // Для мобильной версии
+      console.log(banner.link);            // Ссылка при клике
     });
   });
 
-// Страница категории "Куртки"
-fetch('https://saliy-shop.ru/api/categories/kurtki')
+// Получить баннеры категории
+fetch('https://saliy-shop.ru/api/categories/hoodies')
   .then(res => res.json())
   .then(category => {
     if (category.desktopBannerUrl) {
@@ -234,26 +125,12 @@ uploads/
 ```
 uploads/
   └── categories/
-      ├── desktop-cat1-1234567890.jpg  ← Куртки
+      ├── desktop-cat1-1234567890.jpg
       ├── mobile-cat1-1234567890.jpg
-      ├── desktop-cat2-9876543210.jpg  ← Штаны
-      ├── mobile-cat2-9876543210.jpg
       └── ...
 ```
 
 Все файлы доступны по URL: `https://saliy-shop.ru/uploads/...`
-
----
-
-## Требования к изображениям
-
-**Рекомендуемые размеры:**
-- Desktop: 1920x600px
-- Mobile: 768x768px
-
-**Форматы:**
-- JPG, PNG, WebP
-- Максимальный размер: 5MB
 
 ---
 
@@ -262,13 +139,11 @@ uploads/
 | Код | Описание |
 |-----|----------|
 | 200 | Успешно |
-| 400 | Некорректные данные или отсутствуют обязательные изображения |
-| 404 | Баннер или категория не найдена |
 | 500 | Ошибка сервера |
 
 ---
 
 ## См. также
 
-- [Категории товаров](./categories.md)
-- [Товары](./products.md)
+- [API категорий](./categories.md) - Категории с баннерами
+- [API товаров](./products.md) - Товары
