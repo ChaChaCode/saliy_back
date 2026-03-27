@@ -52,8 +52,8 @@
    - **POST** - обычная почтовая доставка (любая страна)
 4. **Если CDEK:**
    - Выбирает страну (RU или BY)
-   - Выбирает регион
-   - Выбирает город
+   - **Обязательно** выбирает регион из списка
+   - Выбирает город из этого региона
    - Выбирает пункт выдачи
 5. **Если POST:**
    - Выбирает страну
@@ -174,15 +174,22 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
 
 **Пример запроса:**
 ```bash
-# 1. Найти город
-curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
-# Получить cityCode
+# 1. Получить регионы
+curl "https://saliy-shop.ru/api/delivery/regions?countryCode=RU"
+# Получить regionCode (например, 81 для Москвы)
 
-# 2. Получить пункты выдачи
+# 2. Получить города региона
+curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&regionCode=81"
+# Получить cityCode (например, 44 для Москвы)
+
+# Альтернатива: Поиск города по названию
+curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
+
+# 3. Получить пункты выдачи
 curl "https://saliy-shop.ru/api/delivery/pickup-points?cityCode=44"
 # Получить pickupPointCode
 
-# 3. Сохранить в профиле
+# 4. Сохранить в профиле
 curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
@@ -318,6 +325,8 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 **⚠️ Важно:**
 - При смене `deliveryType` (CDEK → POST или наоборот) автоматически очищаются поля другого типа
 - Для добавления `cdekPickupPointCode` сначала нужно выбрать `cdekCityCode`
+- **Для CDEK (RU/BY)**: На фронте сначала выберите регион через `/delivery/regions`, затем город через `/delivery/cities?regionCode=X`
+- **Поиск города**: Можно использовать `search` для поиска по названию без выбора региона
 - Можно обновлять одно поле или несколько сразу
 
 ---

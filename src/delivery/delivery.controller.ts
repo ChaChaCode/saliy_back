@@ -70,6 +70,15 @@ export class DeliveryController {
       return { error: 'Country code is required' };
     }
 
+    // Для CDEK стран (RU, BY) требуем либо regionCode, либо search
+    const isCdekCountry = ['RU', 'BY'].includes(countryCode.toUpperCase());
+    if (isCdekCountry && !regionCode && !search) {
+      return {
+        error: 'For CDEK countries (RU, BY) regionCode or search is required',
+        hint: 'Use /delivery/regions?countryCode=RU to get list of regions first'
+      };
+    }
+
     // Парсим regionCode вручную, если он передан
     const parsedRegionCode = regionCode ? parseInt(regionCode, 10) : undefined;
 

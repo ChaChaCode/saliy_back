@@ -248,22 +248,26 @@ curl "https://saliy-shop.ru/api/delivery/countries?lang=ru"
 
 ### Вариант А: Страны с CDEK (RU, BY)
 
-#### Шаг 2А: Искать город
+#### Шаг 2А: Выбрать регион и город
 
-```bash
-# Поиск города по названию
-curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
-```
-
-Или выбрать регион, затем город:
+**Основной способ (рекомендуется):**
 
 ```bash
 # 1. Получить регионы
 curl "https://saliy-shop.ru/api/delivery/regions?countryCode=RU"
 
-# 2. Получить города региона
-curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&regionCode=77"
+# 2. Получить города региона (обязательно указать regionCode)
+curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&regionCode=81"
 ```
+
+**Альтернатива - поиск по названию:**
+
+```bash
+# Поиск города по названию (без выбора региона)
+curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
+```
+
+⚠️ **Важно:** Без `regionCode` или `search` API вернет ошибку, так как список из 1500+ городов неудобен для выбора.
 
 #### Шаг 3А: Сохранить в профиле
 
