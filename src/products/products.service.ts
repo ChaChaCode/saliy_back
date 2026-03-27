@@ -35,7 +35,7 @@ export class ProductsService {
     }
 
     // Создаём товар со связями с категориями
-    return this.prisma.product.create({
+    const product = await this.prisma.product.create({
       data: {
         ...productData,
         ...(categoryIds && {
@@ -52,6 +52,12 @@ export class ProductsService {
         },
       },
     });
+
+    this.logger.log(
+      `Товар создан: ID=${product.id}, slug="${product.slug}", name="${product.name}", price=${product.price}`,
+    );
+
+    return product;
   }
 
   /**
@@ -106,7 +112,7 @@ export class ProductsService {
    */
   async updateProduct(id: number, dto: UpdateProductDto) {
     // Проверяем существование
-    await this.getProductById(id);
+    const oldProduct = await this.getProductById(id);
 
     const { categoryIds, ...productData } = dto;
 
@@ -122,7 +128,7 @@ export class ProductsService {
     }
 
     // Обновляем товар
-    return this.prisma.product.update({
+    const product = await this.prisma.product.update({
       where: { id },
       data: {
         ...productData,
@@ -141,6 +147,29 @@ export class ProductsService {
         },
       },
     });
+
+    // Логируем изменения
+    const changes: string[] = [];
+    if (dto.name && dto.name !== oldProduct.name) {
+      changes.push(`name: "${oldProduct.name}" → "${dto.name}"`);
+    }
+    if (dto.price !== undefined && dto.price !== oldProduct.price) {
+      changes.push(`price: ${oldProduct.price} → ${dto.price}`);
+    }
+    if (dto.discount !== undefined && dto.discount !== oldProduct.discount) {
+      changes.push(`discount: ${oldProduct.discount}% → ${dto.discount}%`);
+    }
+    if (dto.isActive !== undefined && dto.isActive !== oldProduct.isActive) {
+      changes.push(`isActive: ${oldProduct.isActive} → ${dto.isActive}`);
+    }
+
+    if (changes.length > 0) {
+      this.logger.log(
+        `Товар обновлён: ID=${id}, slug="${product.slug}", изменения: ${changes.join(', ')}`,
+      );
+    }
+
+    return product;
   }
 
   /**
@@ -148,11 +177,17 @@ export class ProductsService {
    */
   async deleteProduct(id: number) {
     // Проверяем существование
-    await this.getProductById(id);
+    const product = await this.getProductById(id);
 
-    return this.prisma.product.delete({
+    const result = await this.prisma.product.delete({
       where: { id },
     });
+
+    this.logger.warn(
+      `Товар удалён: ID=${id}, slug="${product.slug}", name="${product.name}"`,
+    );
+
+    return result;
   }
 
   // ==================== ПОЛУЧЕНИЕ ТОВАРОВ ====================

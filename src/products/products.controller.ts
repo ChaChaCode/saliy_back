@@ -9,13 +9,16 @@ import {
   Query,
   ParseIntPipe,
   ValidationPipe,
+  UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ProductsService } from './products.service';
 import {
   CreateProductDto,
   UpdateProductDto,
   FilterProductsDto,
 } from './products.dto';
+import { AdminGuard } from '../common/guards';
 
 @Controller('products')
 export class ProductsController {
@@ -26,8 +29,10 @@ export class ProductsController {
   /**
    * Создать товар
    * POST /api/products
+   * @requires AdminGuard - Только для авторизованных администраторов
    */
   @Post()
+  @UseGuards(AdminGuard)
   async createProduct(@Body(ValidationPipe) dto: CreateProductDto) {
     return this.productsService.createProduct(dto);
   }
@@ -44,8 +49,10 @@ export class ProductsController {
   /**
    * Поиск товаров
    * GET /api/products/search?q=толстовка
+   * Rate limit: 20 запросов в минуту
    */
   @Get('search')
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   async searchProducts(@Query('q') query: string) {
     return this.productsService.searchProducts(query);
   }
@@ -89,8 +96,10 @@ export class ProductsController {
   /**
    * Обновить товар
    * PUT /api/products/:id
+   * @requires AdminGuard - Только для авторизованных администраторов
    */
   @Put(':id')
+  @UseGuards(AdminGuard)
   async updateProduct(
     @Param('id', ParseIntPipe) id: number,
     @Body(ValidationPipe) dto: UpdateProductDto,
@@ -101,8 +110,10 @@ export class ProductsController {
   /**
    * Удалить товар
    * DELETE /api/products/:id
+   * @requires AdminGuard - Только для авторизованных администраторов
    */
   @Delete(':id')
+  @UseGuards(AdminGuard)
   async deleteProduct(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.deleteProduct(id);
   }

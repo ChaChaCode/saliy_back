@@ -1,0 +1,40 @@
+// Модели для администрирования
+
+enum AdminRole {
+  SUPER_ADMIN // Полный доступ
+  ADMIN // Управление заказами, товарами, пользователями
+  MODERATOR // Просмотр данных
+}
+
+model Admin {
+  id         String    @id @default(uuid())
+  telegramId String    @unique @map("telegram_id") // Telegram User ID
+  name       String // Имя из Telegram
+  role       AdminRole @default(ADMIN)
+  isActive   Boolean   @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@index([telegramId])
+  @@map("admins")
+}
+
+model AdminLoginRequest {
+  id               String   @id @default(uuid())
+  loginId          String   @unique @map("login_id") // Для polling
+  verificationCode String   @map("verification_code") // 4-символьный код
+  ip               String
+  userAgent        String?  @map("user_agent")
+  location         String? // JSON с геоданными
+  approved         Boolean  @default(false)
+  token            String? // JWT токен после подтверждения
+  expiresAt        DateTime @map("expires_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([loginId])
+  @@index([approved])
+  @@index([createdAt])
+  @@map("admin_login_requests")
+}
