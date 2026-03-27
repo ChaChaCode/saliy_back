@@ -13,18 +13,24 @@
   middleName?: string;     // Отчество
   phone?: string;          // Телефон
 
-  // Локация доставки (редактируется через отдельный эндпоинт)
-  cdekCityCode?: number;      // Код города CDEK
-  cdekCountryCode?: string;   // Код страны CDEK
-  cdekRegionCode?: number;    // Код региона CDEK
-  cityName?: string;          // Название города
-  countryName?: string;       // Название страны
-  regionName?: string;        // Название региона
+  // Тип доставки (выбирается первым шагом)
+  deliveryType?: 'CDEK' | 'POST'; // CDEK - самовывоз из ПВЗ, POST - почта
 
-  // Адрес доставки (только для чтения, заполняется при оформлении заказа)
-  street?: string;         // Улица и номер дома
-  apartment?: string;      // Квартира
-  postalCode?: string;     // Почтовый индекс
+  // CDEK доставка (если deliveryType = 'CDEK')
+  cdekCityCode?: number;           // Код города CDEK
+  cdekCountryCode?: string;        // Код страны CDEK (RU/BY)
+  cdekRegionCode?: number;         // Код региона CDEK
+  cdekPickupPointCode?: string;    // Код выбранного ПВЗ
+  cityName?: string;               // Название города
+  countryName?: string;            // Название страны
+  regionName?: string;             // Название региона
+
+  // Почтовая доставка (если deliveryType = 'POST')
+  deliveryCountryCode?: string;    // Код страны (любая)
+  fullAddress?: string;            // Полный адрес одной строкой
+
+  // Общее
+  postalCode?: string;             // Почтовый индекс
 
   createdAt: Date;         // Дата регистрации
   updatedAt: Date;         // Дата обновления
@@ -37,16 +43,24 @@
 
 ### Что можно редактировать:
 - ✅ **Персональные данные**: имя, фамилия, отчество, телефон
-- ✅ **Локация доставки**: страна/регион/город (через `/auth/delivery-location`)
+- ✅ **Адрес доставки**: через `/auth/delivery-location`
 - ❌ **Email**: НЕ редактируется (привязан к аккаунту)
-- ❌ **Адрес доставки**: НЕ редактируется в профиле (вводится при оформлении заказа)
 
 ### Порядок заполнения:
 1. Пользователь регистрируется по email
 2. Заполняет имя, фамилию, телефон в профиле
-3. Выбирает город доставки (страна → регион → город)
-4. При оформлении заказа вводит конкретный адрес (улица, квартира)
-5. Система автоматически использует данные из профиля + введенный адрес
+3. **Выбирает тип доставки:**
+   - **CDEK** - самовывоз из ПВЗ (только RU/BY)
+   - **POST** - обычная почтовая доставка (любая страна)
+4. **Если CDEK:**
+   - Выбирает страну (RU или BY)
+   - Выбирает регион
+   - Выбирает город
+   - Выбирает пункт выдачи
+5. **Если POST:**
+   - Выбирает страну
+   - Вводит полный адрес (одна строка)
+   - Вводит почтовый индекс
 
 ---
 
@@ -64,24 +78,41 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-**Пример ответа:**
+**Пример ответа (CDEK):**
 ```json
 {
   "id": "uuid-123",
   "email": "user@example.com",
   "firstName": "Иван",
   "lastName": "Петров",
-  "middleName": "Сергеевич",
   "phone": "+79991234567",
-  "street": "ул. Ленина, д. 10",
-  "apartment": "25",
-  "postalCode": "123456",
+  "deliveryType": "CDEK",
   "cdekCityCode": 44,
   "cdekCountryCode": "RU",
   "cdekRegionCode": 77,
+  "cdekPickupPointCode": "MSK123",
   "cityName": "Москва",
   "countryName": "Россия",
   "regionName": "Москва",
+  "postalCode": "101000",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "updatedAt": "2024-01-20T14:25:00.000Z"
+}
+```
+
+**Пример ответа (POST):**
+```json
+{
+  "id": "uuid-123",
+  "email": "user@example.com",
+  "firstName": "Иван",
+  "lastName": "Петров",
+  "phone": "+48123456789",
+  "deliveryType": "POST",
+  "deliveryCountryCode": "PL",
+  "countryName": "Польша",
+  "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
+  "postalCode": "00-001",
   "createdAt": "2024-01-15T10:30:00.000Z",
   "updatedAt": "2024-01-20T14:25:00.000Z"
 }
@@ -107,36 +138,7 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
 
 Все поля опциональные.
 
-**Примечание:** Адрес доставки (улица, квартира) НЕ редактируется через этот эндпоинт. Он вводится при оформлении заказа.
-
-**Пример запроса:**
-```bash
-curl -X PUT https://saliy-shop.ru/api/auth/profile \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "Иван",
-    "lastName": "Петров",
-    "phone": "+79991234567"
-  }'
-```
-
-**Пример ответа:**
-```json
-{
-  "id": "uuid-123",
-  "email": "user@example.com",
-  "firstName": "Иван",
-  "lastName": "Петров",
-  "middleName": "Сергеевич",
-  "phone": "+79991234567",
-  "cdekCityCode": 44,
-  "cityName": "Москва",
-  "countryName": "Россия",
-  "createdAt": "2024-01-15T10:30:00.000Z",
-  "updatedAt": "2024-01-20T15:45:00.000Z"
-}
-```
+**Примечание:** Адрес доставки редактируется через отдельный эндпоинт `/auth/delivery-location`.
 
 ---
 
@@ -146,33 +148,42 @@ curl -X PUT https://saliy-shop.ru/api/auth/profile \
 
 **Требуется авторизация:** Да
 
-Есть **два варианта** установки адреса в зависимости от страны доставки.
+**Шаг 1:** Пользователь выбирает тип доставки: **CDEK** или **POST**
 
 ---
 
-#### Вариант А: Страны с CDEK (RU, BY)
-
-Для России и Беларуси пользователь выбирает город через селекты.
+#### Вариант CDEK: Самовывоз из ПВЗ (только RU/BY)
 
 **Тело запроса:**
 ```json
 {
+  "deliveryType": "CDEK",
   "cdekCityCode": 44,
+  "cdekPickupPointCode": "MSK123",
   "postalCode": "101000"
 }
 ```
 
 **Пример запроса:**
 ```bash
-# 1. Найти город через API доставки
+# 1. Найти город
 curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
 # Получить cityCode
 
-# 2. Сохранить город в профиле
+# 2. Получить пункты выдачи
+curl "https://saliy-shop.ru/api/delivery/pickup-points?cityCode=44"
+# Получить pickupPointCode
+
+# 3. Сохранить в профиле
 curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cdekCityCode": 44, "postalCode": "101000"}'
+  -d '{
+    "deliveryType": "CDEK",
+    "cdekCityCode": 44,
+    "cdekPickupPointCode": "MSK123",
+    "postalCode": "101000"
+  }'
 ```
 
 **Пример ответа:**
@@ -181,31 +192,29 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   "id": "uuid-123",
   "email": "user@example.com",
   "firstName": "Иван",
-  "lastName": "Петров",
   "phone": "+79991234567",
+  "deliveryType": "CDEK",
   "cdekCityCode": 44,
   "cdekCountryCode": "RU",
   "cdekRegionCode": 77,
+  "cdekPickupPointCode": "MSK123",
   "cityName": "Москва",
   "countryName": "Россия",
   "regionName": "Москва",
   "postalCode": "101000",
   "deliveryCountryCode": null,
-  "fullAddress": null,
-  "createdAt": "2024-01-15T10:30:00.000Z",
-  "updatedAt": "2024-01-20T16:00:00.000Z"
+  "fullAddress": null
 }
 ```
 
 ---
 
-#### Вариант Б: Другие страны (без CDEK)
-
-Для всех остальных стран пользователь вводит полный адрес одной строкой.
+#### Вариант POST: Почтовая доставка (любая страна)
 
 **Тело запроса:**
 ```json
 {
+  "deliveryType": "POST",
   "deliveryCountryCode": "PL",
   "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
   "postalCode": "00-001"
@@ -218,6 +227,7 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
+    "deliveryType": "POST",
     "deliveryCountryCode": "PL",
     "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
     "postalCode": "00-001"
@@ -230,19 +240,14 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   "id": "uuid-123",
   "email": "user@example.com",
   "firstName": "Иван",
-  "lastName": "Петров",
   "phone": "+48123456789",
-  "cdekCityCode": null,
-  "cdekCountryCode": null,
-  "cdekRegionCode": null,
-  "cityName": null,
-  "countryName": "Польша",
-  "regionName": null,
-  "postalCode": "00-001",
+  "deliveryType": "POST",
   "deliveryCountryCode": "PL",
+  "countryName": "Польша",
   "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
-  "createdAt": "2024-01-15T10:30:00.000Z",
-  "updatedAt": "2024-01-20T16:00:00.000Z"
+  "postalCode": "00-001",
+  "cdekCityCode": null,
+  "cdekPickupPointCode": null
 }
 ```
 
@@ -258,13 +263,10 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 - Минимум: 1 символ
 - Максимум: 100 символов
 
-### Локация доставки
-- Выбирается через `/auth/delivery-location`
-- Используется для расчёта стоимости доставки при оформлении заказа
-
 ### Адрес доставки
-- НЕ редактируется в профиле
-- Вводится пользователем при оформлении заказа
+- **deliveryType** - обязательно ("CDEK" или "POST")
+- **CDEK**: обязательны cdekCityCode и cdekPickupPointCode
+- **POST**: обязательны deliveryCountryCode и fullAddress
 
 ---
 
@@ -286,7 +288,7 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 # 1. Авторизоваться (получить токен)
 # См. docs/shop/auth.md
 
-# 2. Получить текущий профиль
+# 2. Получить профиль
 curl -X GET https://saliy-shop.ru/api/auth/me \
   -H "Authorization: Bearer ACCESS_TOKEN"
 
@@ -297,24 +299,37 @@ curl -X PUT https://saliy-shop.ru/api/auth/profile \
   -d '{
     "firstName": "Иван",
     "lastName": "Петров",
-    "middleName": "Сергеевич",
     "phone": "+79991234567"
   }'
 
-# 4. Выбрать город доставки
-# Сначала найти город через /delivery/cities (см. docs/shop/delivery.md)
-# Затем сохранить код города:
+# 4. Выбрать тип доставки и установить адрес
+
+# === Вариант А: CDEK ===
+# Найти город
+curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
+
+# Найти ПВЗ
+curl "https://saliy-shop.ru/api/delivery/pickup-points?cityCode=44"
+
+# Сохранить
 curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cdekCityCode": 44}'
+  -d '{
+    "deliveryType": "CDEK",
+    "cdekCityCode": 44,
+    "cdekPickupPointCode": "MSK123",
+    "postalCode": "101000"
+  }'
 
-# 5. Проверить обновленный профиль
-curl -X GET https://saliy-shop.ru/api/auth/me \
-  -H "Authorization: Bearer ACCESS_TOKEN"
-# Теперь профиль содержит: имя, телефон, город доставки
+# === Вариант Б: POST ===
+curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deliveryType": "POST",
+    "deliveryCountryCode": "PL",
+    "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
+    "postalCode": "00-001"
+  }'
 ```
-
-**При оформлении заказа:**
-- Система автоматически использует данные из профиля (имя, телефон, город)
-- Пользователь дополнительно вводит конкретный адрес доставки (улица, квартира)

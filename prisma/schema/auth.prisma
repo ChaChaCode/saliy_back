@@ -18,16 +18,22 @@ model User {
   apartment  String? @map("apartment")
   postalCode String? @map("postal_code")
 
-  // CDEK локация (для стран RU/BY)
-  cdekCityCode    Int?    @map("cdek_city_code")
-  cdekCountryCode String? @map("cdek_country_code")
-  cdekRegionCode  Int?    @map("cdek_region_code")
-  cityName        String? @map("city_name")
-  countryName     String? @map("country_name")
-  regionName      String? @map("region_name")
+  // Тип доставки (выбирает пользователь первым шагом)
+  // CDEK - самовывоз из ПВЗ CDEK (только RU/BY)
+  // POST - обычная почтовая доставка (любая страна)
+  deliveryType String? @map("delivery_type")
 
-  // Адрес для стран без CDEK
-  deliveryCountryCode String? @map("delivery_country_code") // Код страны (US, PL, etc)
+  // CDEK доставка (если deliveryType = CDEK)
+  cdekCityCode        Int?    @map("cdek_city_code")
+  cdekCountryCode     String? @map("cdek_country_code")
+  cdekRegionCode      Int?    @map("cdek_region_code")
+  cdekPickupPointCode String? @map("cdek_pickup_point_code") // Код выбранного ПВЗ
+  cityName            String? @map("city_name")
+  countryName         String? @map("country_name")
+  regionName          String? @map("region_name")
+
+  // Почтовая доставка (если deliveryType = POST)
+  deliveryCountryCode String? @map("delivery_country_code") // Код страны (US, PL, RU, etc)
   fullAddress         String? @map("full_address")          // Полный адрес одной строкой
 
   refreshTokens     RefreshToken[]

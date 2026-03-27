@@ -176,9 +176,11 @@ export class AuthService {
         street: true,
         apartment: true,
         postalCode: true,
+        deliveryType: true,
         cdekCityCode: true,
         cdekCountryCode: true,
         cdekRegionCode: true,
+        cdekPickupPointCode: true,
         cityName: true,
         countryName: true,
         regionName: true,
@@ -218,8 +220,14 @@ export class AuthService {
   }
 
   async updateDeliveryLocation(userId: string, dto: UpdateDeliveryLocationDto) {
-    // Вариант 1: CDEK страны (RU, BY) - получаем данные через API
-    if (dto.cdekCityCode) {
+    // Вариант CDEK: Самовывоз из ПВЗ (только RU/BY)
+    if (dto.deliveryType === 'CDEK') {
+      if (!dto.cdekCityCode || !dto.cdekPickupPointCode) {
+        throw new BadRequestException(
+          'Для CDEK доставки обязательны: cdekCityCode и cdekPickupPointCode',
+        );
+      }
+
       // Получаем информацию о городе через CDEK API
       const cities = await this.deliveryService.getCdekCities('RU', undefined, undefined);
       const city = cities.cities.find((c) => c.code === dto.cdekCityCode);
@@ -228,17 +236,27 @@ export class AuthService {
         throw new BadRequestException('Город не найден в CDEK');
       }
 
+      // Можно также проверить что ПВЗ существует
+      const pickupPoints = await this.deliveryService.getCdekPickupPoints(dto.cdekCityCode);
+      const pickupPoint = pickupPoints.points.find((p) => p.code === dto.cdekPickupPointCode);
+
+      if (!pickupPoint) {
+        throw new BadRequestException('Пункт выдачи не найден');
+      }
+
       return this.prisma.user.update({
         where: { id: userId },
         data: {
+          deliveryType: 'CDEK',
           cdekCityCode: city.code,
           cdekCountryCode: city.countryCode,
           cdekRegionCode: city.regionCode,
+          cdekPickupPointCode: dto.cdekPickupPointCode,
           cityName: city.name,
           countryName: city.countryCode === 'RU' ? 'Россия' : 'Беларусь',
           regionName: city.region,
           postalCode: dto.postalCode,
-          // Очищаем поля для других стран
+          // Очищаем поля для почтовой доставки
           deliveryCountryCode: null,
           fullAddress: null,
         },
@@ -249,9 +267,11 @@ export class AuthService {
           lastName: true,
           middleName: true,
           phone: true,
+          deliveryType: true,
           cdekCityCode: true,
           cdekCountryCode: true,
           cdekRegionCode: true,
+          cdekPickupPointCode: true,
           cityName: true,
           countryName: true,
           regionName: true,
@@ -264,8 +284,14 @@ export class AuthService {
       });
     }
 
-    // Вариант 2: Другие страны - сохраняем введенные данные
-    if (dto.deliveryCountryCode) {
+    // Вариант POST: Почтовая доставка (любая страна)
+    if (dto.deliveryType === 'POST') {
+      if (!dto.deliveryCountryCode || !dto.fullAddress) {
+        throw new BadRequestException(
+          'Для почтовой доставки обязательны: deliveryCountryCode и fullAddress',
+        );
+      }
+
       const countryInfo = this.deliveryService.getCountryInfo(dto.deliveryCountryCode, 'ru');
 
       if (!countryInfo) {
@@ -275,6 +301,7 @@ export class AuthService {
       return this.prisma.user.update({
         where: { id: userId },
         data: {
+          deliveryType: 'POST',
           deliveryCountryCode: dto.deliveryCountryCode,
           countryName: countryInfo.name,
           fullAddress: dto.fullAddress,
@@ -283,6 +310,7 @@ export class AuthService {
           cdekCityCode: null,
           cdekCountryCode: null,
           cdekRegionCode: null,
+          cdekPickupPointCode: null,
           cityName: null,
           regionName: null,
         },
@@ -293,9 +321,11 @@ export class AuthService {
           lastName: true,
           middleName: true,
           phone: true,
+          deliveryType: true,
           cdekCityCode: true,
           cdekCountryCode: true,
           cdekRegionCode: true,
+          cdekPickupPointCode: true,
           cityName: true,
           countryName: true,
           regionName: true,
@@ -308,8 +338,6 @@ export class AuthService {
       });
     }
 
-    throw new BadRequestException(
-      'Необходимо указать либо cdekCityCode (для RU/BY), либо deliveryCountryCode + fullAddress (для других стран)',
-    );
+    throw new BadRequestException('Неизвестный тип доставки');
   }
 }
