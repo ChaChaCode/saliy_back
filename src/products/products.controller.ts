@@ -62,7 +62,9 @@ export class ProductsController {
    * GET /api/products/popular?limit=10
    */
   @Get('popular')
-  async getPopularProducts(@Query('limit', ParseIntPipe) limit?: number) {
+  async getPopularProducts(
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
     return this.productsService.getPopularProducts(limit);
   }
 
@@ -71,7 +73,9 @@ export class ProductsController {
    * GET /api/products/sale?limit=20
    */
   @Get('sale')
-  async getSaleProducts(@Query('limit', ParseIntPipe) limit?: number) {
+  async getSaleProducts(
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
     return this.productsService.getSaleProducts(limit);
   }
 
@@ -80,7 +84,9 @@ export class ProductsController {
    * GET /api/products/new?limit=20
    */
   @Get('new')
-  async getNewProducts(@Query('limit', ParseIntPipe) limit?: number) {
+  async getNewProducts(
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
     return this.productsService.getNewProducts(limit);
   }
 
