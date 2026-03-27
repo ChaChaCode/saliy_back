@@ -2,9 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Включаем CORS
   const allowedOrigins = [
@@ -32,6 +34,11 @@ async function bootstrap() {
 
   // Подключаем cookie parser
   app.use(cookieParser());
+
+  // Раздача статических файлов (загруженные изображения)
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   // Глобальный префикс для всех роутов
   app.setGlobalPrefix('api');

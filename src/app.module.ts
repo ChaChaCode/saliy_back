@@ -14,6 +14,7 @@ import { EmailModule } from './common/email/email.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { ProductsModule } from './products/products.module';
 import { AdminModule } from './admin/admin.module';
+import { BannersModule } from './banners/banners.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AdminModule } from './admin/admin.module';
     DeliveryModule,
     ProductsModule,
     AdminModule,
+    BannersModule,
   ],
   controllers: [AppController],
   providers: [

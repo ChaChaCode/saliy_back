@@ -10,6 +10,7 @@ model Category {
   updatedAt DateTime          @updatedAt @map("updated_at")
 
   products  ProductCategory[]
+  banners   Banner[]
 
   @@index([isActive])
   @@index([slug])
