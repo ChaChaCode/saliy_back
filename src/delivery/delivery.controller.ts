@@ -63,14 +63,17 @@ export class DeliveryController {
   @Get('cities')
   async getCities(
     @Query('countryCode') countryCode: string,
-    @Query('regionCode', ParseIntPipe) regionCode?: number,
+    @Query('regionCode') regionCode?: string,
     @Query('search') search?: string,
   ) {
     if (!countryCode) {
       return { error: 'Country code is required' };
     }
 
-    return this.deliveryService.getCdekCities(countryCode, regionCode, search);
+    // Парсим regionCode вручную, если он передан
+    const parsedRegionCode = regionCode ? parseInt(regionCode, 10) : undefined;
+
+    return this.deliveryService.getCdekCities(countryCode, parsedRegionCode, search);
   }
 
   /**

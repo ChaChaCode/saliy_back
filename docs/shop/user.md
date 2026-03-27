@@ -28,9 +28,7 @@
   // Почтовая доставка (если deliveryType = 'POST')
   deliveryCountryCode?: string;    // Код страны (любая)
   fullAddress?: string;            // Полный адрес одной строкой
-
-  // Общее
-  postalCode?: string;             // Почтовый индекс
+  postalCode?: string;             // Почтовый индекс (ТОЛЬКО для POST)
 
   createdAt: Date;         // Дата регистрации
   updatedAt: Date;         // Дата обновления

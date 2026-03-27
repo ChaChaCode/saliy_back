@@ -271,17 +271,17 @@ curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&regionCode=77"
 curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cdekCityCode": 44, "postalCode": "101000"}'
+  -d '{"deliveryType": "CDEK", "cdekCityCode": 44}'
 ```
 
 После этого в профиле автоматически заполнятся:
+- `deliveryType` - "CDEK"
 - `cdekCityCode` - 44
 - `cdekCountryCode` - "RU"
 - `cdekRegionCode` - 77
 - `cityName` - "Москва"
 - `countryName` - "Россия"
 - `regionName` - "Москва"
-- `postalCode` - "101000"
 
 ---
 
@@ -300,6 +300,7 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
+    "deliveryType": "POST",
     "deliveryCountryCode": "PL",
     "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
     "postalCode": "00-001"
@@ -307,6 +308,7 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 ```
 
 После этого в профиле заполнятся:
+- `deliveryType` - "POST"
 - `deliveryCountryCode` - "PL"
 - `countryName` - "Польша"
 - `fullAddress` - "Варшава, ул. Новы Свят, д. 10, кв. 5"
