@@ -230,9 +230,25 @@ curl "https://saliy-shop.ru/api/delivery/prices?cityCode=44&weight=650"
 curl "https://saliy-shop.ru/api/delivery/countries?lang=ru"
 ```
 
-Пользователь выбирает страну из списка (например, RU).
+Пользователь выбирает страну из списка. Ответ содержит поле `deliveryTypes`:
 
-### Шаг 2: Если страна RU или BY - искать город
+```json
+{
+  "code": "RU",
+  "name": "Россия",
+  "deliveryTypes": ["CDEK_PICKUP", "CDEK_COURIER", "STANDARD"]
+}
+```
+
+**Логика фронтенда:**
+- Если `deliveryTypes` содержит `"CDEK_PICKUP"` или `"CDEK_COURIER"` → **Вариант А** (выбор через селекты)
+- Иначе → **Вариант Б** (ввод адреса вручную)
+
+---
+
+### Вариант А: Страны с CDEK (RU, BY)
+
+#### Шаг 2А: Искать город
 
 ```bash
 # Поиск города по названию
@@ -249,13 +265,13 @@ curl "https://saliy-shop.ru/api/delivery/regions?countryCode=RU"
 curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&regionCode=77"
 ```
 
-### Шаг 3: Сохранить город в профиле
+#### Шаг 3А: Сохранить в профиле
 
 ```bash
 curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cdekCityCode": 44}'
+  -d '{"cdekCityCode": 44, "postalCode": "101000"}'
 ```
 
 После этого в профиле автоматически заполнятся:
@@ -265,6 +281,36 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 - `cityName` - "Москва"
 - `countryName` - "Россия"
 - `regionName` - "Москва"
+- `postalCode` - "101000"
+
+---
+
+### Вариант Б: Другие страны (без CDEK)
+
+#### Шаг 2Б: Ввести адрес вручную
+
+Фронтенд показывает поля:
+- Полный адрес (одна строка): "регион, город, улица, дом, квартира"
+- Почтовый индекс
+
+#### Шаг 3Б: Сохранить в профиле
+
+```bash
+curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deliveryCountryCode": "PL",
+    "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
+    "postalCode": "00-001"
+  }'
+```
+
+После этого в профиле заполнятся:
+- `deliveryCountryCode` - "PL"
+- `countryName` - "Польша"
+- `fullAddress` - "Варшава, ул. Новы Свят, д. 10, кв. 5"
+- `postalCode` - "00-001"
 
 ### Шаг 4: Рассчитать стоимость доставки
 

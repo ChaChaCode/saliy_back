@@ -13,18 +13,22 @@ model User {
   middleName String? @map("middle_name")
   phone      String? @map("phone")
 
-  // Адрес доставки
+  // Адрес доставки (для заказов)
   street     String? @map("street")
   apartment  String? @map("apartment")
   postalCode String? @map("postal_code")
 
-  // CDEK локация
+  // CDEK локация (для стран RU/BY)
   cdekCityCode    Int?    @map("cdek_city_code")
   cdekCountryCode String? @map("cdek_country_code")
   cdekRegionCode  Int?    @map("cdek_region_code")
   cityName        String? @map("city_name")
   countryName     String? @map("country_name")
   regionName      String? @map("region_name")
+
+  // Адрес для стран без CDEK
+  deliveryCountryCode String? @map("delivery_country_code") // Код страны (US, PL, etc)
+  fullAddress         String? @map("full_address")          // Полный адрес одной строкой
 
   refreshTokens     RefreshToken[]
   verificationCodes VerificationCode[]

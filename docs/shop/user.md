@@ -140,25 +140,39 @@ curl -X PUT https://saliy-shop.ru/api/auth/profile \
 
 ---
 
-### 3. Установить город доставки
+### 3. Установить адрес доставки
 
 **PUT** `/api/auth/delivery-location`
 
 **Требуется авторизация:** Да
 
+Есть **два варианта** установки адреса в зависимости от страны доставки.
+
+---
+
+#### Вариант А: Страны с CDEK (RU, BY)
+
+Для России и Беларуси пользователь выбирает город через селекты.
+
 **Тело запроса:**
 ```json
 {
-  "cdekCityCode": 44
+  "cdekCityCode": 44,
+  "postalCode": "101000"
 }
 ```
 
 **Пример запроса:**
 ```bash
+# 1. Найти город через API доставки
+curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
+# Получить cityCode
+
+# 2. Сохранить город в профиле
 curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"cdekCityCode": 44}'
+  -d '{"cdekCityCode": 44, "postalCode": "101000"}'
 ```
 
 **Пример ответа:**
@@ -168,12 +182,65 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
   "email": "user@example.com",
   "firstName": "Иван",
   "lastName": "Петров",
+  "phone": "+79991234567",
   "cdekCityCode": 44,
   "cdekCountryCode": "RU",
   "cdekRegionCode": 77,
   "cityName": "Москва",
   "countryName": "Россия",
   "regionName": "Москва",
+  "postalCode": "101000",
+  "deliveryCountryCode": null,
+  "fullAddress": null,
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "updatedAt": "2024-01-20T16:00:00.000Z"
+}
+```
+
+---
+
+#### Вариант Б: Другие страны (без CDEK)
+
+Для всех остальных стран пользователь вводит полный адрес одной строкой.
+
+**Тело запроса:**
+```json
+{
+  "deliveryCountryCode": "PL",
+  "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
+  "postalCode": "00-001"
+}
+```
+
+**Пример запроса:**
+```bash
+curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "deliveryCountryCode": "PL",
+    "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
+    "postalCode": "00-001"
+  }'
+```
+
+**Пример ответа:**
+```json
+{
+  "id": "uuid-123",
+  "email": "user@example.com",
+  "firstName": "Иван",
+  "lastName": "Петров",
+  "phone": "+48123456789",
+  "cdekCityCode": null,
+  "cdekCountryCode": null,
+  "cdekRegionCode": null,
+  "cityName": null,
+  "countryName": "Польша",
+  "regionName": null,
+  "postalCode": "00-001",
+  "deliveryCountryCode": "PL",
+  "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
   "createdAt": "2024-01-15T10:30:00.000Z",
   "updatedAt": "2024-01-20T16:00:00.000Z"
 }

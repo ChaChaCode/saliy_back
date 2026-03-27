@@ -138,9 +138,6 @@ export class AuthController {
     @Req() request: any,
     @Body(ValidationPipe) dto: UpdateDeliveryLocationDto,
   ) {
-    return this.authService.updateDeliveryLocation(
-      request.user.id,
-      dto.cdekCityCode,
-    );
+    return this.authService.updateDeliveryLocation(request.user.id, dto);
   }
 }

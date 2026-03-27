@@ -6,6 +6,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../common/email/email.service';
+import { DeliveryService } from '../delivery/delivery.service';
+import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -14,6 +16,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private emailService: EmailService,
+    private deliveryService: DeliveryService,
   ) {}
 
   private generateCode(): string {
@@ -179,6 +182,8 @@ export class AuthService {
         cityName: true,
         countryName: true,
         regionName: true,
+        deliveryCountryCode: true,
+        fullAddress: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -212,36 +217,99 @@ export class AuthService {
     });
   }
 
-  async updateDeliveryLocation(userId: string, cdekCityCode: number) {
-    // Здесь должна быть интеграция с CDEK API для получения информации о городе
-    // Пока просто сохраняем код города
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        cdekCityCode,
-        // TODO: Получить из CDEK API:
-        // cdekCountryCode, cdekRegionCode, cityName, countryName, regionName
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        firstName: true,
-        lastName: true,
-        middleName: true,
-        phone: true,
-        street: true,
-        apartment: true,
-        postalCode: true,
-        cdekCityCode: true,
-        cdekCountryCode: true,
-        cdekRegionCode: true,
-        cityName: true,
-        countryName: true,
-        regionName: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+  async updateDeliveryLocation(userId: string, dto: UpdateDeliveryLocationDto) {
+    // Вариант 1: CDEK страны (RU, BY) - получаем данные через API
+    if (dto.cdekCityCode) {
+      // Получаем информацию о городе через CDEK API
+      const cities = await this.deliveryService.getCdekCities('RU', undefined, undefined);
+      const city = cities.cities.find((c) => c.code === dto.cdekCityCode);
+
+      if (!city) {
+        throw new BadRequestException('Город не найден в CDEK');
+      }
+
+      return this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          cdekCityCode: city.code,
+          cdekCountryCode: city.countryCode,
+          cdekRegionCode: city.regionCode,
+          cityName: city.name,
+          countryName: city.countryCode === 'RU' ? 'Россия' : 'Беларусь',
+          regionName: city.region,
+          postalCode: dto.postalCode,
+          // Очищаем поля для других стран
+          deliveryCountryCode: null,
+          fullAddress: null,
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          phone: true,
+          cdekCityCode: true,
+          cdekCountryCode: true,
+          cdekRegionCode: true,
+          cityName: true,
+          countryName: true,
+          regionName: true,
+          postalCode: true,
+          deliveryCountryCode: true,
+          fullAddress: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    }
+
+    // Вариант 2: Другие страны - сохраняем введенные данные
+    if (dto.deliveryCountryCode) {
+      const countryInfo = this.deliveryService.getCountryInfo(dto.deliveryCountryCode, 'ru');
+
+      if (!countryInfo) {
+        throw new BadRequestException('Страна не найдена');
+      }
+
+      return this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          deliveryCountryCode: dto.deliveryCountryCode,
+          countryName: countryInfo.name,
+          fullAddress: dto.fullAddress,
+          postalCode: dto.postalCode,
+          // Очищаем поля CDEK
+          cdekCityCode: null,
+          cdekCountryCode: null,
+          cdekRegionCode: null,
+          cityName: null,
+          regionName: null,
+        },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          middleName: true,
+          phone: true,
+          cdekCityCode: true,
+          cdekCountryCode: true,
+          cdekRegionCode: true,
+          cityName: true,
+          countryName: true,
+          regionName: true,
+          postalCode: true,
+          deliveryCountryCode: true,
+          fullAddress: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+    }
+
+    throw new BadRequestException(
+      'Необходимо указать либо cdekCityCode (для RU/BY), либо deliveryCountryCode + fullAddress (для других стран)',
+    );
   }
 }
