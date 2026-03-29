@@ -67,6 +67,7 @@ async function seed() {
           L: Math.floor(Math.random() * 10) + 5,   // 5-14 шт
           XL: Math.floor(Math.random() * 10) + 5,  // 5-14 шт
         },
+        sizeChart: 'sizeChart/photo_2026-03-30_00-20-26.jpg',
         isActive: true,
         categories: {
           create: [{ categoryId: category.id }],
@@ -119,6 +120,7 @@ async function seed() {
           L: Math.floor(Math.random() * 10) + 5,   // 5-14 шт
           XL: Math.floor(Math.random() * 10) + 5,  // 5-14 шт
         },
+        sizeChart: 'sizeChart/photo_2026-03-30_00-20-26.jpg',
         isActive: true,
         categories: {
           create: [{ categoryId: category.id }],

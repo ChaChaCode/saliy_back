@@ -72,6 +72,9 @@ export class Product {
   @Field(() => GraphQLJSONObject)
   stock: any;
 
+  @Field(() => GraphQLJSONObject, { nullable: true })
+  sizeChart?: any;
+
   @Field()
   isActive: boolean;
 
