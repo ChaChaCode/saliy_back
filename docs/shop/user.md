@@ -12,6 +12,7 @@
   lastName?: string;       // Фамилия
   middleName?: string;     // Отчество
   phone?: string;          // Телефон
+  socialContact?: string;  // Контакт в соц. сети (Telegram: @user или Instagram: @user)
 
   // Тип доставки (выбирается первым шагом)
   deliveryType?: 'CDEK' | 'POST'; // CDEK - самовывоз из ПВЗ, POST - почта
@@ -141,11 +142,16 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
   "firstName": "Иван",
   "lastName": "Петров",
   "middleName": "Сергеевич",
-  "phone": "+79991234567"
+  "phone": "+79991234567",
+  "socialContact": "Telegram: @ivan_petrov"
 }
 ```
 
 Все поля опциональные.
+
+**Примеры socialContact:**
+- `"Telegram: @ivan_petrov"`
+- `"Instagram: @ivan.p"`
 
 **Примечание:** Адрес доставки редактируется через отдельный эндпоинт `/auth/delivery-location`.
 

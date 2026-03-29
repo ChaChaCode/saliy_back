@@ -98,7 +98,7 @@ export class OrdersService {
       `Заказ создан: ${order.orderNumber}, товаров: ${items.length}, сумма: ${total} RUB`,
     );
 
-    // 🔒 ШАГ 8: ОТПРАВКА EMAIL УВЕДОМЛЕНИЙ
+    // 🔒 ШАГ 8: ОТПРАВКА EMAIL УВЕДОМЛЕНИЯ
     try {
       // Отправляем подтверждение заказа
       await this.emailService.sendOrderConfirmation(orderInfo.email, {
@@ -116,14 +116,7 @@ export class OrdersService {
         total,
       });
 
-      // Сразу отправляем подтверждение оплаты (т.к. заказ сразу оплачен)
-      await this.emailService.sendPaymentSuccess(
-        orderInfo.email,
-        order.orderNumber,
-        orderInfo.firstName,
-      );
-
-      this.logger.log(`Email уведомления отправлены: ${orderInfo.email}`);
+      this.logger.log(`Email уведомление отправлено: ${orderInfo.email}`);
     } catch (error) {
       this.logger.error(`Не удалось отправить email: ${error.message}`);
       // Не падаем, заказ уже создан

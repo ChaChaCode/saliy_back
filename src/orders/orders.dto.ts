@@ -49,15 +49,7 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsString()
-  username?: string;
-
-  @IsOptional()
-  @IsString()
-  telegram?: string;
-
-  @IsOptional()
-  @IsString()
-  instagram?: string;
+  socialContact?: string; // Telegram: @username или Instagram: @username
 
   // Тип доставки
   @IsEnum(DeliveryType)

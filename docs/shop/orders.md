@@ -17,9 +17,7 @@
   "lastName": "Петров",
   "email": "test@example.com",
   "phone": "+375291234567",
-  "username": "ivan_p",
-  "telegram": "@ivan_petrov",
-  "instagram": "@ivan.p",
+  "socialContact": "Telegram: @ivan_petrov",
   "deliveryType": "STANDARD",
   "paymentMethod": "CARD_ONLINE",
   "promoCode": "SALE10"
@@ -33,7 +31,7 @@
     {
       "productId": 20,
       "productName": "Джинсовка SALIY чёрная",
-      "productSlug": "dzhinsovka-saliy-chernaya",
+      "productSlug": "dzhinsovka-saliy-black",
       "size": "M",
       "color": "black",
       "quantity": 1,
@@ -41,7 +39,11 @@
       "discount": 0,
       "finalPrice": 9500,
       "totalPrice": 9500,
-      "imageUrl": "products/jacket.jpg"
+      "imageUrl": {
+        "url": "https://storage.yandexcloud.net/saliy-shop/products/...",
+        "isPreview": true,
+        "previewOrder": 1
+      }
     }
   ],
   "subtotal": 9500,
@@ -59,7 +61,7 @@
 **POST** `/api/orders`
 
 Создает заказ и сразу подтверждает оплату.
-Отправляются 2 email: подтверждение заказа + подтверждение оплаты.
+Отправляется email с подтверждением заказа.
 
 ### Важно:
 - ✅ Цены берутся из БД, не от клиента!
@@ -78,18 +80,15 @@
   "lastName": "Петров",
   "email": "test@example.com",
   "phone": "+375291234567",
-  "username": "ivan_p",
-  "telegram": "@ivan_petrov",
-  "instagram": "@ivan.p",
+  "socialContact": "Telegram: @ivan_petrov",
   "deliveryType": "STANDARD",
   "paymentMethod": "CARD_ONLINE"
 }
 ```
 
-### Новые поля для связи:
-- `username` - Имя пользователя (опционально)
-- `telegram` - Telegram username для связи (опционально)
-- `instagram` - Instagram username для связи (опционально)
+### Новое поле для связи:
+- `socialContact` - Контакт в соц. сети (опционально)
+  - Примеры: "Telegram: @ivan_petrov" или "Instagram: @ivan.p"
 
 ### DeliveryType (выбор типа доставки):
 - `CDEK_PICKUP` - Самовывоз из ПВЗ CDEK
@@ -111,9 +110,7 @@
   "lastName": "Петров",
   "email": "test@example.com",
   "phone": "+375291234567",
-  "username": "ivan_p",
-  "telegram": "@ivan_petrov",
-  "instagram": "@ivan.p",
+  "socialContact": "Telegram: @ivan_petrov",
   "deliveryType": "STANDARD",
   "paymentMethod": "CARD_ONLINE",
   "subtotal": 9500,
@@ -157,7 +154,7 @@ curl https://saliy-shop.ru/api/orders/260329-0001
 4. **Вызывается POST /api/orders**
    - Создается заказ
    - Уменьшаются остатки
-   - Отправляются email уведомления
+   - Отправляется email уведомление
 
 ---
 
@@ -165,5 +162,5 @@ curl https://saliy-shop.ru/api/orders/260329-0001
 
 Данные из профиля автоматически подставляются в форму заказа:
 - `firstName`, `lastName`, `phone`
-- `username`, `telegram`, `instagram`
+- `socialContact` - контакт в соц. сети
 - Адрес доставки
