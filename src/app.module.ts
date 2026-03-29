@@ -17,6 +17,8 @@ import { AdminModule } from './admin/admin.module';
 import { BannersModule } from './banners/banners.module';
 import { CartModule } from './cart/cart.module';
 import { OrdersModule } from './orders/orders.module';
+import { PromoCodesModule } from './admin/promo-codes/promo-codes.module';
+import { PromoModule } from './promo/promo.module';
 // import { PaymentModule } from './payment/payment.module'; // Отложено
 
 @Module({
@@ -47,6 +49,8 @@ import { OrdersModule } from './orders/orders.module';
     BannersModule,
     CartModule,
     OrdersModule,
+    PromoCodesModule,
+    PromoModule,
     // PaymentModule, // Отложено - пока заказы сразу оплачены
   ],
   controllers: [AppController],

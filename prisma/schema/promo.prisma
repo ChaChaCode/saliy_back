@@ -1,0 +1,88 @@
+// Промокоды
+
+model PromoCode {
+  id        Int      @id @default(autoincrement())
+  code      String   // Код промокода (например, SALE10)
+
+  // Тип промокода
+  type      PromoType
+
+  // Значение скидки
+  value     Float    // Для PERCENTAGE - процент (10 = 10%), для FIXED - сумма в RUB
+
+  // На что применяется
+  appliesTo PromoAppliesTo @default(ALL) @map("applies_to")
+
+  // Ограничения по товарам
+  specificProductIds  Int[]  @default([]) @map("specific_product_ids")  // Только для этих товаров (если appliesTo=PRODUCT)
+  excludedProductIds  Int[]  @default([]) @map("excluded_product_ids")  // НЕ для этих товаров
+
+  // Ограничения по пользователям
+  allowedUserIds      String[] @default([]) @map("allowed_user_ids")    // Массив UUID пользователей (пустой = для всех)
+
+  // Лимиты использований
+  maxUses             Int?     @map("max_uses")                          // Общий лимит использований (null = без лимита)
+  maxUsesPerUser      Int?     @map("max_uses_per_user")                 // Лимит на одного пользователя (null = без лимита)
+  usedCount           Int      @default(0) @map("used_count")            // Сколько раз использован
+
+  // Ограничения по количеству товаров
+  maxItems            Int?     @map("max_items")                         // Применяется только к N самым дорогим товарам (null = ко всем)
+
+  // Условия применения
+  minOrderAmount      Float?   @map("min_order_amount")                  // Минимальная сумма заказа в RUB
+
+  // Даты действия
+  validFrom           DateTime? @map("valid_from")                       // Начало действия (null = сразу)
+  validUntil          DateTime? @map("valid_until")                      // Конец действия (null = бессрочно)
+
+  // Статус
+  isActive            Boolean  @default(true) @map("is_active")          // Активен ли промокод
+
+  // Описание (автогенерируется)
+  description         String?
+
+  // Метаданные
+  createdBy           String   @default("admin") @map("created_by")     // Кто создал
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  usages              PromoCodeUsage[]
+
+  @@index([code])
+  @@index([isActive])
+  @@index([validFrom, validUntil])
+  @@map("promo_codes")
+}
+
+// История использований промокодов
+model PromoCodeUsage {
+  id           Int       @id @default(autoincrement())
+  promoCodeId  Int       @map("promo_code_id")
+  userId       String?   @map("user_id")                  // UUID пользователя (null для гостей)
+  orderId      String?   @map("order_id")                 // UUID заказа
+  usedAt       DateTime  @default(now()) @map("used_at")
+
+  // Связи
+  promoCode    PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  order        Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([promoCodeId])
+  @@index([userId])
+  @@index([orderId])
+  @@map("promo_code_usage")
+}
+
+// Типы промокодов
+enum PromoType {
+  PERCENTAGE      // Процентная скидка (10%)
+  FIXED           // Фиксированная скидка (500 RUB)
+  FREE_DELIVERY   // Бесплатная доставка
+}
+
+// На что применяется промокод
+enum PromoAppliesTo {
+  ALL             // На все товары
+  PRODUCT         // Только на конкретные товары (specificProductIds)
+}

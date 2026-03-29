@@ -56,6 +56,9 @@ model Order {
   // Товары в заказе
   items OrderItem[]
 
+  // Промокоды
+  promoCodeUsages PromoCodeUsage[]
+
   @@index([userId])
   @@index([orderNumber])
   @@index([status])

@@ -43,6 +43,7 @@ model User {
   verificationCodes VerificationCode[]
   orders            Order[]
   cartItems         CartItem[]
+  promoCodeUsages   PromoCodeUsage[]
 }
 
 model VerificationCode {
