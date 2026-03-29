@@ -8,11 +8,14 @@ model Order {
   userId       String?  @map("user_id")
   user         User?    @relation(fields: [userId], references: [id])
 
-  // Информация о клиенте
+  // Информация о клиенте (снэпшот на момент заказа)
   firstName    String   @map("first_name")
   lastName     String   @map("last_name")
   phone        String
   email        String
+  username     String?  @map("username")     // Имя пользователя
+  telegram     String?  @map("telegram")     // Telegram для связи
+  instagram    String?  @map("instagram")    // Instagram для связи
 
   // Адрес доставки (снэпшот на момент заказа)
   countryName  String?  @map("country_name")

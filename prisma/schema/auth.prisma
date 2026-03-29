@@ -13,6 +13,11 @@ model User {
   middleName String? @map("middle_name")
   phone      String? @map("phone")
 
+  // Контакты для связи
+  username  String? @map("username")    // Имя пользователя
+  telegram  String? @map("telegram")    // Telegram username (@username)
+  instagram String? @map("instagram")   // Instagram username (@username)
+
   // Адрес доставки (для заказов)
   street     String? @map("street")
   apartment  String? @map("apartment")

@@ -133,6 +133,59 @@ export class OrdersService {
   }
 
   /**
+   * 💰 РАССЧИТАТЬ СТОИМОСТЬ ЗАКАЗА (без создания заказа)
+   * Используется для отображения итоговой суммы перед кнопкой "Оплатить"
+   */
+  async calculateOrder(dto: CreateOrderDto) {
+    const { items, promoCode, deliveryType, cdekCityCode } = dto;
+
+    // 🔒 ШАГ 1: ВАЛИДАЦИЯ ТОВАРОВ И НАЛИЧИЯ НА СКЛАДЕ
+    const validatedItems = await this.validateOrderItems(items);
+
+    // 🔒 ШАГ 2: РАСЧЕТ СТОИМОСТИ (цены из БД, не от клиента!)
+    const subtotal = validatedItems.reduce(
+      (sum, item) => sum + item.totalPrice,
+      0,
+    );
+
+    // 🔒 ШАГ 3: ПРИМЕНЕНИЕ ПРОМОКОДА (если есть)
+    let discountAmount = 0;
+    if (promoCode) {
+      discountAmount = await this.applyPromoCode(promoCode, subtotal);
+    }
+
+    // 🔒 ШАГ 4: РАСЧЕТ ДОСТАВКИ
+    const deliveryPrice = await this.calculateDeliveryPrice(
+      deliveryType,
+      cdekCityCode,
+    );
+
+    // 🔒 ШАГ 5: ИТОГОВАЯ СУММА
+    const total = subtotal - discountAmount + deliveryPrice;
+
+    return {
+      items: validatedItems.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        productSlug: item.productSlug,
+        size: item.size,
+        color: item.color,
+        quantity: item.quantity,
+        price: item.price,
+        discount: item.discount,
+        finalPrice: item.finalPrice,
+        totalPrice: item.totalPrice,
+        imageUrl: item.imageUrl,
+      })),
+      subtotal,
+      discountAmount,
+      deliveryPrice,
+      total,
+      currency: 'RUB',
+    };
+  }
+
+  /**
    * 🔒 ВАЛИДАЦИЯ ТОВАРОВ ПЕРЕД ЗАКАЗОМ
    * Проверяет наличие, активность и остатки на складе
    */
@@ -174,9 +227,14 @@ export class OrdersService {
       const finalPrice = Math.floor(price - (price * discount) / 100);
       const totalPrice = finalPrice * item.quantity;
 
+      // Получаем первое изображение товара
+      const images = product.images as any;
+      const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+
       validatedItems.push({
         productId: product.id,
         productName: product.name,
+        productSlug: product.slug,
         color: product.color,
         size: item.size,
         quantity: item.quantity,
@@ -184,6 +242,7 @@ export class OrdersService {
         discount,
         finalPrice,
         totalPrice,
+        imageUrl,
       });
     }
 

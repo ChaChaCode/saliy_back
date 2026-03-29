@@ -17,6 +17,16 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   /**
+   * Рассчитать стоимость заказа (БЕЗ создания заказа)
+   * POST /api/orders/calculate
+   * Показывает итоговую сумму перед кнопкой "Оплатить"
+   */
+  @Post('calculate')
+  async calculateOrder(@Body() dto: CreateOrderDto) {
+    return this.ordersService.calculateOrder(dto);
+  }
+
+  /**
    * Создать заказ
    * POST /api/orders
    * Доступно и гостям, и авторизованным

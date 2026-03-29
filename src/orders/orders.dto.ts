@@ -47,6 +47,18 @@ export class CreateOrderDto {
   @IsEmail()
   email: string;
 
+  @IsOptional()
+  @IsString()
+  username?: string;
+
+  @IsOptional()
+  @IsString()
+  telegram?: string;
+
+  @IsOptional()
+  @IsString()
+  instagram?: string;
+
   // Тип доставки
   @IsEnum(DeliveryType)
   deliveryType: DeliveryType;
