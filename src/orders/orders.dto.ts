@@ -10,6 +10,7 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { DeliveryType, PaymentMethod } from '@prisma/client';
 
 // Элемент заказа от клиента (ТОЛЬКО ID, размер, количество - НЕ ЦЕНЫ!)
 export class OrderItemDto {
@@ -22,18 +23,6 @@ export class OrderItemDto {
   @IsInt()
   @Min(1)
   quantity: number;
-}
-
-// Типы доставки
-export enum DeliveryType {
-  CDEK = 'CDEK',
-  POST = 'POST',
-}
-
-// Методы оплаты
-export enum PaymentMethod {
-  CARD = 'CARD',
-  CASH = 'CASH',
 }
 
 // DTO для создания заказа

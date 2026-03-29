@@ -5,6 +5,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './orders.dto';
 import { EmailService } from '../common/email/email.service';
@@ -64,7 +65,7 @@ export class OrdersService {
           discountAmount,
           deliveryTotal: deliveryPrice,
           total,
-          status: 'PAID', // Сразу оплачен
+          status: OrderStatus.CONFIRMED, // Сразу оплачен и подтвержден
           isPaid: true,   // Оплачен
           currency: 'RUB',
           // Создаем элементы заказа (со снэпшотом цен)
