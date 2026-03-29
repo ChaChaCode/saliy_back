@@ -9,6 +9,7 @@ import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './orders.dto';
 import { EmailService } from '../common/email/email.service';
+import { PromoService } from '../promo/promo.service';
 
 @Injectable()
 export class OrdersService {
@@ -17,6 +18,8 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    @Inject(forwardRef(() => PromoService))
+    private readonly promoService: PromoService,
   ) {}
 
   /**
@@ -37,8 +40,16 @@ export class OrdersService {
 
     // 🔒 ШАГ 3: ПРИМЕНЕНИЕ ПРОМОКОДА (если есть)
     let discountAmount = 0;
+    let promoCodeId: number | undefined;
     if (promoCode) {
-      discountAmount = await this.applyPromoCode(promoCode, subtotal);
+      const promoResult = await this.applyPromoCode(
+        promoCode,
+        subtotal,
+        validatedItems,
+        userId,
+      );
+      discountAmount = promoResult.discountAmount;
+      promoCodeId = promoResult.promoCodeId;
     }
 
     // 🔒 ШАГ 4: РАСЧЕТ ДОСТАВКИ
@@ -98,7 +109,13 @@ export class OrdersService {
       `Заказ создан: ${order.orderNumber}, товаров: ${items.length}, сумма: ${total} RUB`,
     );
 
-    // 🔒 ШАГ 8: ОТПРАВКА EMAIL УВЕДОМЛЕНИЯ
+    // 🔒 ШАГ 8: ЗАПИСЬ ИСПОЛЬЗОВАНИЯ ПРОМОКОДА
+    if (promoCodeId) {
+      await this.promoService.usePromoCode(promoCodeId, userId, order.id);
+      this.logger.log(`Промокод записан в историю использования для заказа ${order.orderNumber}`);
+    }
+
+    // 🔒 ШАГ 9: ОТПРАВКА EMAIL УВЕДОМЛЕНИЯ
     try {
       // Отправляем подтверждение заказа
       await this.emailService.sendOrderConfirmation(orderInfo.email, {
@@ -144,7 +161,13 @@ export class OrdersService {
     // 🔒 ШАГ 3: ПРИМЕНЕНИЕ ПРОМОКОДА (если есть)
     let discountAmount = 0;
     if (promoCode) {
-      discountAmount = await this.applyPromoCode(promoCode, subtotal);
+      const promoResult = await this.applyPromoCode(
+        promoCode,
+        subtotal,
+        validatedItems,
+        undefined, // userId не передается в calculateOrder
+      );
+      discountAmount = promoResult.discountAmount;
     }
 
     // 🔒 ШАГ 4: РАСЧЕТ ДОСТАВКИ
@@ -285,10 +308,38 @@ export class OrdersService {
   /**
    * Применить промокод
    */
-  private async applyPromoCode(code: string, subtotal: number): Promise<number> {
-    // TODO: Реализовать логику промокодов
-    this.logger.log(`Промокод ${code} не реализован пока`);
-    return 0;
+  private async applyPromoCode(
+    code: string,
+    subtotal: number,
+    validatedItems: any[],
+    userId?: string,
+  ): Promise<{ discountAmount: number; promoCodeId?: number }> {
+    // Валидируем промокод
+    const result = await this.promoService.validatePromoCode(
+      {
+        code,
+        orderAmount: subtotal,
+        cartItems: validatedItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.finalPrice,
+        })),
+      },
+      userId,
+    );
+
+    if (!result.isValid) {
+      throw new BadRequestException(result.message || 'Промокод недействителен');
+    }
+
+    this.logger.log(
+      `Промокод ${code} применен: скидка ${result.discount} ₽`,
+    );
+
+    return {
+      discountAmount: result.discount,
+      promoCodeId: result.promoCode?.id,
+    };
   }
 
   /**
