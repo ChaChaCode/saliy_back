@@ -39,6 +39,7 @@ model User {
   refreshTokens     RefreshToken[]
   verificationCodes VerificationCode[]
   orders            Order[]
+  cartItems         CartItem[]
 }
 
 model VerificationCode {

@@ -15,6 +15,7 @@ import { DeliveryModule } from './delivery/delivery.module';
 import { ProductsModule } from './products/products.module';
 import { AdminModule } from './admin/admin.module';
 import { BannersModule } from './banners/banners.module';
+import { CartModule } from './cart/cart.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { BannersModule } from './banners/banners.module';
     ProductsModule,
     AdminModule,
     BannersModule,
+    CartModule,
   ],
   controllers: [AppController],
   providers: [

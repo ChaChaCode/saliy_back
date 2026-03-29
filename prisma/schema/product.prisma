@@ -57,6 +57,7 @@ model Product {
   // Связи
   categories  ProductCategory[]
   orderItems  OrderItem[]
+  cartItems   CartItem[]
 
   @@index([slug])
   @@index([isActive])

@@ -1,0 +1,21 @@
+// Модель для корзины авторизованных пользователей
+
+model CartItem {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id")
+  productId Int      @map("product_id")
+  size      String   // S, M, L, XL, ONE SIZE
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Один пользователь не может добавить один и тот же товар с одним размером дважды
+  @@unique([userId, productId, size])
+  @@index([userId])
+  @@index([productId])
+  @@map("cart_items")
+}
