@@ -382,25 +382,124 @@ export class OrdersService {
    * Получить заказ по номеру
    */
   async getOrderByNumber(orderNumber: string) {
-    return this.prisma.order.findUnique({
+    const order = await this.prisma.order.findUnique({
       where: { orderNumber },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                slug: true,
+                images: true,
+              },
+            },
+          },
+        },
+        promoCodeUsages: {
+          include: {
+            promoCode: {
+              select: {
+                code: true,
+                type: true,
+                value: true,
+              },
+            },
+          },
+        },
       },
     });
+
+    if (!order) {
+      return null;
+    }
+
+    // Форматируем данные
+    return {
+      ...order,
+      items: order.items.map((item) => {
+        const images = item.product?.images as any;
+        const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+
+        return {
+          id: item.id,
+          productId: item.productId,
+          name: item.name,
+          slug: item.product?.slug || null,
+          color: item.color,
+          size: item.size,
+          quantity: item.quantity,
+          price: item.price,
+          discount: item.discount,
+          finalPrice: Math.floor(item.price - (item.price * item.discount) / 100),
+          totalPrice: Math.floor(item.price - (item.price * item.discount) / 100) * item.quantity,
+          imageUrl,
+        };
+      }),
+      promoCode: order.promoCodeUsages.length > 0
+        ? order.promoCodeUsages[0].promoCode
+        : null,
+    };
   }
 
   /**
    * Получить заказы пользователя
    */
   async getUserOrders(userId: string) {
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { userId },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                slug: true,
+                images: true,
+              },
+            },
+          },
+        },
+        promoCodeUsages: {
+          include: {
+            promoCode: {
+              select: {
+                code: true,
+                type: true,
+                value: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Форматируем данные для удобства
+    return orders.map((order) => ({
+      ...order,
+      items: order.items.map((item) => {
+        // Получаем первое изображение товара
+        const images = item.product?.images as any;
+        const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+
+        return {
+          id: item.id,
+          productId: item.productId,
+          name: item.name,
+          slug: item.product?.slug || null,
+          color: item.color,
+          size: item.size,
+          quantity: item.quantity,
+          price: item.price,
+          discount: item.discount,
+          finalPrice: Math.floor(item.price - (item.price * item.discount) / 100),
+          totalPrice: Math.floor(item.price - (item.price * item.discount) / 100) * item.quantity,
+          imageUrl,
+        };
+      }),
+      promoCode: order.promoCodeUsages.length > 0
+        ? order.promoCodeUsages[0].promoCode
+        : null,
+    }));
   }
 
   /**
