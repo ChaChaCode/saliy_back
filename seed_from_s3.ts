@@ -33,7 +33,9 @@ async function seed() {
     console.log('👕 Создаём товар: Джинсовка SALIY чёрная...');
     const blackDzhinsovka = await prisma.product.upsert({
       where: { slug: 'dzhinsovka-saliy-black' },
-      update: {},
+      update: {
+        sizeChart: 'sizeChart/photo_2026-03-30_00-20-26.jpg',
+      },
       create: {
         name: 'Джинсовка SALIY чёрная',
         slug: 'dzhinsovka-saliy-black',
@@ -81,7 +83,9 @@ async function seed() {
     console.log('👕 Создаём товар: Джинсовка SALIY синяя...');
     const blueDzhinsovka = await prisma.product.upsert({
       where: { slug: 'dzhinsovka-saliy-blue' },
-      update: {},
+      update: {
+        sizeChart: 'sizeChart/photo_2026-03-30_00-20-26.jpg',
+      },
       create: {
         name: 'Джинсовка SALIY синяя',
         slug: 'dzhinsovka-saliy-blue',
