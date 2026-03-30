@@ -1,5 +1,5 @@
 import { Resolver, Query, Context } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, NotFoundException } from '@nestjs/common';
 import { User } from './models/user.model';
 import { AuthService } from './auth.service';
 import { GqlAuthGuard } from './guards/gql-auth.guard';
@@ -15,6 +15,12 @@ export class UserResolver {
   @UseGuards(GqlAuthGuard)
   async getMe(@Context() context: any): Promise<User> {
     const userId = context.req.user.id;
-    return this.authService.validateUser(userId);
+    const user = await this.authService.validateUser(userId);
+
+    if (!user) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    return user;
   }
 }
