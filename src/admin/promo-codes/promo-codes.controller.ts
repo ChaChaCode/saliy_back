@@ -12,11 +12,10 @@ import {
 } from '@nestjs/common';
 import { PromoCodesService } from './promo-codes.service';
 import { CreatePromoCodeDto, UpdatePromoCodeDto } from './dto/promo-code.dto';
-import { AdminGuard } from '../../auth/guards/admin.guard';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../../common/guards/admin.guard';
 
 @Controller('admin/promo-codes')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(AdminGuard)
 export class PromoCodesController {
   constructor(private readonly promoCodesService: PromoCodesService) {}
 
