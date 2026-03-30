@@ -51,9 +51,18 @@ export class EmailService {
       subtotal: number;
       deliveryPrice: number;
       total: number;
+      paymentMethod: string;
       paymentUrl?: string;
     },
   ): Promise<void> {
+    // Преобразуем enum в читаемый текст
+    const paymentMethodNames: Record<string, string> = {
+      CARD_ONLINE: 'ОНЛАЙН ОПЛАТА КАРТОЙ',
+      CARD_MANUAL: 'ОПЛАТА КАРТОЙ ЧЕРЕЗ МЕНЕДЖЕРА',
+      CRYPTO: 'КРИПТОВАЛЮТА',
+      PAYPAL: 'PAYPAL',
+    };
+    const paymentMethodText = paymentMethodNames[orderData.paymentMethod] || orderData.paymentMethod;
     const currentDate = new Date().toLocaleDateString('ru-RU', {
       day: '2-digit',
       month: '2-digit',
@@ -67,7 +76,7 @@ export class EmailService {
     const itemsHtml = orderData.items
       .map(
         (item, index) => `
-        <div style="margin: 10px 0; font-size: 13px; line-height: 1.6; background: #ffffff; color: #000000;">
+        <div style="margin: 10px 0; font-size: 13px; line-height: 1.6; background: #ffffff; color: #000000; text-transform: uppercase;">
           <div style="display: table; width: 100%; table-layout: fixed;">
             <div style="display: table-row;">
               <div style="display: table-cell; color: #000000;">ТОВАР ${index + 1}</div>
@@ -75,10 +84,10 @@ export class EmailService {
             </div>
           </div>
           <div style="color: #666666; font-size: 12px; margin-top: 2px;">
-            ${item.name}
+            ${item.name.toUpperCase()}
           </div>
           <div style="color: #666666; font-size: 12px;">
-            РАЗМЕР: ${item.size} × ${item.quantity} ШТ @ ${item.price.toFixed(2)} ₽
+            РАЗМЕР: ${item.size.toUpperCase()} × ${item.quantity} ШТ @ ${item.price.toFixed(2)} ₽
           </div>
         </div>
       `,
@@ -90,7 +99,8 @@ export class EmailService {
       to: email,
       subject: `Заказ #${orderData.orderNumber} оформлен - Saliy Clothes`,
       html: `
-        <div style="font-family: 'Courier New', Courier, monospace; max-width: 400px; margin: 40px auto; padding: 0; background: #e8e8e8; color-scheme: light;">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 400px; margin: 40px auto; padding: 0; background: #e8e8e8; color-scheme: light;">
           <!-- Чек -->
           <div style="background: #ffffff; margin: 0 auto; position: relative; box-shadow: 0 8px 30px rgba(0,0,0,0.15); color: #000000;">
             <!-- Треугольные вырезы сверху -->
@@ -106,7 +116,7 @@ export class EmailService {
             <!-- Контент чека -->
             <div style="padding: 40px 35px; background: #ffffff; color: #000000;">
               <!-- Заголовок магазина -->
-              <div style="text-align: center; margin-bottom: 10px; background: #ffffff; color: #000000;">
+              <div style="text-align: center; margin-bottom: 10px; background: #ffffff; color: #000000; text-transform: uppercase;">
                 <div style="font-size: 18px; font-weight: bold; letter-spacing: 4px; color: #000000;">SALIY CLOTHES</div>
                 <div style="font-size: 11px; color: #666666; margin-top: 5px; letter-spacing: 1px;">ОНЛАЙН МАГАЗИН</div>
               </div>
@@ -115,12 +125,12 @@ export class EmailService {
               <div style="border-top: 2px dotted #cccccc; margin: 15px 0;"></div>
 
               <!-- RECEIPT -->
-              <div style="text-align: center; margin: 15px 0; font-size: 16px; font-weight: bold; letter-spacing: 2px; color: #000000;">
+              <div style="text-align: center; margin: 15px 0; font-size: 16px; font-weight: bold; letter-spacing: 2px; color: #000000; text-transform: uppercase;">
                 *** ЧЕК ***
               </div>
 
               <!-- Дата и время -->
-              <div style="text-align: center; font-size: 11px; color: #666666; margin-bottom: 15px;">
+              <div style="text-align: center; font-size: 11px; color: #666666; margin-bottom: 15px; text-transform: uppercase;">
                 <div style="color: #000000;">ЗАКАЗ #${orderData.orderNumber}</div>
                 <div style="margin-top: 3px; color: #666666;">${currentDate} - ${currentTime}</div>
               </div>
@@ -137,7 +147,7 @@ export class EmailService {
               <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
 
               <!-- Итого -->
-              <div style="font-size: 13px; line-height: 1.8; background: #ffffff; color: #000000;">
+              <div style="font-size: 13px; line-height: 1.8; background: #ffffff; color: #000000; text-transform: uppercase;">
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="color: #000000; padding: 4px 0;">ТОВАРЫ</td>
@@ -157,12 +167,8 @@ export class EmailService {
                 </table>
                 <table style="width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px;">
                   <tr>
-                    <td style="color: #000000; padding: 4px 0;">НАЛИЧНЫЕ</td>
+                    <td style="color: #000000; padding: 4px 0;">${paymentMethodText}</td>
                     <td style="color: #000000; text-align: right; padding: 4px 0;">${orderData.total.toFixed(2)} ₽</td>
-                  </tr>
-                  <tr>
-                    <td style="color: #000000; padding: 4px 0;">СДАЧА</td>
-                    <td style="color: #000000; text-align: right; padding: 4px 0;">0.00 ₽</td>
                   </tr>
                 </table>
               </div>
@@ -175,7 +181,7 @@ export class EmailService {
                   ? `
               <!-- Кнопка оплаты -->
               <div style="text-align: center; margin: 20px 0; background: #ffffff;">
-                <a href="${orderData.paymentUrl}" style="display: inline-block; background: #000000; color: #ffffff; padding: 12px 30px; text-decoration: none; font-size: 13px; font-weight: bold; letter-spacing: 1px; border: 2px solid #000000;">
+                <a href="${orderData.paymentUrl}" style="display: inline-block; background: #000000; color: #ffffff; padding: 12px 30px; text-decoration: none; font-size: 13px; font-weight: bold; letter-spacing: 1px; border: 2px solid #000000; text-transform: uppercase;">
                   ОПЛАТИТЬ ЗАКАЗ
                 </a>
               </div>
@@ -186,14 +192,14 @@ export class EmailService {
               }
 
               <!-- Благодарность -->
-              <div style="text-align: center; margin: 25px 0; font-size: 12px; letter-spacing: 1px; color: #000000;">
+              <div style="text-align: center; margin: 25px 0; font-size: 12px; letter-spacing: 1px; color: #000000; text-transform: uppercase;">
                 СПАСИБО ЗА ПОКУПКУ!
               </div>
 
               <!-- QR код -->
               <div style="text-align: center; margin: 25px 0; background: #ffffff;">
                 <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.youtube.com/watch?v=dQw4w9WgXcQ" alt="QR Code" style="width: 150px; height: 150px; border: 2px solid #000000; padding: 5px; background: #ffffff;">
-                <div style="font-size: 10px; margin-top: 8px; letter-spacing: 2px; color: #666666;">ОТСКАНИРУЙТЕ ДЛЯ ОТСЛЕЖИВАНИЯ</div>
+                <div style="font-size: 10px; margin-top: 8px; letter-spacing: 2px; color: #666666; text-transform: uppercase;">ОТСКАНИРУЙТЕ ДЛЯ ОТСЛЕЖИВАНИЯ</div>
               </div>
             </div>
 
@@ -206,12 +212,6 @@ export class EmailService {
               </defs>
               <rect width="400" height="15" fill="url(#bottomTriangles)"/>
             </svg>
-          </div>
-
-          <!-- Информация под чеком -->
-          <div style="text-align: center; margin-top: 30px; padding: 0 20px; color: #999999; font-size: 11px; font-family: Arial, sans-serif; background: transparent;">
-            <p style="margin: 5px 0; color: #999999;">Это автоматическое письмо, отвечать на него не нужно</p>
-            <p style="margin: 5px 0; color: #999999;">Вопросы? Пишите: ${process.env.EMAIL_FROM}</p>
           </div>
         </div>
       `,

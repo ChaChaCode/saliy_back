@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './orders.dto';
 import { EmailService } from '../common/email/email.service';
 import { PromoService } from '../promo/promo.service';
+import { CartService } from '../cart/cart.service';
 
 @Injectable()
 export class OrdersService {
@@ -18,6 +19,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly cartService: CartService,
     @Inject(forwardRef(() => PromoService))
     private readonly promoService: PromoService,
   ) {}
@@ -131,12 +133,24 @@ export class OrdersService {
         subtotal,
         deliveryPrice,
         total,
+        paymentMethod: orderInfo.paymentMethod,
       });
 
       this.logger.log(`Email уведомление отправлено: ${orderInfo.email}`);
     } catch (error) {
       this.logger.error(`Не удалось отправить email: ${error.message}`);
       // Не падаем, заказ уже создан
+    }
+
+    // 🔒 ШАГ 10: ОЧИСТКА КОРЗИНЫ (если пользователь авторизован)
+    if (userId) {
+      try {
+        await this.cartService.clearCart(userId);
+        this.logger.log(`Корзина очищена для пользователя ${userId}`);
+      } catch (error) {
+        this.logger.error(`Не удалось очистить корзину: ${error.message}`);
+        // Не падаем, заказ уже создан
+      }
     }
 
     return order;
