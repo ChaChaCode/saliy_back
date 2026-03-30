@@ -1,0 +1,163 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+enum CardStatus {
+  COMING_SOON
+  NEW
+  NONE
+  PRE_ORDER
+  SALE
+  SOLD_OUT
+}
+
+type CartItem {
+  createdAt: DateTime
+  id: Int!
+  product: Product!
+  productId: Int!
+  quantity: Int!
+  size: String!
+  updatedAt: DateTime
+  userId: String!
+}
+
+input CartItemInput {
+  productId: Int!
+  quantity: Int!
+  size: String!
+}
+
+type Category {
+  createdAt: DateTime
+  id: Int!
+  isActive: Boolean!
+  name: String!
+  slug: String!
+  type: String!
+  updatedAt: DateTime
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+enum GenderType {
+  FEMALE
+  MALE
+  UNISEX
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
+type Mutation {
+  addToCart(productId: Int!, quantity: Int!, size: String!): CartItem!
+  clearCart: Boolean!
+  mergeCart(items: [CartItemInput!]!): Boolean!
+  removeFromCart(itemId: Int!): Boolean!
+  updateCartItem(itemId: Int!, quantity: Int!): CartItem!
+}
+
+type Product {
+  cardStatus: CardStatus!
+  categories: [ProductCategory!]
+  color: String
+  createdAt: DateTime
+  description: String
+  discount: Int!
+  finalPrice: Float!
+  gender: GenderType!
+  id: Int!
+  images: JSON!
+  isActive: Boolean!
+  name: String!
+  price: Float!
+  salesCount: Int!
+  sizeChart: JSON
+  slug: String!
+  stock: JSON!
+  updatedAt: DateTime
+  viewCount: Int!
+  weight: Float
+}
+
+type ProductCategory {
+  category: Category!
+  id: Int!
+}
+
+type ProductsResponse {
+  limit: Int!
+  offset: Int!
+  products: [Product!]!
+  total: Int!
+}
+
+type Query {
+  cart: [CartItem!]!
+  categories: [Category!]!
+  category(slug: String!): Category!
+  health: String!
+  me: User!
+  newProducts(limit: Int = 20): [Product!]!
+  popularProducts(limit: Int = 10): [Product!]!
+  product(slug: String!): Product!
+  products(categorySlug: String, gender: String, inStock: Boolean, limit: Int = 20, maxPrice: Int, minPrice: Int, offset: Int = 0, sortBy: String, sortOrder: String, status: String): ProductsResponse!
+  saleProducts(limit: Int = 20): [Product!]!
+  searchProducts(query: String!): [Product!]!
+  validateCart(items: [CartItemInput!]!): ValidatedCart!
+}
+
+type User {
+  apartment: String
+  birthdate: DateTime
+  cdekCityCode: Int
+  cdekCountryCode: String
+  cdekPickupPointCode: String
+  cdekRegionCode: Int
+  cityName: String
+  countryName: String
+  createdAt: DateTime!
+  deliveryCountryCode: String
+  deliveryType: String
+  email: String!
+  firstName: String
+  fullAddress: String
+  id: String!
+  lastName: String
+  middleName: String
+  name: String
+  phone: String
+  postalCode: String
+  regionName: String
+  socialContact: String
+  street: String
+  updatedAt: DateTime!
+}
+
+type ValidatedCart {
+  items: [ValidatedCartItem!]!
+  itemsCount: Int!
+  subtotal: Float!
+  total: Float!
+}
+
+type ValidatedCartItem {
+  availableQuantity: Int!
+  discount: Int!
+  finalPrice: Float!
+  imageUrl: String!
+  inStock: Boolean!
+  price: Float!
+  productId: Int!
+  productName: String!
+  productSlug: String!
+  quantity: Int!
+  size: String!
+  sizeChart: String
+  totalPrice: Float!
+}
