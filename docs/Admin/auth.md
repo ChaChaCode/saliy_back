@@ -2,7 +2,7 @@
 
 Документация по авторизации в админ-панель ViceSeason.
 
-**Базовый путь:** `/admin/auth`
+**Базовый путь:** `/api/admin/auth`
 
 ---
 
@@ -37,8 +37,8 @@
 ### Поток авторизации
 
 1. На фронте админки пользователь нажимает "Запросить вход"
-2. Фронтенд отправляет `POST /admin/auth/request-login` и получает `loginId`
-3. Фронтенд начинает поллить `GET /admin/auth/check-status/:loginId` каждые 2 секунды
+2. Фронтенд отправляет `POST /api/admin/auth/request-login` и получает `loginId`
+3. Фронтенд начинает поллить `GET /api/admin/auth/check-status/:loginId` каждые 2 секунды
 4. В Telegram-канал приходит сообщение с кнопкой "Подтвердить вход"
 5. Администратор нажимает кнопку в Telegram → вход подтверждается
 6. Фронтенд получает `approved: true` + токен при следующем polling
@@ -50,7 +50,7 @@
 
 Генерирует JWT токен и отправляет кнопку входа в Telegram-канал.
 
-**Эндпоинт:** `POST /admin/auth/request-login`
+**Эндпоинт:** `POST /api/admin/auth/request-login`
 
 **Авторизация:** Не требуется
 
@@ -59,7 +59,7 @@
 #### Пример запроса
 
 ```http
-POST /admin/auth/request-login
+POST /api/admin/auth/request-login
 ```
 
 #### Пример ответа
@@ -166,14 +166,14 @@ POST /admin/auth/request-login
 
 Проверяет, была ли нажата кнопка входа в Telegram.
 
-**Эндпоинт:** `GET /admin/auth/check-status/:loginId`
+**Эндпоинт:** `GET /api/admin/auth/check-status/:loginId`
 
 **Авторизация:** Не требуется
 
 #### Пример запроса
 
 ```http
-GET /admin/auth/check-status/a1b2c3d4e5f6789012345678abcdef01
+GET /api/admin/auth/check-status/a1b2c3d4e5f6789012345678abcdef01
 ```
 
 #### Пример ответа (ожидание)
@@ -222,7 +222,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```javascript
 // 1. Запросить вход
 const requestLogin = async () => {
-  const response = await fetch('/admin/auth/request-login', {
+  const response = await fetch('/api/admin/auth/request-login', {
     method: 'POST',
   });
   return response.json();
@@ -233,7 +233,7 @@ const pollLoginStatus = async loginId => {
   return new Promise((resolve, reject) => {
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`/admin/auth/check-status/${loginId}`);
+        const response = await fetch(`/api/admin/auth/check-status/${loginId}`);
         const data = await response.json();
 
         if (data.approved) {
@@ -271,7 +271,7 @@ const login = async () => {
 // 4. Использование токена для запросов
 const fetchOrders = async () => {
   const token = localStorage.getItem('adminToken');
-  const response = await fetch('/admin/orders', {
+  const response = await fetch('/api/admin/orders', {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -291,14 +291,14 @@ const fetchOrders = async () => {
 
 Выдаёт новый токен на 24 часа, если текущий ещё валиден.
 
-**Эндпоинт:** `POST /admin/auth/refresh`
+**Эндпоинт:** `POST /api/admin/auth/refresh`
 
 **Авторизация:** Требуется (Bearer Token)
 
 #### Пример запроса
 
 ```http
-POST /admin/auth/refresh
+POST /api/admin/auth/refresh
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
@@ -325,7 +325,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 const refreshToken = async () => {
   const currentToken = localStorage.getItem('adminToken');
 
-  const response = await fetch('/admin/auth/refresh', {
+  const response = await fetch('/api/admin/auth/refresh', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${currentToken}`,
@@ -396,7 +396,7 @@ setInterval(refreshToken, 12 * 60 * 60 * 1000);
 
 ## Защита от брутфорса
 
-Все защищённые эндпоинты админ-панели (`/admin/*`) имеют защиту от перебора:
+Все защищённые эндпоинты админ-панели (`/api/admin/*`) имеют защиту от перебора:
 
 | Параметр                   | Значение                 |
 | -------------------------- | ------------------------ |
@@ -472,7 +472,7 @@ setInterval(refreshToken, 12 * 60 * 60 * 1000);
 
 ### Получить список заблокированных IP
 
-**Эндпоинт:** `GET /admin/auth/blocked-ips`
+**Эндпоинт:** `GET /api/admin/auth/blocked-ips`
 
 **Авторизация:** Требуется (AdminGuard)
 
@@ -496,14 +496,14 @@ setInterval(refreshToken, 12 * 60 * 60 * 1000);
 
 ### Разблокировать IP
 
-**Эндпоинт:** `POST /admin/auth/unblock/:ip`
+**Эндпоинт:** `POST /api/admin/auth/unblock/:ip`
 
 **Авторизация:** Требуется (AdminGuard)
 
 #### Пример запроса
 
 ```http
-POST /admin/auth/unblock/77.222.101.28
+POST /api/admin/auth/unblock/77.222.101.28
 ```
 
 #### Пример ответа
@@ -519,14 +519,14 @@ POST /admin/auth/unblock/77.222.101.28
 
 ### Удалить IP из базы
 
-**Эндпоинт:** `DELETE /admin/auth/blocked-ips/:ip`
+**Эндпоинт:** `DELETE /api/admin/auth/blocked-ips/:ip`
 
 **Авторизация:** Требуется (AdminGuard)
 
 #### Пример запроса
 
 ```http
-DELETE /admin/auth/blocked-ips/77.222.101.28
+DELETE /api/admin/auth/blocked-ips/77.222.101.28
 ```
 
 #### Пример ответа

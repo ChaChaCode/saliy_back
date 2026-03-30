@@ -12,11 +12,11 @@
 
 - [Типы данных](#типы-данных)
 - [Эндпоинты](#эндпоинты)
-  - [GET /admin/products](#get-adminproducts) - Получить список товаров
-  - [GET /admin/products/:id](#get-adminproductsid) - Получить товар по ID
-  - [GET /admin/products/enums/all](#get-adminproductsenums) - Получить enums
-  - [PATCH /admin/products/:id](#patch-adminproductsid) - Обновить товар
-  - [PATCH /admin/products/:id/delete-image](#patch-adminproductsiddelete-image) - Удалить изображение
+  - [GET /api/admin/products](#get-apiadminproducts) - Получить список товаров
+  - [GET /api/admin/products/:id](#get-apiadminproductsid) - Получить товар по ID
+  - [GET /api/admin/products/enums/all](#get-apiadminproductsenums) - Получить enums
+  - [PATCH /api/admin/products/:id](#patch-apiadminproductsid) - Обновить товар
+  - [PATCH /api/admin/products/:id/delete-image](#patch-apiadminproductsiddelete-image) - Удалить изображение
 - [Примеры](#примеры)
 
 ---
@@ -90,7 +90,7 @@
 
 ## Эндпоинты
 
-### GET /admin/products
+### GET /api/admin/products
 
 Получить список всех товаров с фильтрацией и пагинацией.
 
@@ -163,7 +163,7 @@ Authorization: Bearer <admin_token>
 
 ---
 
-### GET /admin/products/:id
+### GET /api/admin/products/:id
 
 Получить подробную информацию о товаре.
 
@@ -211,7 +211,7 @@ Authorization: Bearer <admin_token>
 
 ---
 
-### GET /admin/products/enums/all
+### GET /api/admin/products/enums/all
 
 Получить все enums для товаров (категории, полы, статусы).
 
@@ -248,7 +248,7 @@ Authorization: Bearer <admin_token>
 
 ---
 
-### PATCH /admin/products/:id
+### PATCH /api/admin/products/:id
 
 Обновить товар (с загрузкой новых фотографий).
 
@@ -323,7 +323,7 @@ fetch('/api/admin/products/1', {
 
 ---
 
-### PATCH /admin/products/:id/delete-image
+### PATCH /api/admin/products/:id/delete-image
 
 Удалить конкретное изображение товара.
 

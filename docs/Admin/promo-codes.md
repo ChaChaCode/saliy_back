@@ -12,13 +12,13 @@
 
 - [Типы данных](#типы-данных)
 - [Эндпоинты](#эндпоинты)
-  - [POST /admin/promo-codes](#post-adminpromo-codes) - Создать промокод
-  - [GET /admin/promo-codes](#get-adminpromo-codes) - Получить все промокоды
-  - [GET /admin/promo-codes/:id](#get-adminpromo-codesid) - Получить промокод по ID
-  - [PUT /admin/promo-codes/:id](#put-adminpromo-codesid) - Обновить промокод
-  - [DELETE /admin/promo-codes/:id](#delete-adminpromo-codesid) - Удалить промокод
-  - [POST /admin/promo-codes/:id/deactivate](#post-adminpromo-codesiddeactivate) - Деактивировать промокод
-  - [GET /admin/promo-codes/:id/stats](#get-adminpromo-codesidstats) - Статистика использований
+  - [POST /api/admin/promo-codes](#post-apiadminpromo-codes) - Создать промокод
+  - [GET /api/admin/promo-codes](#get-apiadminpromo-codes) - Получить все промокоды
+  - [GET /api/admin/promo-codes/:id](#get-apiadminpromo-codesid) - Получить промокод по ID
+  - [PUT /api/admin/promo-codes/:id](#put-apiadminpromo-codesid) - Обновить промокод
+  - [DELETE /api/admin/promo-codes/:id](#delete-apiadminpromo-codesid) - Удалить промокод
+  - [POST /api/admin/promo-codes/:id/deactivate](#post-apiadminpromo-codesiddeactivate) - Деактивировать промокод
+  - [GET /api/admin/promo-codes/:id/stats](#get-apiadminpromo-codesidstats) - Статистика использований
 - [UX Рекомендации для фронтенда](#ux-рекомендации-для-фронтенда)
 - [Коды ошибок](#коды-ошибок)
 
@@ -72,7 +72,7 @@
 
 ## Эндпоинты
 
-### POST /admin/promo-codes
+### POST /api/admin/promo-codes
 
 Создание нового промокода.
 
@@ -294,7 +294,7 @@ Content-Type: application/json
 
 ---
 
-### GET /admin/promo-codes
+### GET /api/admin/promo-codes
 
 Получение списка всех промокодов с пагинацией и фильтрацией.
 
@@ -351,7 +351,7 @@ GET /api/admin/promo-codes?isActive=true&type=PERCENTAGE&page=1&limit=10
 
 ---
 
-### GET /admin/promo-codes/:id
+### GET /api/admin/promo-codes/:id
 
 Получение промокода по ID с последними 10 использованиями.
 
@@ -421,7 +421,7 @@ GET /api/admin/promo-codes/1
 
 ---
 
-### PUT /admin/promo-codes/:id
+### PUT /api/admin/promo-codes/:id
 
 Обновление существующего промокода.
 
@@ -489,7 +489,7 @@ Content-Type: application/json
 
 ---
 
-### DELETE /admin/promo-codes/:id
+### DELETE /api/admin/promo-codes/:id
 
 Полное удаление промокода из базы данных.
 
@@ -515,7 +515,7 @@ DELETE /api/admin/promo-codes/1
 
 ---
 
-### POST /admin/promo-codes/:id/deactivate
+### POST /api/admin/promo-codes/:id/deactivate
 
 Деактивация промокода (без удаления). Устанавливает `isActive = false`.
 
@@ -546,7 +546,7 @@ POST /api/admin/promo-codes/1/deactivate
 
 ---
 
-### GET /admin/promo-codes/:id/stats
+### GET /api/admin/promo-codes/:id/stats
 
 Получение статистики использований промокода по пользователям.
 

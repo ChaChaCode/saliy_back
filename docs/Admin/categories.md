@@ -12,11 +12,11 @@
 
 - [Типы данных](#типы-данных)
 - [Эндпоинты](#эндпоинты)
-  - [GET /admin/categories](#get-admincategories) - Получить список категорий
-  - [GET /admin/categories/:id](#get-admincategoriesid) - Получить категорию по ID
-  - [POST /admin/categories](#post-admincategories) - Создать категорию
-  - [PATCH /admin/categories/:id](#patch-admincategoriesid) - Обновить категорию
-  - [DELETE /admin/categories/:id](#delete-admincategoriesid) - Удалить категорию
+  - [GET /api/admin/categories](#get-apiadmincategories) - Получить список категорий
+  - [GET /api/admin/categories/:id](#get-apiadmincategoriesid) - Получить категорию по ID
+  - [POST /api/admin/categories](#post-apiadmincategories) - Создать категорию
+  - [PATCH /api/admin/categories/:id](#patch-apiadmincategoriesid) - Обновить категорию
+  - [DELETE /api/admin/categories/:id](#delete-apiadmincategoriesid) - Удалить категорию
 - [Примеры](#примеры)
 
 ---
@@ -53,7 +53,7 @@
 
 ## Эндпоинты
 
-### GET /admin/categories
+### GET /api/admin/categories
 
 Получить список всех категорий с количеством товаров.
 
@@ -99,7 +99,7 @@ Authorization: Bearer <admin_token>
 
 ---
 
-### GET /admin/categories/:id
+### GET /api/admin/categories/:id
 
 Получить подробную информацию о категории.
 
@@ -138,7 +138,7 @@ Authorization: Bearer <admin_token>
 
 ---
 
-### POST /admin/categories
+### POST /api/admin/categories
 
 Создать новую категорию с загрузкой баннеров.
 
@@ -201,7 +201,7 @@ fetch('/api/admin/categories', {
 
 ---
 
-### PATCH /admin/categories/:id
+### PATCH /api/admin/categories/:id
 
 Обновить категорию (с возможностью загрузки новых баннеров).
 
@@ -261,7 +261,7 @@ fetch('/api/admin/categories/1', {
 
 ---
 
-### DELETE /admin/categories/:id
+### DELETE /api/admin/categories/:id
 
 Удалить категорию (только если нет связанных товаров).
 

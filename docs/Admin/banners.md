@@ -12,11 +12,11 @@
 
 - [Типы данных](#типы-данных)
 - [Эндпоинты](#эндпоинты)
-  - [GET /admin/banners](#get-adminbanners) - Получить список баннеров
-  - [GET /admin/banners/:id](#get-adminbannersid) - Получить баннер по ID
-  - [POST /admin/banners](#post-adminbanners) - Создать баннер
-  - [PATCH /admin/banners/:id](#patch-adminbannersid) - Обновить баннер
-  - [DELETE /admin/banners/:id](#delete-adminbannersid) - Удалить баннер
+  - [GET /api/admin/banners](#get-apiadminbanners) - Получить список баннеров
+  - [GET /api/admin/banners/:id](#get-apiadminbannersid) - Получить баннер по ID
+  - [POST /api/admin/banners](#post-apiadminbanners) - Создать баннер
+  - [PATCH /api/admin/banners/:id](#patch-apiadminbannersid) - Обновить баннер
+  - [DELETE /api/admin/banners/:id](#delete-apiadminbannersid) - Удалить баннер
 - [Примеры](#примеры)
 
 ---
@@ -42,7 +42,7 @@
 
 ## Эндпоинты
 
-### GET /admin/banners
+### GET /api/admin/banners
 
 Получить список всех баннеров (включая неактивные), отсортированных по порядку отображения.
 
@@ -86,7 +86,7 @@ Authorization: Bearer <admin_token>
 
 ---
 
-### GET /admin/banners/:id
+### GET /api/admin/banners/:id
 
 Получить подробную информацию о баннере.
 
@@ -122,7 +122,7 @@ Authorization: Bearer <admin_token>
 
 ---
 
-### POST /admin/banners
+### POST /api/admin/banners
 
 Создать новый баннер главной страницы.
 
@@ -185,7 +185,7 @@ fetch('/api/admin/banners', {
 
 ---
 
-### PATCH /admin/banners/:id
+### PATCH /api/admin/banners/:id
 
 Обновить баннер (с возможностью загрузки новых изображений).
 
@@ -245,7 +245,7 @@ fetch('/api/admin/banners/550e8400-e29b-41d4-a716-446655440000', {
 
 ---
 
-### DELETE /admin/banners/:id
+### DELETE /api/admin/banners/:id
 
 Удалить баннер (автоматически удаляются файлы изображений).
 
