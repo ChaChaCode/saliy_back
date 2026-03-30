@@ -15,6 +15,7 @@ export class LoggingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const contextType = context.getType<string>();
+    const now = Date.now();
 
     // Логирование GraphQL запросов
     if (contextType === 'graphql') {
@@ -23,7 +24,6 @@ export class LoggingInterceptor implements NestInterceptor {
       const operationType = info.operation.operation;
       const operationName = info.fieldName;
 
-      const now = Date.now();
       return next.handle().pipe(
         tap({
           next: () => {
@@ -43,15 +43,21 @@ export class LoggingInterceptor implements NestInterceptor {
     }
 
     // Логирование HTTP запросов
-    const request = context.switchToHttp().getRequest();
-    const { method, url, ip } = request;
-    const userAgent = request.get('user-agent') || '';
+    const http = context.switchToHttp();
+    const request = http.getRequest();
 
-    const now = Date.now();
+    if (!request) {
+      // Если нет HTTP request (например, для microservices), просто пропускаем
+      return next.handle();
+    }
+
+    const { method, url, ip } = request;
+    const userAgent = request.get?.('user-agent') || '';
+
     return next.handle().pipe(
       tap({
-        next: (data) => {
-          const response = context.switchToHttp().getResponse();
+        next: () => {
+          const response = http.getResponse();
           const { statusCode } = response;
           const responseTime = Date.now() - now;
 
