@@ -14,7 +14,7 @@ export class LoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger('HTTP');
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    const contextType = context.getType();
+    const contextType = context.getType<string>();
 
     // Логирование GraphQL запросов
     if (contextType === 'graphql') {
