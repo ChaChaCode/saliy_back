@@ -30,6 +30,7 @@ model PromoCode {
 
   // Условия применения
   minOrderAmount      Float?   @map("min_order_amount")                  // Минимальная сумма заказа в RUB
+  excludeNewItems     Boolean  @default(true) @map("exclude_new_items")  // Не применять к товарам с cardStatus=NEW (по умолчанию true)
 
   // Даты действия
   validFrom           DateTime? @map("valid_from")                       // Начало действия (null = сразу)

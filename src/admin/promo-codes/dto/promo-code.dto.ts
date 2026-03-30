@@ -61,6 +61,10 @@ export class CreatePromoCodeDto {
   minOrderAmount?: number;
 
   @IsOptional()
+  @IsBoolean()
+  excludeNewItems?: boolean; // Не применять к товарам с cardStatus=NEW (по умолчанию true)
+
+  @IsOptional()
   @IsDateString()
   validFrom?: string;
 
@@ -125,6 +129,10 @@ export class UpdatePromoCodeDto {
   @IsNumber()
   @Min(0)
   minOrderAmount?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  excludeNewItems?: boolean; // Не применять к товарам с cardStatus=NEW
 
   @IsOptional()
   @IsDateString()

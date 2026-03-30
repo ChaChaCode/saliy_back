@@ -196,22 +196,25 @@ export class PromoService {
         }
       }
 
-      // НЕ применять к новинкам (кроме FREE_DELIVERY)
-      const newItems = cartItemsWithData.filter(
-        (item) => item.cardStatus === 'NEW',
-      );
-      const hasNewItems = newItems.length > 0;
+      // Проверка на новинки (если включена)
+      if (promoCode.excludeNewItems) {
+        const newItems = cartItemsWithData.filter(
+          (item) => item.cardStatus === 'NEW',
+        );
+        const hasNewItems = newItems.length > 0;
 
-      if (hasNewItems && promoCode.type !== 'FREE_DELIVERY') {
-        const newProductNames = newItems
-          .map((i) => i.name || `#${i.productId}`)
-          .join(', ');
-        return {
-          isValid: false,
-          discount: 0,
-          message: `Промокоды не применяются к заказам с новинками (${newProductNames})`,
-          reason: 'NEW_ITEMS_IN_CART',
-        };
+        // FREE_DELIVERY всегда можно применить к новинкам
+        if (hasNewItems && promoCode.type !== 'FREE_DELIVERY') {
+          const newProductNames = newItems
+            .map((i) => i.name || `#${i.productId}`)
+            .join(', ');
+          return {
+            isValid: false,
+            discount: 0,
+            message: `Промокоды не применяются к заказам с новинками (${newProductNames})`,
+            reason: 'NEW_ITEMS_IN_CART',
+          };
+        }
       }
 
       // Расчет применимой суммы
