@@ -17,7 +17,7 @@ async function checkDates() {
 
   // Проверяем один продукт напрямую через SQL
   const result = await prisma.$queryRaw`
-    SELECT id, name, slug, created_at, updated_at, pg_typeof(created_at) as created_at_type
+    SELECT id, name, slug, created_at, updated_at
     FROM products
     WHERE slug = 'dzhinsovka-saliy-black'
     LIMIT 1
