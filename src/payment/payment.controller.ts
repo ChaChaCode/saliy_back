@@ -54,17 +54,13 @@ export class PaymentController {
       // Обновляем статус заказа в БД
       await this.ordersService.updatePaymentStatus(orderId, status);
 
-      // Если оплата успешна - отправляем email
-      if (status === 'CAPTURED') {
-        const order = await this.ordersService.getOrderByNumber(orderId);
-        if (order) {
-          await this.emailService.sendPaymentSuccess(
-            order.email,
-            order.orderNumber,
-            order.firstName,
-          );
-        }
-      }
+      // Если оплата успешна - отправляем email (ОТЛОЖЕНО)
+      // if (status === 'CAPTURED') {
+      //   const order = await this.ordersService.getOrderByNumber(orderId);
+      //   if (order) {
+      //     // TODO: Добавить отправку email при необходимости
+      //   }
+      // }
     }
 
     return { success: true };
