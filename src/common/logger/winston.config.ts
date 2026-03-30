@@ -2,10 +2,16 @@ import { utilities as nestWinston } from 'nest-winston';
 import * as winston from 'winston';
 import 'winston-daily-rotate-file';
 
-const isDevelopment = process.env.NODE_ENV !== 'production';
+// Используем LOG_PRETTY для управления форматом логов
+// LOG_PRETTY=true - красивый цветной формат
+// LOG_PRETTY=false или отсутствует - JSON формат
+const usePrettyLogs = process.env.LOG_PRETTY === 'true';
+
+// Определяем production окружение для файловых логов
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Формат для консоли (с цветами в dev)
-const consoleFormat = isDevelopment
+const consoleFormat = usePrettyLogs
   ? winston.format.combine(
       winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
       winston.format.ms(),
@@ -36,7 +42,7 @@ const transports: winston.transport[] = [
 ];
 
 // В продакшене добавляем файловые транспорты
-if (!isDevelopment) {
+if (isProduction) {
   // Все логи (с ротацией)
   transports.push(
     new winston.transports.DailyRotateFile({
@@ -63,6 +69,6 @@ if (!isDevelopment) {
 
 export const winstonConfig = {
   transports,
-  level: isDevelopment ? 'debug' : 'info',
+  level: isProduction ? 'info' : 'debug',
   exitOnError: false,
 };

@@ -8,10 +8,13 @@ import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { S3UrlInterceptor } from './common/interceptors';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true, // Буферизируем начальные логи до подключения Winston
+  });
 
   // Подключаем Winston как главный логгер приложения
   app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+  app.flushLogs(); // Выводим буферизированные логи через Winston
 
   // Включаем CORS
   const allowedOrigins = [

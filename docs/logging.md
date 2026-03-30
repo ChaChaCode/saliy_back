@@ -6,23 +6,53 @@
 
 Конфигурация логгера находится в `src/common/logger/winston.config.ts`.
 
-### Режим разработки (NODE_ENV !== 'production')
+### Переменные окружения
 
-- **Уровень логирования:** `debug`
-- **Транспорты:** Console (с цветами и форматированием)
-- **Формат:** Nest-like формат с timestamp и цветным выводом
+- **LOG_PRETTY** - управляет форматом консольного вывода
+  - `true` - красивый цветной формат с именем приложения и PID
+  - `false` или не установлена - JSON формат
 
-### Режим продакшена (NODE_ENV === 'production')
+- **NODE_ENV** - определяет окружение
+  - `production` - включает файловые логи и уровень `info`
+  - любое другое значение - уровень `debug`, без файловых логов
 
-- **Уровень логирования:** `info`
-- **Транспорты:**
-  - Console (JSON формат)
-  - Daily Rotate File - все логи (`logs/application-%DATE%.log`)
-    - Максимальный размер файла: 20MB
-    - Хранение: 14 дней
-  - Daily Rotate File - только ошибки (`logs/error-%DATE%.log`)
-    - Максимальный размер файла: 20MB
-    - Хранение: 30 дней
+### Формат логов
+
+#### Красивый формат (LOG_PRETTY=true)
+
+```
+[SaliyShop] 5892 2026-03-30 18:44:55     LOG [NestFactory] Starting Nest application... +0ms
+[SaliyShop] 5892 2026-03-30 18:44:55     LOG [RouterExplorer] Mapped {/api, GET} route +1ms
+```
+
+- Цветной вывод
+- Имя приложения: `[SaliyShop]`
+- PID процесса
+- Timestamp
+- Контекст и сообщение
+- Время с предыдущего лога
+
+#### JSON формат (LOG_PRETTY=false)
+
+```json
+{"level":"info","message":"Starting Nest application...","context":"NestFactory","timestamp":"2026-03-30T13:48:35.745Z"}
+{"level":"info","message":"Mapped {/api, GET} route","context":"RouterExplorer","timestamp":"2026-03-30T13:48:35.749Z"}
+```
+
+- Подходит для ELK, Datadog, CloudWatch
+- Легко парсится и индексируется
+
+### Файловые логи (NODE_ENV=production)
+
+В production окружении автоматически создаются файловые логи:
+
+- **Все логи:** `logs/application-%DATE%.log`
+  - Максимальный размер файла: 20MB
+  - Хранение: 14 дней
+
+- **Только ошибки:** `logs/error-%DATE%.log`
+  - Максимальный размер файла: 20MB
+  - Хранение: 30 дней
 
 ## Использование
 
