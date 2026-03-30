@@ -30,6 +30,11 @@ export class S3UrlInterceptor implements NestInterceptor {
 
     // Если это объект
     if (typeof data === 'object') {
+      // Пропускаем Date объекты - не трансформируем их
+      if (data instanceof Date) {
+        return data;
+      }
+
       const transformed: any = {};
 
       for (const key in data) {
@@ -39,8 +44,8 @@ export class S3UrlInterceptor implements NestInterceptor {
         if (this.isUrlField(key) && typeof value === 'string') {
           transformed[key] = this.addBaseUrl(value);
         }
-        // Рекурсивно обрабатываем вложенные объекты
-        else if (typeof value === 'object' && value !== null) {
+        // Рекурсивно обрабатываем вложенные объекты (но не Date)
+        else if (typeof value === 'object' && value !== null && !(value instanceof Date)) {
           transformed[key] = this.transformUrls(value);
         }
         // Остальные поля оставляем как есть
