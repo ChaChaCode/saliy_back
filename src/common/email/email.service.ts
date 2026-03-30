@@ -88,14 +88,14 @@ export class EmailService {
       to: email,
       subject: `Заказ #${orderData.orderNumber} оформлен - Saliy Clothes`,
       html: `
-        <div style="font-family: 'Courier New', Courier, monospace; max-width: 480px; margin: 40px auto; padding: 0; background: #f5f5f5;">
+        <div style="font-family: 'Courier New', Courier, monospace; max-width: 400px; margin: 40px auto; padding: 0; background: #e8e8e8;">
           <!-- Чек -->
-          <div style="background: white; margin: 0 auto; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-            <!-- Зубчатый верхний край -->
-            <div style="height: 12px; background: linear-gradient(135deg, white 5px, transparent 0), linear-gradient(225deg, white 5px, transparent 0); background-size: 12px 12px; background-position: 0 0, 6px 0; background-repeat: repeat-x;"></div>
+          <div style="background: white; margin: 0 auto; position: relative; box-shadow: 0 8px 30px rgba(0,0,0,0.15);">
+            <!-- Треугольный верхний край -->
+            <div style="height: 0; border-left: 200px solid transparent; border-right: 200px solid transparent; border-top: 15px solid #e8e8e8;"></div>
 
             <!-- Контент чека -->
-            <div style="padding: 30px 40px;">
+            <div style="padding: 40px 35px;">
               <!-- Заголовок магазина -->
               <div style="text-align: center; margin-bottom: 10px;">
                 <div style="font-size: 18px; font-weight: bold; letter-spacing: 4px;">SALIY CLOTHES</div>
@@ -171,19 +171,19 @@ export class EmailService {
               }
 
               <!-- Благодарность -->
-              <div style="text-align: center; margin: 20px 0; font-size: 12px; letter-spacing: 1px;">
+              <div style="text-align: center; margin: 25px 0; font-size: 12px; letter-spacing: 1px;">
                 СПАСИБО ЗА ПОКУПКУ!
               </div>
 
-              <!-- Штрих-код (имитация) -->
-              <div style="text-align: center; margin: 20px 0;">
-                <div style="display: inline-block; background: repeating-linear-gradient(90deg, #000 0px, #000 2px, transparent 2px, transparent 4px, #000 4px, #000 5px, transparent 5px, transparent 8px); height: 50px; width: 200px;"></div>
-                <div style="font-size: 10px; margin-top: 5px; letter-spacing: 2px;">${orderData.orderNumber}</div>
+              <!-- QR код -->
+              <div style="text-align: center; margin: 25px 0;">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.youtube.com/watch?v=dQw4w9WgXcQ" alt="QR Code" style="width: 150px; height: 150px; border: 2px solid #000; padding: 5px; background: white;">
+                <div style="font-size: 10px; margin-top: 8px; letter-spacing: 2px; color: #666;">ОТСКАНИРУЙТЕ ДЛЯ ОТСЛЕЖИВАНИЯ</div>
               </div>
             </div>
 
-            <!-- Зубчатый нижний край -->
-            <div style="height: 12px; background: linear-gradient(135deg, transparent 5px, white 0), linear-gradient(225deg, transparent 5px, white 0); background-size: 12px 12px; background-position: 0 0, 6px 0; background-repeat: repeat-x;"></div>
+            <!-- Треугольный нижний край -->
+            <div style="height: 0; border-left: 200px solid transparent; border-right: 200px solid transparent; border-bottom: 15px solid #e8e8e8;"></div>
           </div>
 
           <!-- Информация под чеком -->
