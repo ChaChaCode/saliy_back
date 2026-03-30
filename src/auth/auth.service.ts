@@ -220,8 +220,15 @@ export class AuthService {
         }
       }
 
-      // Преобразуем строку даты в Date объект (ISO 8601 формат)
-      data.birthdate = new Date(data.birthdate);
+      // Преобразуем строку даты из формата DD.MM.YYYY в Date объект
+      const [day, month, year] = data.birthdate.split('.');
+      data.birthdate = new Date(+year, +month - 1, +day);
+
+      // Проверяем валидность даты
+      if (isNaN(data.birthdate.getTime())) {
+        throw new BadRequestException('Некорректная дата рождения');
+      }
+
       // Обновляем birthdateUpdatedAt при изменении birthdate
       data.birthdateUpdatedAt = new Date();
     }
