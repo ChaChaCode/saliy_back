@@ -89,6 +89,7 @@ export class PromoCodesService {
         maxUsesPerUser: dto.maxUsesPerUser,
         maxItems: dto.maxItems,
         minOrderAmount: dto.minOrderAmount,
+        excludeNewItems: dto.excludeNewItems ?? true,
         validFrom: dto.validFrom ? new Date(dto.validFrom) : null,
         validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
         isActive: dto.isActive ?? true,
@@ -222,6 +223,9 @@ export class PromoCodesService {
         ...(dto.maxItems !== undefined && { maxItems: dto.maxItems }),
         ...(dto.minOrderAmount !== undefined && {
           minOrderAmount: dto.minOrderAmount,
+        }),
+        ...(dto.excludeNewItems !== undefined && {
+          excludeNewItems: dto.excludeNewItems,
         }),
         ...(dto.validFrom !== undefined && {
           validFrom: dto.validFrom ? new Date(dto.validFrom) : null,
