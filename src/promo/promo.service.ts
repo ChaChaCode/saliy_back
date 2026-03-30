@@ -325,14 +325,13 @@ export class PromoService {
       },
     });
 
-    if (userId) {
-      await this.prisma.promoCodeUsage.create({
-        data: {
-          promoCodeId,
-          userId,
-          orderId,
-        },
-      });
-    }
+    // Создаем запись использования (и для гостей тоже)
+    await this.prisma.promoCodeUsage.create({
+      data: {
+        promoCodeId,
+        userId: userId || null,
+        orderId: orderId || null,
+      },
+    });
   }
 }
