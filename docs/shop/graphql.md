@@ -307,6 +307,179 @@ query GetCategory($slug: String!) {
 
 ---
 
+### Корзина
+
+#### 1. Получить корзину пользователя (требует авторизации)
+
+```graphql
+query GetCart {
+  cart {
+    id
+    productId
+    size
+    quantity
+    createdAt
+    updatedAt
+    product {
+      id
+      name
+      slug
+      price
+      finalPrice
+      images
+      stock
+    }
+  }
+}
+```
+
+**Требуется заголовок:**
+```
+Authorization: Bearer <access_token>
+```
+
+---
+
+#### 2. Валидировать корзину (для всех, включая гостей)
+
+```graphql
+query ValidateCart($items: [CartItemInput!]!) {
+  validateCart(items: $items) {
+    items {
+      productId
+      productName
+      productSlug
+      size
+      quantity
+      price
+      finalPrice
+      totalPrice
+      inStock
+      availableQuantity
+      imageUrl
+    }
+    itemsCount
+    subtotal
+    total
+  }
+}
+```
+
+**Variables:**
+```json
+{
+  "items": [
+    {
+      "productId": 20,
+      "size": "M",
+      "quantity": 2
+    }
+  ]
+}
+```
+
+**Описание:** Проверяет актуальность цен и наличие товаров в корзине. Используется для гостей (данные из localStorage) и перед оформлением заказа.
+
+---
+
+#### 3. Добавить товар в корзину (требует авторизации)
+
+```graphql
+mutation AddToCart($productId: Int!, $size: String!, $quantity: Int!) {
+  addToCart(productId: $productId, size: $size, quantity: $quantity) {
+    id
+    productId
+    size
+    quantity
+  }
+}
+```
+
+---
+
+#### 4. Обновить количество товара (требует авторизации)
+
+```graphql
+mutation UpdateCartItem($itemId: Int!, $quantity: Int!) {
+  updateCartItem(itemId: $itemId, quantity: $quantity) {
+    id
+    quantity
+  }
+}
+```
+
+---
+
+#### 5. Удалить товар из корзины (требует авторизации)
+
+```graphql
+mutation RemoveFromCart($itemId: Int!) {
+  removeFromCart(itemId: $itemId)
+}
+```
+
+---
+
+#### 6. Очистить корзину (требует авторизации)
+
+```graphql
+mutation ClearCart {
+  clearCart
+}
+```
+
+---
+
+#### 7. Объединить корзину (требует авторизации)
+
+```graphql
+mutation MergeCart($items: [CartItemInput!]!) {
+  mergeCart(items: $items)
+}
+```
+
+**Описание:** Объединяет корзину из localStorage с корзиной в БД после авторизации пользователя.
+
+---
+
+### Профиль пользователя
+
+#### 1. Получить профиль текущего пользователя (требует авторизации)
+
+```graphql
+query GetMe {
+  me {
+    id
+    email
+    firstName
+    lastName
+    middleName
+    phone
+    birthdate
+    socialContact
+    deliveryType
+    cdekCityCode
+    cdekPickupPointCode
+    cityName
+    countryName
+    regionName
+    postalCode
+    fullAddress
+    createdAt
+    updatedAt
+  }
+}
+```
+
+**Требуется заголовок:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Примечание:** Обновление профиля происходит через REST API (`PUT /api/auth/profile`).
+
+---
+
 ## Типы данных
 
 ### Product
@@ -324,15 +497,30 @@ type Product {
   price: Float!
   discount: Int!
   finalPrice: Float!
-  images: JSONObject!
-  stock: JSONObject!
+  images: JSON!          # Массив объектов с url, isPreview, previewOrder
+  stock: JSON!           # Объект с размерами и количеством: {"S": 10, "M": 5}
+  sizeChart: JSON        # Размерная таблица (опционально)
   isActive: Boolean!
   viewCount: Int!
   salesCount: Int!
-  createdAt: DateTime!
-  updatedAt: DateTime!
+  createdAt: DateTime    # Nullable
+  updatedAt: DateTime    # Nullable
   categories: [ProductCategory!]
 }
+```
+
+**Пример images:**
+```json
+[
+  {"url": "https://...", "isPreview": true, "previewOrder": 1},
+  {"url": "https://...", "isPreview": true, "previewOrder": 2},
+  {"url": "https://...", "isPreview": false, "previewOrder": null}
+]
+```
+
+**Пример stock:**
+```json
+{"S": 10, "M": 5, "L": 0, "XL": 3}
 ```
 
 ### Category
@@ -344,8 +532,78 @@ type Category {
   slug: String!
   type: String!
   isActive: Boolean!
-  createdAt: DateTime!
-  updatedAt: DateTime!
+  createdAt: DateTime    # Nullable
+  updatedAt: DateTime    # Nullable
+}
+```
+
+### User
+
+```graphql
+type User {
+  id: String!
+  email: String!
+  firstName: String
+  lastName: String
+  middleName: String
+  phone: String
+  birthdate: Date        # Формат: DD.MM.YYYY при обновлении через REST
+  socialContact: String
+  deliveryType: String   # "CDEK" или "POST"
+  cdekCityCode: Int
+  cdekPickupPointCode: String
+  cityName: String
+  countryName: String
+  regionName: String
+  postalCode: String
+  fullAddress: String
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+```
+
+### CartItem
+
+```graphql
+type CartItem {
+  id: Int!
+  userId: String!
+  productId: Int!
+  size: String!
+  quantity: Int!
+  createdAt: DateTime
+  updatedAt: DateTime
+  product: Product!
+}
+```
+
+### ValidatedCartItem
+
+```graphql
+type ValidatedCartItem {
+  productId: Int!
+  productName: String!
+  productSlug: String!
+  size: String!
+  quantity: Int!
+  price: Float!
+  finalPrice: Float!
+  totalPrice: Float!
+  inStock: Boolean!
+  availableQuantity: Int!
+  sizeChart: String
+  imageUrl: String!
+}
+```
+
+### ValidatedCart
+
+```graphql
+type ValidatedCart {
+  items: [ValidatedCartItem!]!
+  itemsCount: Int!
+  subtotal: Float!
+  total: Float!
 }
 ```
 
@@ -435,6 +693,85 @@ query {
 }
 ```
 
+### Фильтрация товаров по цене и наличию
+
+```graphql
+query {
+  products(
+    categorySlug: "dzhinsovki"
+    minPrice: 5000
+    maxPrice: 15000
+    inStock: true
+    sortBy: "price"
+    sortOrder: "asc"
+    limit: 10
+  ) {
+    products {
+      id
+      name
+      price
+      finalPrice
+      stock
+    }
+    total
+  }
+}
+```
+
+### Валидация корзины гостя перед оформлением
+
+```graphql
+query {
+  validateCart(items: [
+    {productId: 20, size: "M", quantity: 2},
+    {productId: 21, size: "L", quantity: 1}
+  ]) {
+    items {
+      productName
+      size
+      quantity
+      finalPrice
+      totalPrice
+      inStock
+      availableQuantity
+    }
+    total
+    itemsCount
+  }
+}
+```
+
+### Получить профиль и корзину после авторизации
+
+```graphql
+query {
+  me {
+    id
+    email
+    firstName
+    lastName
+    phone
+  }
+
+  cart {
+    id
+    size
+    quantity
+    product {
+      name
+      price
+      finalPrice
+      images
+    }
+  }
+}
+```
+
+**Требуется заголовок:**
+```
+Authorization: Bearer <access_token>
+```
+
 ---
 
 ## Преимущества GraphQL
@@ -490,13 +827,107 @@ const data = await response.json();
 ## Когда использовать GraphQL vs REST
 
 ### Используй GraphQL для:
-- Получения товаров с фильтрацией
-- Поиска товаров
-- Получения категорий
-- Когда нужны разные наборы полей в разных местах
+- **Получения товаров** с фильтрацией (categorySlug, gender, status, minPrice, maxPrice, inStock, sortBy, sortOrder)
+- **Поиска товаров** по запросу
+- **Получения категорий**
+- **Получения профиля пользователя** (query `me`)
+- **Работы с корзиной** (получение, добавление, обновление, удаление, валидация)
+- **Валидации корзины гостя** перед оформлением заказа
+- Когда нужны **разные наборы полей** в разных местах (гибкость GraphQL)
 
 ### Используй REST для:
-- Авторизации (POST /api/auth/*)
-- Создания/редактирования товаров (админка)
-- Проверки остатков (GET /api/products/:id/stock)
-- Загрузки файлов
+- **Авторизации** (POST /api/auth/send-code, POST /api/auth/verify-code, POST /api/auth/refresh)
+- **Обновления профиля** (PUT /api/auth/profile - в т.ч. дата рождения в формате DD.MM.YYYY)
+- **Обновления адреса доставки** (PUT /api/auth/delivery-location)
+- **Создания заказов** (POST /api/orders)
+- **Админка** (создание/редактирование товаров, категорий, промокодов)
+- **Загрузки файлов** (изображения товаров, баннеры)
+
+### Особенности авторизации в GraphQL
+
+Для queries и mutations, требующих авторизации, добавь JWT токен в заголовок:
+
+```
+Authorization: Bearer <access_token>
+```
+
+Получить access token можно через REST API:
+1. POST /api/auth/send-code - отправка кода на email
+2. POST /api/auth/verify-code - проверка кода и получение токенов
+
+После авторизации доступны:
+- `query { me }` - профиль пользователя
+- `query { cart }` - корзина пользователя
+- `mutation { addToCart }` - добавление в корзину
+- `mutation { mergeCart }` - объединение корзины после входа
+
+---
+
+## Важные примечания
+
+### Формат даты рождения
+
+**В GraphQL:** поле `birthdate` возвращается как `Date` (ISO 8601 формат)
+```json
+{
+  "birthdate": "2003-07-13T00:00:00.000Z"
+}
+```
+
+**В REST API (обновление):** отправлять в формате `DD.MM.YYYY`
+```json
+{
+  "birthdate": "13.07.2003"
+}
+```
+
+Ограничение: дату рождения можно изменить только **раз в год**.
+
+### Формат изображений (images)
+
+Поле `images` теперь возвращает массив объектов:
+```json
+[
+  {
+    "url": "https://storage.yandexcloud.net/saliy-shop/products/...",
+    "isPreview": true,
+    "previewOrder": 1
+  },
+  {
+    "url": "https://storage.yandexcloud.net/saliy-shop/products/...",
+    "isPreview": true,
+    "previewOrder": 2
+  }
+]
+```
+
+### Nullable поля
+
+Поля `createdAt` и `updatedAt` могут быть `null` в GraphQL ответах. Всегда проверяй наличие значения:
+
+```typescript
+if (product.createdAt) {
+  const date = new Date(product.createdAt);
+  // работаем с датой
+}
+```
+
+### Валидация корзины
+
+**Важно:** Всегда валидируй корзину перед оформлением заказа с помощью `validateCart`. Это гарантирует:
+- Актуальные цены товаров
+- Доступное количество на складе
+- Товары все еще активны
+
+```graphql
+query {
+  validateCart(items: $cartItems) {
+    items {
+      inStock
+      availableQuantity
+      finalPrice
+    }
+    total
+  }
+}
+```
