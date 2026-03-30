@@ -1,5 +1,5 @@
 import { ObjectType, Field, Int, Float, registerEnumType } from '@nestjs/graphql';
-import { GraphQLJSONObject } from 'graphql-type-json';
+import { GraphQLJSONObject, GraphQLJSON } from 'graphql-type-json';
 import { Category } from './category.model';
 
 export enum CardStatus {
@@ -66,13 +66,13 @@ export class Product {
   @Field(() => Int)
   discount: number;
 
-  @Field(() => GraphQLJSONObject)
+  @Field(() => GraphQLJSON)
   images: any;
 
-  @Field(() => GraphQLJSONObject)
+  @Field(() => GraphQLJSON)
   stock: any;
 
-  @Field(() => GraphQLJSONObject, { nullable: true })
+  @Field(() => GraphQLJSON, { nullable: true })
   sizeChart?: any;
 
   @Field()
@@ -84,11 +84,11 @@ export class Product {
   @Field(() => Int)
   salesCount: number;
 
-  @Field()
-  createdAt: Date;
+  @Field(() => Date, { nullable: true })
+  createdAt: Date | null;
 
-  @Field()
-  updatedAt: Date;
+  @Field(() => Date, { nullable: true })
+  updatedAt: Date | null;
 
   @Field(() => [ProductCategory], { nullable: true })
   categories?: ProductCategory[];

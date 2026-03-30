@@ -17,9 +17,9 @@ export class Category {
   @Field()
   isActive: boolean;
 
-  @Field()
-  createdAt: Date;
+  @Field(() => Date, { nullable: true })
+  createdAt: Date | null;
 
-  @Field()
-  updatedAt: Date;
+  @Field(() => Date, { nullable: true })
+  updatedAt: Date | null;
 }

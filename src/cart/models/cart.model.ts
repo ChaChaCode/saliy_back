@@ -19,11 +19,11 @@ export class CartItem {
   @Field(() => Int)
   quantity: number;
 
-  @Field()
-  createdAt: Date;
+  @Field(() => Date, { nullable: true })
+  createdAt: Date | null;
 
-  @Field()
-  updatedAt: Date;
+  @Field(() => Date, { nullable: true })
+  updatedAt: Date | null;
 
   // Связь с товаром
   @Field(() => Product)
