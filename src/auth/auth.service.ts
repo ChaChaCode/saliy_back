@@ -220,6 +220,8 @@ export class AuthService {
         }
       }
 
+      // Преобразуем строку даты в Date объект (ISO 8601 формат)
+      data.birthdate = new Date(data.birthdate);
       // Обновляем birthdateUpdatedAt при изменении birthdate
       data.birthdateUpdatedAt = new Date();
     }
