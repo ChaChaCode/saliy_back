@@ -1,11 +1,17 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+});
 
 async function fixDates() {
   console.log('Fixing dates...');
 
-  // Обновляем products
+  // Обновляем products - просто триггерим updatedAt
   const productsUpdated = await prisma.product.updateMany({
     where: {},
     data: {
