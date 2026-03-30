@@ -1,4 +1,4 @@
-import { ObjectType, Field } from '@nestjs/graphql';
+import { ObjectType, Field, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class User {
@@ -9,64 +9,64 @@ export class User {
   email: string;
 
   @Field({ nullable: true })
-  name?: string;
+  name: string | null;
 
   @Field({ nullable: true })
-  firstName?: string;
+  firstName: string | null;
 
   @Field({ nullable: true })
-  lastName?: string;
+  lastName: string | null;
 
   @Field({ nullable: true })
-  middleName?: string;
+  middleName: string | null;
 
   @Field({ nullable: true })
-  phone?: string;
+  phone: string | null;
 
   @Field({ nullable: true })
-  birthdate?: Date;
+  birthdate: Date | null;
 
   @Field({ nullable: true })
-  socialContact?: string;
+  socialContact: string | null;
 
   @Field({ nullable: true })
-  street?: string;
+  street: string | null;
 
   @Field({ nullable: true })
-  apartment?: string;
+  apartment: string | null;
 
   @Field({ nullable: true })
-  postalCode?: string;
+  postalCode: string | null;
 
   @Field({ nullable: true })
-  deliveryType?: string;
+  deliveryType: string | null;
+
+  @Field(() => Int, { nullable: true })
+  cdekCityCode: number | null;
 
   @Field({ nullable: true })
-  cdekCityCode?: string;
+  cdekCountryCode: string | null;
+
+  @Field(() => Int, { nullable: true })
+  cdekRegionCode: number | null;
 
   @Field({ nullable: true })
-  cdekCountryCode?: string;
+  cdekPickupPointCode: string | null;
 
   @Field({ nullable: true })
-  cdekRegionCode?: string;
+  cityName: string | null;
 
   @Field({ nullable: true })
-  cdekPickupPointCode?: string;
+  countryName: string | null;
 
   @Field({ nullable: true })
-  cityName?: string;
+  regionName: string | null;
 
   @Field({ nullable: true })
-  countryName?: string;
+  deliveryCountryCode: string | null;
 
   @Field({ nullable: true })
-  regionName?: string;
-
-  @Field({ nullable: true })
-  deliveryCountryCode?: string;
-
-  @Field({ nullable: true })
-  fullAddress?: string;
+  fullAddress: string | null;
 
   @Field()
   createdAt: Date;
