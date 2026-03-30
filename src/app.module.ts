@@ -33,6 +33,12 @@ import { CacheModule } from './common/cache/cache.module';
       {
         ttl: 60000, // 1 минута
         limit: 100, // 100 запросов
+        ignoreUserAgents: [],
+        skipIf: (context) => {
+          // Пропускаем GraphQL запросы (у GraphQL свой контекст)
+          const request = context.switchToHttp().getRequest();
+          return request?.url?.includes('/graphql');
+        },
       },
     ]),
     GraphQLModule.forRoot<ApolloDriverConfig>({
