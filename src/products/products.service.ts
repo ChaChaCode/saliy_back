@@ -200,6 +200,13 @@ export class ProductsService {
   async getProducts(filters: FilterProductsDto = {}) {
     const {
       categorySlug,
+      gender,
+      status,
+      minPrice,
+      maxPrice,
+      inStock,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
       limit = 20,
       offset = 0,
     } = filters;
@@ -220,8 +227,40 @@ export class ProductsService {
       };
     }
 
+    // Фильтр по полу
+    if (gender) {
+      where.gender = gender;
+    }
+
+    // Фильтр по статусу карточки
+    if (status) {
+      where.cardStatus = status;
+    }
+
+    // Фильтр по цене
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      where.price = {};
+      if (minPrice !== undefined) {
+        where.price.gte = minPrice;
+      }
+      if (maxPrice !== undefined) {
+        where.price.lte = maxPrice;
+      }
+    }
+
+    // Фильтр по наличию (только товары в наличии)
+    // Проверяем что в JSON stock есть хотя бы один размер с количеством > 0
+    // Но Prisma не поддерживает фильтрацию по содержимому JSON полей напрямую
+    // Поэтому этот фильтр нужно применять после получения данных
+
+    // Сортировка
+    const orderBy: any = {};
+    const validSortFields = ['createdAt', 'price', 'salesCount', 'viewCount'];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    orderBy[sortField] = sortOrder === 'asc' ? 'asc' : 'desc';
+
     // Получаем товары
-    const products = await this.prisma.product.findMany({
+    let products = await this.prisma.product.findMany({
       where,
       include: {
         categories: {
@@ -230,19 +269,30 @@ export class ProductsService {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy,
       take: limit,
       skip: offset,
     });
 
-    // Получаем общее количество
+    // Применяем фильтр по наличию (после получения из БД)
+    if (inStock) {
+      products = products.filter((product) => {
+        const stock = product.stock as any;
+        if (!stock || typeof stock !== 'object') return false;
+
+        // Проверяем есть ли хотя бы один размер с количеством > 0
+        return Object.values(stock).some((quantity) =>
+          typeof quantity === 'number' && quantity > 0
+        );
+      });
+    }
+
+    // Получаем общее количество (без учета inStock фильтра для корректной пагинации)
     const total = await this.prisma.product.count({ where });
 
     return {
       products,
-      total,
+      total: inStock ? products.length : total,
       limit,
       offset,
     };
