@@ -1,119 +1,411 @@
-# Управление категориями (Admin)
+# API управления категориями (Admin)
 
-> **Требуется авторизация администратора** для всех операций в этом разделе.
+Административный API для управления категориями товаров. Все эндпоинты требуют авторизации через Telegram.
 
-## Загрузка баннеров категории
+**Базовый URL:** `/api/admin/categories`
 
-### Загрузить/обновить баннеры категории
+**Требуется:** `AdminGuard` (JWT токен администратора)
 
-**PUT** `/api/categories/:id/banners`
+---
 
-Загружает или обновляет баннеры для категории.
+## Содержание
 
-**Авторизация:**
+- [Типы данных](#типы-данных)
+- [Эндпоинты](#эндпоинты)
+  - [GET /admin/categories](#get-admincategories) - Получить список категорий
+  - [GET /admin/categories/:id](#get-admincategoriesid) - Получить категорию по ID
+  - [POST /admin/categories](#post-admincategories) - Создать категорию
+  - [PATCH /admin/categories/:id](#patch-admincategoriesid) - Обновить категорию
+  - [DELETE /admin/categories/:id](#delete-admincategoriesid) - Удалить категорию
+- [Примеры](#примеры)
+
+---
+
+## Типы данных
+
+### CategoryType (Тип категории)
+
+| Значение | Описание |
+|----------|----------|
+| `TOP` | Верхняя одежда |
+| `BOTTOM` | Нижняя одежда |
+| `ACCESSORIES` | Аксессуары |
+| `SPORT` | Спортивная одежда |
+| `OTHER` | Другое |
+
+### Объект Category
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `id` | `number` | ID категории |
+| `name` | `string` | Название категории |
+| `slug` | `string` | URL-friendly идентификатор (уникальный) |
+| `type` | `CategoryType` | Тип категории |
+| `description` | `string \| null` | Описание категории |
+| `desktopBannerUrl` | `string \| null` | URL баннера для десктопа |
+| `mobileBannerUrl` | `string \| null` | URL баннера для мобильных |
+| `isActive` | `boolean` | Активна ли категория |
+| `productsCount` | `number` | Количество товаров в категории |
+| `createdAt` | `string` | Дата создания |
+| `updatedAt` | `string` | Дата обновления |
+
+---
+
+## Эндпоинты
+
+### GET /admin/categories
+
+Получить список всех категорий с количеством товаров.
+
+**Пример запроса:**
+
 ```http
+GET /api/admin/categories
 Authorization: Bearer <admin_token>
 ```
 
-**Параметры (multipart/form-data):**
-- `desktopBanner` (file, опционально) - Изображение для десктопа
-- `mobileBanner` (file, опционально) - Изображение для мобильной версии
+**Пример ответа:**
 
-**Примечание:** Можно загрузить оба баннера одновременно или обновить только один из них.
+```json
+[
+  {
+    "id": 1,
+    "name": "Куртки",
+    "slug": "jackets",
+    "type": "TOP",
+    "description": "Верхняя одежда для холодной погоды",
+    "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
+    "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
+    "isActive": true,
+    "productsCount": 15,
+    "createdAt": "2026-03-30T10:00:00.000Z",
+    "updatedAt": "2026-03-30T12:00:00.000Z"
+  },
+  {
+    "id": 2,
+    "name": "Брюки",
+    "slug": "pants",
+    "type": "BOTTOM",
+    "description": "Брюки и джинсы",
+    "desktopBannerUrl": null,
+    "mobileBannerUrl": null,
+    "isActive": true,
+    "productsCount": 8,
+    "createdAt": "2026-03-30T11:00:00.000Z",
+    "updatedAt": "2026-03-30T11:00:00.000Z"
+  }
+]
+```
+
+---
+
+### GET /admin/categories/:id
+
+Получить подробную информацию о категории.
+
+**Параметры пути:**
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `id` | `number` | ID категории |
 
 **Пример запроса:**
-```bash
-# Загрузить оба баннера
-curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
-  -H "Authorization: Bearer <admin_token>" \
-  -F "desktopBanner=@hoodies-desktop.jpg" \
-  -F "mobileBanner=@hoodies-mobile.jpg"
 
-# Обновить только десктопный баннер
-curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
-  -H "Authorization: Bearer <admin_token>" \
-  -F "desktopBanner=@new-desktop.jpg"
-
-# Обновить только мобильный баннер
-curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
-  -H "Authorization: Bearer <admin_token>" \
-  -F "mobileBanner=@new-mobile.jpg"
+```http
+GET /api/admin/categories/1
+Authorization: Bearer <admin_token>
 ```
 
 **Пример ответа:**
+
 ```json
 {
   "id": 1,
-  "name": "Толстовки",
-  "slug": "hoodies",
+  "name": "Куртки",
+  "slug": "jackets",
   "type": "TOP",
+  "description": "Верхняя одежда для холодной погоды",
+  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
+  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
   "isActive": true,
-  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1711234567890.jpg",
-  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1711234567890.jpg",
-  "createdAt": "2024-01-15T10:00:00.000Z",
-  "updatedAt": "2024-01-15T12:30:00.000Z"
+  "createdAt": "2026-03-30T10:00:00.000Z",
+  "updatedAt": "2026-03-30T12:00:00.000Z",
+  "_count": {
+    "products": 15
+  }
 }
 ```
 
-**Ошибки:**
-- `400` - Не передано ни одно изображение
-- `401` - Требуется авторизация администратора
-- `404` - Категория не найдена
+---
+
+### POST /admin/categories
+
+Создать новую категорию с загрузкой баннеров.
+
+**Content-Type:** `multipart/form-data`
+
+**Обязательные поля:**
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `name` | `string` | Название категории |
+| `slug` | `string` | URL-friendly идентификатор (уникальный) |
+
+**Опциональные поля:**
+
+| Поле | Тип | По умолчанию | Описание |
+|------|-----|--------------|----------|
+| `type` | `CategoryType` | `OTHER` | Тип категории |
+| `description` | `string` | - | Описание |
+| `isActive` | `boolean` | `true` | Активность |
+| `desktopBanner` | `File` | - | Баннер для десктопа (JPG, PNG, WEBP, макс. 10MB) |
+| `mobileBanner` | `File` | - | Баннер для мобильных (JPG, PNG, WEBP, макс. 10MB) |
+
+**Пример запроса (FormData):**
+
+```javascript
+const formData = new FormData();
+formData.append('name', 'Куртки');
+formData.append('slug', 'jackets');
+formData.append('type', 'TOP');
+formData.append('description', 'Верхняя одежда для холодной погоды');
+formData.append('isActive', 'true');
+formData.append('desktopBanner', desktopBannerFile);
+formData.append('mobileBanner', mobileBannerFile);
+
+fetch('/api/admin/categories', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer <admin_token>'
+  },
+  body: formData
+});
+```
+
+**Пример ответа:**
+
+```json
+{
+  "id": 1,
+  "name": "Куртки",
+  "slug": "jackets",
+  "type": "TOP",
+  "description": "Верхняя одежда для холодной погоды",
+  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1711800000000.jpg",
+  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1711800000000.jpg",
+  "isActive": true,
+  "createdAt": "2026-03-30T10:00:00.000Z",
+  "updatedAt": "2026-03-30T10:00:00.000Z"
+}
+```
 
 ---
 
-## Технические детали
+### PATCH /admin/categories/:id
 
-### Хранение файлов
-Баннеры категорий сохраняются в:
+Обновить категорию (с возможностью загрузки новых баннеров).
+
+**Content-Type:** `multipart/form-data`
+
+**Параметры пути:**
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `id` | `number` | ID категории |
+
+**Поля (все опциональные):**
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `name` | `string` | Название |
+| `slug` | `string` | URL-friendly идентификатор |
+| `type` | `CategoryType` | Тип категории |
+| `description` | `string` | Описание |
+| `isActive` | `boolean` | Активность |
+| `desktopBanner` | `File` | Новый баннер для десктопа (замена) |
+| `mobileBanner` | `File` | Новый баннер для мобильных (замена) |
+
+**Пример запроса (FormData):**
+
+```javascript
+const formData = new FormData();
+formData.append('name', 'Зимние куртки');
+formData.append('description', 'Обновленное описание');
+formData.append('desktopBanner', newDesktopBannerFile);
+
+fetch('/api/admin/categories/1', {
+  method: 'PATCH',
+  headers: {
+    'Authorization': 'Bearer <admin_token>'
+  },
+  body: formData
+});
 ```
-uploads/
-  └── categories/
-      ├── desktop-cat1-1234567890.jpg
-      ├── mobile-cat1-1234567890.jpg
-      └── ...
+
+**Пример ответа:**
+
+```json
+{
+  "id": 1,
+  "name": "Зимние куртки",
+  "slug": "jackets",
+  "type": "TOP",
+  "description": "Обновленное описание",
+  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1711805000000.jpg",
+  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1711800000000.jpg",
+  "isActive": true,
+  "createdAt": "2026-03-30T10:00:00.000Z",
+  "updatedAt": "2026-03-30T14:30:00.000Z"
+}
 ```
-
-### Формат имени файла
-- Desktop: `desktop-cat{categoryId}-{timestamp}.{ext}`
-- Mobile: `mobile-cat{categoryId}-{timestamp}.{ext}`
-
-### При загрузке нового баннера
-- Старый файл автоматически удаляется с диска
-- URL в базе данных обновляется на новый
-
-### Требования к изображениям
-
-**Рекомендуемые размеры:**
-- Desktop: 1920x600px
-- Mobile: 768x768px
-
-**Форматы:**
-- JPG, PNG, WebP
-- Максимальный размер: 5MB
 
 ---
 
-## Примеры использования
+### DELETE /admin/categories/:id
 
-### Загрузить баннеры для категории "Толстовки"
-```bash
-curl -X PUT https://saliy-shop.ru/api/categories/1/banners \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-  -F "desktopBanner=@hoodies-desktop.jpg" \
-  -F "mobileBanner=@hoodies-mobile.jpg"
+Удалить категорию (только если нет связанных товаров).
+
+**Параметры пути:**
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `id` | `number` | ID категории |
+
+**Пример запроса:**
+
+```http
+DELETE /api/admin/categories/1
+Authorization: Bearer <admin_token>
 ```
 
-### Обновить только мобильный баннер
-```bash
-curl -X PUT https://saliy-shop.ru/api/categories/2/banners \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-  -F "mobileBanner=@pants-mobile.jpg"
+**Пример успешного ответа:**
+
+```json
+{
+  "message": "Category \"Куртки\" deleted successfully"
+}
+```
+
+**Ошибка при наличии товаров:**
+
+```json
+{
+  "statusCode": 400,
+  "message": "Cannot delete category with 15 associated products",
+  "error": "Bad Request"
+}
 ```
 
 ---
 
-## См. также
+## Примеры
 
-- [Авторизация администратора](./auth.md)
-- [Управление баннерами главной страницы](./banners.md)
+### Пример 1: Создание категории без баннеров
+
+```http
+POST /api/admin/categories
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "name": "Аксессуары",
+  "slug": "accessories",
+  "type": "ACCESSORIES",
+  "description": "Шапки, шарфы, перчатки"
+}
+```
+
+### Пример 2: Обновление только названия и описания
+
+```http
+PATCH /api/admin/categories/1
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "name": "Зимние куртки",
+  "description": "Теплые куртки для суровой зимы"
+}
+```
+
+### Пример 3: Загрузка только desktop баннера
+
+```javascript
+const formData = new FormData();
+formData.append('desktopBanner', desktopBannerFile);
+
+await fetch('/api/admin/categories/1', {
+  method: 'PATCH',
+  headers: {
+    'Authorization': `Bearer ${adminToken}`
+  },
+  body: formData
+});
+```
+
+### Пример 4: Деактивация категории
+
+```http
+PATCH /api/admin/categories/1
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+```
+
+### Пример 5: Изменение типа категории
+
+```http
+PATCH /api/admin/categories/5
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "type": "SPORT"
+}
+```
+
+---
+
+## Коды ошибок
+
+| Код | Описание |
+|-----|----------|
+| 400 | Bad Request - некорректные данные или slug уже существует |
+| 401 | Unauthorized - отсутствует токен |
+| 403 | Forbidden - недостаточно прав |
+| 404 | Not Found - категория не найдена |
+| 413 | Payload Too Large - файл слишком большой (лимит 10MB) |
+| 500 | Internal Server Error - ошибка сервера |
+
+---
+
+## Примечания
+
+1. **Уникальность slug:**
+   - Поле `slug` должно быть уникальным
+   - При попытке создать/обновить категорию с существующим slug вернется ошибка 400
+
+2. **Загрузка баннеров:**
+   - Максимальный размер файла: 10MB
+   - Поддерживаемые форматы: JPG, JPEG, PNG, WEBP
+   - Файлы сохраняются в `/uploads/categories/`
+   - При обновлении старые файлы автоматически удаляются
+
+3. **Удаление категории:**
+   - Нельзя удалить категорию, у которой есть связанные товары
+   - При удалении автоматически удаляются файлы баннеров
+
+4. **Автоматические значения:**
+   - `type` по умолчанию: `OTHER`
+   - `isActive` по умолчанию: `true`
+
+5. **Авторизация:**
+   - Все эндпоинты требуют AdminGuard
+   - Токен передается в заголовке `Authorization: Bearer <token>`
+
+6. **Формат имен файлов:**
+   - Desktop баннер: `desktop-cat{id}-{timestamp}.{ext}`
+   - Mobile баннер: `mobile-cat{id}-{timestamp}.{ext}`
