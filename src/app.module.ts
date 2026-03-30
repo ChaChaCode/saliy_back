@@ -40,6 +40,7 @@ import { CacheModule } from './common/cache/cache.module';
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
       sortSchema: true,
       playground: true,
+      path: '/api/graphql',
       context: ({ req, res }) => ({ req, res }),
     }),
     PrismaModule,
