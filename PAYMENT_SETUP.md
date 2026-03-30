@@ -144,11 +144,11 @@ curl -X POST https://saliy-shop.ru/api/payment/webhook/yandex \
 
 Все операции логируются:
 ```
-[OrdersService] Заказ создан: 260330-0001, товаров: 2, сумма: 19000 RUB
+[OrdersService] Заказ создан: SALIY2603300001, товаров: 2, сумма: 19000 RUB
 [OrdersService] Email уведомление отправлено: ivan@example.com
-[YandexPayService] Платеж создан: orderId=260330-0001
+[YandexPayService] Платеж создан: orderId=SALIY2603300001
 [PaymentController] Получен webhook от Yandex Pay
-[OrdersService] Статус заказа обновлен: 260330-0001, status=PAID
+[OrdersService] Статус заказа обновлен: SALIY2603300001, status=PAID
 ```
 
 ### Ошибки

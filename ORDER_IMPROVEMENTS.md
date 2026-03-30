@@ -90,7 +90,7 @@ POST /api/orders
 
 ```json
 {
-  "orderNumber": "260329-0001",
+  "orderNumber": "SALIY2603290001",
   "firstName": "Иван",
   "lastName": "Петров",
   "email": "test@example.com",

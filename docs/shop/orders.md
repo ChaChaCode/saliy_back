@@ -109,6 +109,15 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
 Создает заказ и сразу подтверждает оплату.
 Отправляется email с подтверждением заказа.
 
+**Формат номера заказа:** `SALIYYYMMDDXXXXX`
+- SALIY - префикс бренда
+- YY - год (26 для 2026)
+- MM - месяц (01-12)
+- DD - день (01-31)
+- XXXXX - уникальный 5-значный порядковый номер за день
+
+Пример: `SALIY2603300001` (первый заказ за 30 марта 2026)
+
 ### Важно:
 - ✅ Цены берутся из БД, не от клиента!
 - ✅ Проверяется наличие товара на складе
@@ -151,7 +160,7 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
 ```json
 {
   "id": "uuid",
-  "orderNumber": "260329-0001",
+  "orderNumber": "SALIY2603290001",
   "firstName": "Иван",
   "lastName": "Петров",
   "email": "test@example.com",
@@ -179,14 +188,14 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
 Возвращает детальную информацию о заказе по его номеру.
 
 ```bash
-curl https://saliy-shop.ru/api/orders/260329-0001
+curl https://saliy-shop.ru/api/orders/SALIY2603290001
 ```
 
 ### Response:
 ```json
 {
   "id": "uuid",
-  "orderNumber": "260329-0001",
+  "orderNumber": "SALIY2603290001",
   "firstName": "Иван",
   "lastName": "Петров",
   "email": "test@example.com",
@@ -268,7 +277,7 @@ curl https://saliy-shop.ru/api/orders \
 [
   {
     "id": "uuid",
-    "orderNumber": "260330-0003",
+    "orderNumber": "SALIY2603300003",
     "firstName": "Иван",
     "lastName": "Петров",
     "email": "test@example.com",
@@ -312,7 +321,7 @@ curl https://saliy-shop.ru/api/orders \
   },
   {
     "id": "uuid-2",
-    "orderNumber": "260329-0001",
+    "orderNumber": "SALIY2603290001",
     "...": "..."
   }
 ]

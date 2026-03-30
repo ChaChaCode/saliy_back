@@ -376,6 +376,7 @@ export class OrdersService {
 
   /**
    * Генерировать уникальный номер заказа
+   * Формат: SALIYYYMMDDXXXXX (например: SALIY2603300001)
    */
   private async generateOrderNumber(): Promise<string> {
     const date = new Date();
@@ -392,8 +393,8 @@ export class OrdersService {
       },
     });
 
-    const orderNum = (count + 1).toString().padStart(4, '0');
-    return `${year}${month}${day}-${orderNum}`;
+    const orderNum = (count + 1).toString().padStart(5, '0');
+    return `SALIY${year}${month}${day}${orderNum}`;
   }
 
   /**
