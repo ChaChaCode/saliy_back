@@ -39,7 +39,7 @@ export class EmailService {
   }
 
   /**
-   * Отправить email с подтверждением заказа
+   * Отправить email с подтверждением заказа (в стиле печатного чека)
    */
   async sendOrderConfirmation(
     email: string,
@@ -54,14 +54,31 @@ export class EmailService {
       paymentUrl?: string;
     },
   ): Promise<void> {
+    const currentDate = new Date().toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    const currentTime = new Date().toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     const itemsHtml = orderData.items
       .map(
-        (item) => `
-        <tr>
-          <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.name} (${item.size})</td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
-          <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${(item.price * item.quantity).toFixed(2)} ₽</td>
-        </tr>
+        (item, index) => `
+        <div style="margin: 8px 0; font-size: 13px; line-height: 1.6;">
+          <div style="display: flex; justify-content: space-between;">
+            <span>ТОВАР ${index + 1}</span>
+            <span style="font-weight: 600;">${(item.price * item.quantity).toFixed(2)} ₽</span>
+          </div>
+          <div style="color: #666; font-size: 12px; margin-top: 2px;">
+            ${item.name}
+          </div>
+          <div style="color: #666; font-size: 12px;">
+            РАЗМЕР: ${item.size} × ${item.quantity} ШТ @ ${item.price.toFixed(2)} ₽
+          </div>
+        </div>
       `,
       )
       .join('');
@@ -71,55 +88,108 @@ export class EmailService {
       to: email,
       subject: `Заказ #${orderData.orderNumber} оформлен - Saliy Clothes`,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #000; font-size: 28px; margin: 0;">SALIY</h1>
-            <p style="color: #666; margin-top: 5px;">Спасибо за ваш заказ!</p>
+        <div style="font-family: 'Courier New', Courier, monospace; max-width: 480px; margin: 40px auto; padding: 0; background: #f5f5f5;">
+          <!-- Чек -->
+          <div style="background: white; margin: 0 auto; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+            <!-- Зубчатый верхний край -->
+            <div style="height: 12px; background: linear-gradient(135deg, white 5px, transparent 0), linear-gradient(225deg, white 5px, transparent 0); background-size: 12px 12px; background-position: 0 0, 6px 0; background-repeat: repeat-x;"></div>
+
+            <!-- Контент чека -->
+            <div style="padding: 30px 40px;">
+              <!-- Заголовок магазина -->
+              <div style="text-align: center; margin-bottom: 10px;">
+                <div style="font-size: 18px; font-weight: bold; letter-spacing: 4px;">SALIY CLOTHES</div>
+                <div style="font-size: 11px; color: #666; margin-top: 5px; letter-spacing: 1px;">ОНЛАЙН МАГАЗИН</div>
+              </div>
+
+              <!-- Пунктирная линия -->
+              <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
+
+              <!-- RECEIPT -->
+              <div style="text-align: center; margin: 15px 0; font-size: 16px; font-weight: bold; letter-spacing: 2px;">
+                *** ЧЕК ***
+              </div>
+
+              <!-- Дата и время -->
+              <div style="text-align: center; font-size: 11px; color: #666; margin-bottom: 15px;">
+                <div>ЗАКАЗ #${orderData.orderNumber}</div>
+                <div style="margin-top: 3px;">${currentDate} - ${currentTime}</div>
+              </div>
+
+              <!-- Пунктирная линия -->
+              <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
+
+              <!-- Товары -->
+              <div style="margin: 20px 0;">
+                ${itemsHtml}
+              </div>
+
+              <!-- Пунктирная линия -->
+              <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
+
+              <!-- Итого -->
+              <div style="font-size: 13px; line-height: 1.8;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span>ТОВАРЫ</span>
+                  <span>${orderData.subtotal.toFixed(2)} ₽</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span>ДОСТАВКА</span>
+                  <span>${orderData.deliveryPrice.toFixed(2)} ₽</span>
+                </div>
+                <div style="border-top: 2px dotted #ccc; margin: 10px 0;"></div>
+                <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 15px;">
+                  <span>ИТОГО</span>
+                  <span>${orderData.total.toFixed(2)} ₽</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+                  <span>НАЛИЧНЫЕ</span>
+                  <span>${orderData.total.toFixed(2)} ₽</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span>СДАЧА</span>
+                  <span>0.00 ₽</span>
+                </div>
+              </div>
+
+              <!-- Пунктирная линия -->
+              <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
+
+              ${
+                orderData.paymentUrl
+                  ? `
+              <!-- Кнопка оплаты -->
+              <div style="text-align: center; margin: 20px 0;">
+                <a href="${orderData.paymentUrl}" style="display: inline-block; background: #000; color: #fff; padding: 12px 30px; text-decoration: none; font-size: 13px; font-weight: bold; letter-spacing: 1px; border: 2px solid #000;">
+                  ОПЛАТИТЬ ЗАКАЗ
+                </a>
+              </div>
+
+              <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
+              `
+                  : ''
+              }
+
+              <!-- Благодарность -->
+              <div style="text-align: center; margin: 20px 0; font-size: 12px; letter-spacing: 1px;">
+                СПАСИБО ЗА ПОКУПКУ!
+              </div>
+
+              <!-- Штрих-код (имитация) -->
+              <div style="text-align: center; margin: 20px 0;">
+                <div style="display: inline-block; background: repeating-linear-gradient(90deg, #000 0px, #000 2px, transparent 2px, transparent 4px, #000 4px, #000 5px, transparent 5px, transparent 8px); height: 50px; width: 200px;"></div>
+                <div style="font-size: 10px; margin-top: 5px; letter-spacing: 2px;">${orderData.orderNumber}</div>
+              </div>
+            </div>
+
+            <!-- Зубчатый нижний край -->
+            <div style="height: 12px; background: linear-gradient(135deg, transparent 5px, white 0), linear-gradient(225deg, transparent 5px, white 0); background-size: 12px 12px; background-position: 0 0, 6px 0; background-repeat: repeat-x;"></div>
           </div>
 
-          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
-            <h2 style="margin-top: 0; color: #333;">Заказ #${orderData.orderNumber}</h2>
-            <p style="color: #666; margin: 5px 0;">Здравствуйте, ${orderData.firstName}!</p>
-            <p style="color: #666; margin: 5px 0;">Ваш заказ успешно оформлен и ожидает оплаты.</p>
-          </div>
-
-          <h3 style="color: #333; margin-bottom: 15px;">Состав заказа:</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <thead>
-              <tr style="background-color: #f4f4f4;">
-                <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ddd;">Товар</th>
-                <th style="padding: 10px; text-align: center; border-bottom: 2px solid #ddd;">Кол-во</th>
-                <th style="padding: 10px; text-align: right; border-bottom: 2px solid #ddd;">Сумма</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-            </tbody>
-          </table>
-
-          <div style="text-align: right; margin-top: 20px;">
-            <p style="margin: 5px 0; color: #666;">Товары: <strong>${orderData.subtotal.toFixed(2)} ₽</strong></p>
-            <p style="margin: 5px 0; color: #666;">Доставка: <strong>${orderData.deliveryPrice.toFixed(2)} ₽</strong></p>
-            <p style="margin: 15px 0 0 0; font-size: 20px; color: #000;">Итого: <strong>${orderData.total.toFixed(2)} ₽</strong></p>
-          </div>
-
-          ${
-            orderData.paymentUrl
-              ? `
-          <div style="text-align: center; margin-top: 40px;">
-            <a href="${orderData.paymentUrl}" style="display: inline-block; background-color: #000; color: #fff; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-size: 16px; font-weight: bold;">
-              Оплатить заказ
-            </a>
-            <p style="color: #999; font-size: 12px; margin-top: 15px;">Или скопируйте ссылку: ${orderData.paymentUrl}</p>
-          </div>
-          `
-              : ''
-          }
-
-          <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
-            <p>Если у вас есть вопросы, свяжитесь с нами:</p>
-            <p>Email: ${process.env.EMAIL_FROM}</p>
-            <p style="margin-top: 20px;">С уважением,<br/>Команда SALIY</p>
+          <!-- Информация под чеком -->
+          <div style="text-align: center; margin-top: 30px; padding: 0 20px; color: #999; font-size: 11px; font-family: Arial, sans-serif;">
+            <p style="margin: 5px 0;">Это автоматическое письмо, отвечать на него не нужно</p>
+            <p style="margin: 5px 0;">Вопросы? Пишите: ${process.env.EMAIL_FROM}</p>
           </div>
         </div>
       `,
@@ -129,33 +199,96 @@ export class EmailService {
   }
 
   /**
-   * Отправить уведомление об успешной оплате
+   * Отправить уведомление об успешной оплате (в стиле печатного чека)
    */
   async sendPaymentSuccess(
     email: string,
     orderNumber: string,
     firstName: string,
   ): Promise<void> {
+    const currentDate = new Date().toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    const currentTime = new Date().toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: email,
       subject: `Оплата заказа #${orderNumber} подтверждена - Saliy Clothes`,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="color: #000; font-size: 28px; margin: 0;">SALIY</h1>
-            <div style="font-size: 48px; margin: 20px 0;">✓</div>
-            <h2 style="color: #4CAF50; margin: 0;">Оплата получена!</h2>
+        <div style="font-family: 'Courier New', Courier, monospace; max-width: 480px; margin: 40px auto; padding: 0; background: #f5f5f5;">
+          <!-- Чек -->
+          <div style="background: white; margin: 0 auto; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+            <!-- Зубчатый верхний край -->
+            <div style="height: 12px; background: linear-gradient(135deg, white 5px, transparent 0), linear-gradient(225deg, white 5px, transparent 0); background-size: 12px 12px; background-position: 0 0, 6px 0; background-repeat: repeat-x;"></div>
+
+            <!-- Контент чека -->
+            <div style="padding: 30px 40px;">
+              <!-- Заголовок магазина -->
+              <div style="text-align: center; margin-bottom: 10px;">
+                <div style="font-size: 18px; font-weight: bold; letter-spacing: 4px;">SALIY CLOTHES</div>
+                <div style="font-size: 11px; color: #666; margin-top: 5px; letter-spacing: 1px;">ОНЛАЙН МАГАЗИН</div>
+              </div>
+
+              <!-- Пунктирная линия -->
+              <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
+
+              <!-- Галочка -->
+              <div style="text-align: center; font-size: 60px; margin: 20px 0;">✓</div>
+
+              <!-- ОПЛАТА ПОЛУЧЕНА -->
+              <div style="text-align: center; margin: 15px 0; font-size: 16px; font-weight: bold; letter-spacing: 2px;">
+                *** ОПЛАТА ПОЛУЧЕНА ***
+              </div>
+
+              <!-- Дата и время -->
+              <div style="text-align: center; font-size: 11px; color: #666; margin-bottom: 15px;">
+                <div>ЗАКАЗ #${orderNumber}</div>
+                <div style="margin-top: 3px;">${currentDate} - ${currentTime}</div>
+              </div>
+
+              <!-- Пунктирная линия -->
+              <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
+
+              <!-- Сообщение -->
+              <div style="font-size: 13px; line-height: 1.8; text-align: center; color: #333; margin: 25px 0;">
+                <div style="margin-bottom: 15px;">ЗДРАВСТВУЙТЕ, ${firstName.toUpperCase()}!</div>
+                <div style="margin-bottom: 10px;">ОПЛАТА ПО ЗАКАЗУ #${orderNumber}</div>
+                <div style="margin-bottom: 10px;">УСПЕШНО ПОЛУЧЕНА</div>
+                <div style="margin-top: 20px; font-size: 12px; color: #666;">
+                  МЫ НАЧАЛИ ПОДГОТОВКУ ВАШЕГО<br/>
+                  ЗАКАЗА К ОТПРАВКЕ
+                </div>
+              </div>
+
+              <!-- Пунктирная линия -->
+              <div style="border-top: 2px dotted #ccc; margin: 15px 0;"></div>
+
+              <!-- Благодарность -->
+              <div style="text-align: center; margin: 20px 0; font-size: 12px; letter-spacing: 1px;">
+                СПАСИБО ЗА ПОКУПКУ!
+              </div>
+
+              <!-- Штрих-код (имитация) -->
+              <div style="text-align: center; margin: 20px 0;">
+                <div style="display: inline-block; background: repeating-linear-gradient(90deg, #000 0px, #000 2px, transparent 2px, transparent 4px, #000 4px, #000 5px, transparent 5px, transparent 8px); height: 50px; width: 200px;"></div>
+                <div style="font-size: 10px; margin-top: 5px; letter-spacing: 2px;">${orderNumber}</div>
+              </div>
+            </div>
+
+            <!-- Зубчатый нижний край -->
+            <div style="height: 12px; background: linear-gradient(135deg, transparent 5px, white 0), linear-gradient(225deg, transparent 5px, white 0); background-size: 12px 12px; background-position: 0 0, 6px 0; background-repeat: repeat-x;"></div>
           </div>
 
-          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px;">
-            <p style="color: #666; margin: 5px 0;">Здравствуйте, ${firstName}!</p>
-            <p style="color: #666; margin: 15px 0;">Оплата по заказу <strong>#${orderNumber}</strong> успешно получена.</p>
-            <p style="color: #666; margin: 15px 0;">Мы начали подготовку вашего заказа к отправке. О статусе доставки мы сообщим дополнительно.</p>
-          </div>
-
-          <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 12px;">
-            <p>С уважением,<br/>Команда SALIY</p>
+          <!-- Информация под чеком -->
+          <div style="text-align: center; margin-top: 30px; padding: 0 20px; color: #999; font-size: 11px; font-family: Arial, sans-serif;">
+            <p style="margin: 5px 0;">Это автоматическое письмо, отвечать на него не нужно</p>
+            <p style="margin: 5px 0;">Вопросы? Пишите: ${process.env.EMAIL_FROM}</p>
           </div>
         </div>
       `,
