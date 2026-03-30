@@ -124,24 +124,34 @@ export class DeliveryService {
 
   /**
    * Получить список всех стран с поддержкой типов доставки
+   * Россия и Беларусь отображаются первыми
    */
   getCountries(lang: string = 'ru') {
     const allCodes = Object.keys(countries.getAlpha2Codes());
     const cdekCountries = ['RU', 'BY'];
+    const priorityCountries = ['RU', 'BY'];
+
+    const allCountriesList = allCodes.map((code) => {
+      const name = countries.getName(code, lang) || code;
+      const isCdekSupported = cdekCountries.includes(code);
+
+      return {
+        code,
+        name,
+        deliveryTypes: isCdekSupported ? ['CDEK_PICKUP'] : ['STANDARD'],
+      };
+    });
+
+    // Разделяем на приоритетные (RU, BY) и остальные
+    const priority = allCountriesList.filter((country) =>
+      priorityCountries.includes(country.code),
+    );
+    const others = allCountriesList.filter(
+      (country) => !priorityCountries.includes(country.code),
+    );
 
     return {
-      countries: allCodes.map((code) => {
-        const name = countries.getName(code, lang) || code;
-        const isCdekSupported = cdekCountries.includes(code);
-
-        return {
-          code,
-          name,
-          deliveryTypes: isCdekSupported
-            ? ['CDEK_PICKUP', 'CDEK_COURIER', 'STANDARD']
-            : ['STANDARD'],
-        };
-      }),
+      countries: [...priority, ...others],
     };
   }
 
@@ -161,9 +171,7 @@ export class DeliveryService {
     return {
       code: countryCode,
       name,
-      deliveryTypes: isCdekSupported
-        ? ['CDEK_PICKUP', 'CDEK_COURIER', 'STANDARD']
-        : ['STANDARD'],
+      deliveryTypes: isCdekSupported ? ['CDEK_PICKUP'] : ['STANDARD'],
     };
   }
 

@@ -1,6 +1,52 @@
 # API заказов
 
-## 1. Рассчитать стоимость заказа
+## 1. Получить доступные опции доставки и оплаты
+
+**GET** `/api/orders/delivery-options?country=RU`
+
+Возвращает доступные типы доставки и методы оплаты для выбранной страны.
+
+### Query параметры:
+- `country` - Код страны (RU, BY, PL, и т.д.)
+
+### Правила:
+- **Россия и Беларусь (RU, BY):** только `CDEK_PICKUP` (самовывоз из ПВЗ)
+- **Другие страны:** только `STANDARD` (почтовая доставка)
+- **Все страны:** только `CARD_ONLINE` (Яндекс Пей, фейковая оплата - сразу проходит)
+
+### Примеры запросов:
+
+**Россия:**
+```bash
+curl "https://saliy-shop.ru/api/orders/delivery-options?country=RU"
+```
+
+**Response:**
+```json
+{
+  "deliveryTypes": ["CDEK_PICKUP"],
+  "paymentMethods": ["CARD_ONLINE"],
+  "country": "RU"
+}
+```
+
+**Польша:**
+```bash
+curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
+```
+
+**Response:**
+```json
+{
+  "deliveryTypes": ["STANDARD"],
+  "paymentMethods": ["CARD_ONLINE"],
+  "country": "PL"
+}
+```
+
+---
+
+## 2. Рассчитать стоимость заказа
 
 **POST** `/api/orders/calculate`
 
@@ -56,7 +102,7 @@
 
 ---
 
-## 2. Создать заказ
+## 3. Создать заказ
 
 **POST** `/api/orders`
 
@@ -91,15 +137,15 @@
   - Примеры: "Telegram: @ivan_petrov" или "Instagram: @ivan.p"
 
 ### DeliveryType (выбор типа доставки):
-- `CDEK_PICKUP` - Самовывоз из ПВЗ CDEK
-- `CDEK_COURIER` - Курьерская доставка CDEK
-- `STANDARD` - Стандартная доставка
+- `CDEK_PICKUP` - Самовывоз из ПВЗ CDEK (500₽) - только для России и Беларуси
+- `STANDARD` - Почтовая доставка (800₽) - для всех остальных стран
+
+⚠️ **Важно:** Используйте endpoint `/api/orders/delivery-options?country=RU` для получения доступных типов доставки в зависимости от страны.
 
 ### PaymentMethod (метод оплаты):
-- `CARD_ONLINE` - Онлайн оплата картой
-- `CARD_MANUAL` - Оплата картой через менеджера
-- `CRYPTO` - Криптовалюта
-- `PAYPAL` - PayPal
+- `CARD_ONLINE` - Яндекс Пей (фейковая оплата, автоматически успешная)
+
+⚠️ **Важно:** Только Яндекс Пей доступен для всех стран. Оплата проходит автоматически.
 
 ### Response:
 ```json
@@ -126,7 +172,7 @@
 
 ---
 
-## 3. Получить заказ по номеру
+## 4. Получить заказ по номеру
 
 **GET** `/api/orders/:orderNumber`
 
@@ -204,7 +250,7 @@ curl https://saliy-shop.ru/api/orders/260329-0001
 
 ---
 
-## 4. Получить мои заказы
+## 5. Получить мои заказы
 
 **GET** `/api/orders`
 
@@ -312,7 +358,7 @@ curl https://saliy-shop.ru/api/orders \
 
 ---
 
-## 5. Валидация промокода
+## 6. Валидация промокода
 
 **POST** `/api/promo/validate`
 

@@ -37,12 +37,12 @@ curl "https://saliy-shop.ru/api/delivery/countries?lang=ru"
     {
       "code": "RU",
       "name": "Россия",
-      "deliveryTypes": ["CDEK_PICKUP", "CDEK_COURIER", "STANDARD"]
+      "deliveryTypes": ["CDEK_PICKUP"]
     },
     {
       "code": "BY",
       "name": "Беларусь",
-      "deliveryTypes": ["CDEK_PICKUP", "CDEK_COURIER", "STANDARD"]
+      "deliveryTypes": ["CDEK_PICKUP"]
     },
     {
       "code": "PL",
@@ -69,7 +69,7 @@ curl "https://saliy-shop.ru/api/delivery/countries/RU?lang=ru"
 {
   "code": "RU",
   "name": "Россия",
-  "deliveryTypes": ["CDEK_PICKUP", "CDEK_COURIER", "STANDARD"]
+  "deliveryTypes": ["CDEK_PICKUP"]
 }
 ```
 
@@ -175,7 +175,7 @@ curl "https://saliy-shop.ru/api/delivery/pickup-points?cityCode=44"
 
 **GET** `/api/delivery/prices?cityCode=44&weight=500&currency=RUB`
 
-Рассчитывает стоимость доставки для самовывоза и курьера.
+Рассчитывает стоимость доставки для самовывоза.
 
 **Query параметры:**
 - `cityCode` - Код города CDEK (обязательно)
@@ -194,29 +194,18 @@ curl "https://saliy-shop.ru/api/delivery/prices?cityCode=44&weight=650"
     "tariffCode": 136,
     "tariffName": "Посылка склад-склад",
     "tariffDescription": "Самовывоз из пункта выдачи CDEK",
-    "deliverySum": 350,
+    "deliverySum": 500,
     "periodMin": 2,
     "periodMax": 4,
     "calendarMin": 2,
     "calendarMax": 4,
-    "currency": "RUB"
-  },
-  "courier": {
-    "tariffCode": 137,
-    "tariffName": "Посылка склад-дверь",
-    "tariffDescription": "Доставка курьером до двери",
-    "deliverySum": 450,
-    "periodMin": 2,
-    "periodMax": 5,
-    "calendarMin": 2,
-    "calendarMax": 5,
     "currency": "RUB"
   }
 }
 ```
 
 **Описание полей:**
-- `deliverySum` - Стоимость доставки в рублях
+- `deliverySum` - Стоимость доставки в рублях (фиксированная цена 500₽ для CDEK)
 - `periodMin/Max` - Срок доставки в рабочих днях
 - `calendarMin/Max` - Срок доставки в календарных днях
 
@@ -236,13 +225,13 @@ curl "https://saliy-shop.ru/api/delivery/countries?lang=ru"
 {
   "code": "RU",
   "name": "Россия",
-  "deliveryTypes": ["CDEK_PICKUP", "CDEK_COURIER", "STANDARD"]
+  "deliveryTypes": ["CDEK_PICKUP"]
 }
 ```
 
 **Логика фронтенда:**
-- Если `deliveryTypes` содержит `"CDEK_PICKUP"` или `"CDEK_COURIER"` → **Вариант А** (выбор через селекты)
-- Иначе → **Вариант Б** (ввод адреса вручную)
+- Если `deliveryTypes` содержит `"CDEK_PICKUP"` → **Вариант А** (выбор через селекты, самовывоз из ПВЗ)
+- Иначе → **Вариант Б** (ввод адреса вручную, почтовая доставка)
 
 ---
 
@@ -326,7 +315,7 @@ curl "https://saliy-shop.ru/api/delivery/prices?cityCode=44&weight=650"
 
 ### Шаг 5: Выбрать способ доставки
 
-**Вариант А: Самовывоз из ПВЗ**
+**Для России/Беларуси: Самовывоз из ПВЗ CDEK**
 ```bash
 # Получить список пунктов выдачи
 curl "https://saliy-shop.ru/api/delivery/pickup-points?cityCode=44"
@@ -334,7 +323,7 @@ curl "https://saliy-shop.ru/api/delivery/pickup-points?cityCode=44"
 # Пользователь выбирает ПВЗ и сохраняет его код
 ```
 
-**Вариант Б: Курьерская доставка**
+**Для других стран: Почтовая доставка**
 ```bash
 # Пользователь вводит адрес в профиле
 curl -X PUT https://saliy-shop.ru/api/auth/profile \
@@ -374,11 +363,10 @@ curl -X PUT https://saliy-shop.ru/api/auth/profile \
 
 ## Типы доставки
 
-| Тип | Код | Описание |
-|-----|-----|----------|
-| Самовывоз из ПВЗ | `CDEK_PICKUP` | Пользователь забирает заказ из пункта выдачи CDEK |
-| Курьер до двери | `CDEK_COURIER` | Курьер доставляет заказ по адресу |
-| Стандартная доставка | `STANDARD` | Для стран без поддержки CDEK |
+| Тип | Код | Описание | Страны |
+|-----|-----|----------|--------|
+| Самовывоз из ПВЗ CDEK | `CDEK_PICKUP` | Пользователь забирает заказ из пункта выдачи CDEK (500₽) | 🇷🇺 Россия, 🇧🇾 Беларусь |
+| Почтовая доставка | `STANDARD` | Доставка почтой по адресу (800₽) | Все остальные страны |
 
 ---
 
@@ -405,18 +393,18 @@ curl -X PUT https://saliy-shop.ru/api/auth/profile \
    - Получение цен доставки
      [GET /delivery/prices?cityCode=44&weight=650]
    ↓
-8a. Если самовывоз:
+8a. Если Россия/Беларусь (CDEK_PICKUP):
     - Выбор ПВЗ
       [GET /delivery/pickup-points?cityCode=44]
     - Пользователь выбирает удобный ПВЗ
 
-8b. Если курьер:
+8b. Если другие страны (STANDARD):
     - Заполнение адреса
       [PUT /auth/profile]
    ↓
 9. Создание заказа
    ↓
-10. Оплата
+10. Оплата (Яндекс Пей - автоуспех)
 ```
 
 ---
