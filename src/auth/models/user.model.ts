@@ -2,75 +2,75 @@ import { ObjectType, Field, Int } from '@nestjs/graphql';
 
 @ObjectType()
 export class User {
-  @Field()
+  @Field(() => String)
   id: string;
 
-  @Field()
+  @Field(() => String)
   email: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   name: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   firstName: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   lastName: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   middleName: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   phone: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => Date, { nullable: true })
   birthdate: Date | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   socialContact: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   street: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   apartment: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   postalCode: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   deliveryType: string | null;
 
   @Field(() => Int, { nullable: true })
   cdekCityCode: number | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   cdekCountryCode: string | null;
 
   @Field(() => Int, { nullable: true })
   cdekRegionCode: number | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   cdekPickupPointCode: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   cityName: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   countryName: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   regionName: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   deliveryCountryCode: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   fullAddress: string | null;
 
-  @Field()
+  @Field(() => Date)
   createdAt: Date;
 
-  @Field()
+  @Field(() => Date)
   updatedAt: Date;
 }
