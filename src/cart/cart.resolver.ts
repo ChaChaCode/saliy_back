@@ -85,8 +85,11 @@ export class CartResolver {
    * Валидировать корзину (получить актуальные цены и наличие)
    */
   @Query(() => ValidatedCart, { name: 'validateCart' })
-  async validateCart(@Args('input') input: ValidateCartInput) {
-    return this.cartService.validateCart(input.items);
+  async validateCart(
+    @Args({ name: 'items', type: () => [CartItemInput] })
+    items: CartItemInput[],
+  ) {
+    return this.cartService.validateCart(items);
   }
 
   // ==================== ОБЪЕДИНЕНИЕ ====================

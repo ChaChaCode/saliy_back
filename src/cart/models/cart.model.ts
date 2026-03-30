@@ -90,20 +90,38 @@ export class ValidatedCart {
 }
 
 // Input для GraphQL
+import {
+  IsInt,
+  IsString,
+  IsArray,
+  Min,
+  ValidateNested,
+  ArrayMinSize,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
 @InputType()
 export class CartItemInput {
   @Field(() => Int)
+  @IsInt()
   productId: number;
 
   @Field()
+  @IsString()
   size: string;
 
   @Field(() => Int)
+  @IsInt()
+  @Min(1)
   quantity: number;
 }
 
 @InputType()
 export class ValidateCartInput {
   @Field(() => [CartItemInput])
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => CartItemInput)
   items: CartItemInput[];
 }
