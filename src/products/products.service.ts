@@ -425,8 +425,11 @@ export class ProductsService {
     const currentStock = stock?.[size] || 0;
 
     if (currentStock < quantity) {
+      if (currentStock === 0) {
+        throw new BadRequestException('Товар закончился');
+      }
       throw new BadRequestException(
-        `Недостаточно товара на складе. Доступно: ${currentStock}, запрошено: ${quantity}`,
+        `Доступно только ${currentStock} шт`,
       );
     }
 

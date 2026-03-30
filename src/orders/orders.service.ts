@@ -246,8 +246,7 @@ export class OrdersService {
 
       if (availableQuantity < item.quantity) {
         throw new BadRequestException(
-          `Недостаточно товара "${product.name}" размера ${item.size}. ` +
-          `Запрошено: ${item.quantity}, доступно: ${availableQuantity}`,
+          `${product.name} (${item.size}): доступно только ${availableQuantity} шт`,
         );
       }
 
@@ -297,8 +296,7 @@ export class OrdersService {
 
     if (currentStock < quantity) {
       throw new BadRequestException(
-        `Недостаточно товара на складе (race condition). ` +
-        `Доступно: ${currentStock}, запрошено: ${quantity}`,
+        `Товар закончился, доступно только ${currentStock} шт`,
       );
     }
 

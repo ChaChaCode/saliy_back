@@ -62,8 +62,11 @@ export class CartService {
     const availableQuantity = stock[size] || 0;
 
     if (availableQuantity < quantity) {
+      if (availableQuantity === 0) {
+        throw new BadRequestException('Товар закончился');
+      }
       throw new BadRequestException(
-        `Недостаточно товара на складе. Доступно: ${availableQuantity}`,
+        `Доступно только ${availableQuantity} шт`,
       );
     }
 
@@ -83,8 +86,11 @@ export class CartService {
       const newQuantity = existing.quantity + quantity;
 
       if (availableQuantity < newQuantity) {
+        if (availableQuantity === 0) {
+          throw new BadRequestException('Товар закончился');
+        }
         throw new BadRequestException(
-          `Недостаточно товара на складе. Доступно: ${availableQuantity}, в корзине: ${existing.quantity}`,
+          `Доступно только ${availableQuantity} шт (в корзине уже ${existing.quantity})`,
         );
       }
 
@@ -149,8 +155,11 @@ export class CartService {
     const availableQuantity = stock[cartItem.size] || 0;
 
     if (availableQuantity < quantity) {
+      if (availableQuantity === 0) {
+        throw new BadRequestException('Товар закончился');
+      }
       throw new BadRequestException(
-        `Недостаточно товара на складе. Доступно: ${availableQuantity}`,
+        `Доступно только ${availableQuantity} шт`,
       );
     }
 
