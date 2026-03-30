@@ -361,11 +361,17 @@ export class OrdersService {
     deliveryType: string,
     cdekCityCode?: number,
   ): Promise<number> {
-    // TODO: Интеграция с CDEK API для расчета доставки
-    if (deliveryType === 'CDEK') {
-      return 500; // Временно фиксированная цена
+    // CDEK_PICKUP - самовывоз из пункта выдачи (Россия/Беларусь)
+    if (deliveryType === 'CDEK_PICKUP') {
+      return 500; // Фиксированная цена для самовывоза
     }
-    return 0; // POST - бесплатно (или рассчитывать отдельно)
+
+    // STANDARD - почтовая доставка (все страны кроме России/Беларуси)
+    if (deliveryType === 'STANDARD') {
+      return 800; // Фиксированная цена для почты
+    }
+
+    return 0;
   }
 
   /**

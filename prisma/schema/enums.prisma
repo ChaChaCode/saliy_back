@@ -2,7 +2,6 @@
 
 enum DeliveryType {
   CDEK_PICKUP  // Самовывоз из пункта выдачи CDEK
-  CDEK_COURIER // Курьерская доставка CDEK
   STANDARD     // Стандартная доставка
 }
 

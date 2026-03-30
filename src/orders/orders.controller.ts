@@ -4,6 +4,7 @@ import {
   Get,
   Body,
   Param,
+  Query,
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -15,6 +16,30 @@ import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
+
+  /**
+   * Получить доступные методы доставки и оплаты для страны
+   * GET /api/orders/delivery-options?country=RU
+   */
+  @Get('delivery-options')
+  async getDeliveryOptions(@Query('country') countryCode: string) {
+    // Россия и Беларусь - только CDEK самовывоз
+    // Другие страны - только стандартная почта
+    const isRussiaBelarus = ['RU', 'BY', 'RUS', 'BLR'].includes(countryCode?.toUpperCase());
+
+    const deliveryTypes = isRussiaBelarus
+      ? ['CDEK_PICKUP']
+      : ['STANDARD'];
+
+    // Только Яндекс Пей (CARD_ONLINE) для всех стран
+    const paymentMethods = ['CARD_ONLINE']; // Фейковая оплата, сразу проходит
+
+    return {
+      deliveryTypes,
+      paymentMethods,
+      country: countryCode,
+    };
+  }
 
   /**
    * Рассчитать стоимость заказа (БЕЗ создания заказа)
