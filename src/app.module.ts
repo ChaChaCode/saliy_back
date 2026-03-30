@@ -5,7 +5,6 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
-import { WinstonModule } from 'nest-winston';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AppResolver } from './app.resolver';
@@ -22,7 +21,6 @@ import { PromoCodesModule } from './admin/promo-codes/promo-codes.module';
 import { PromoModule } from './promo/promo.module';
 import { CacheModule } from './common/cache/cache.module';
 import { GqlThrottlerGuard } from './common/guards/graphql-throttler.guard';
-import { winstonConfig } from './common/logger/winston.config';
 // import { PaymentModule } from './payment/payment.module'; // Отложено
 
 @Module({
@@ -30,7 +28,6 @@ import { winstonConfig } from './common/logger/winston.config';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    WinstonModule.forRoot(winstonConfig),
     CacheModule,
     // Rate limiting - 100 запросов в минуту на IP
     ThrottlerModule.forRoot([

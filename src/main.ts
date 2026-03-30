@@ -4,17 +4,10 @@ import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
-import { S3UrlInterceptor } from './common/interceptors';
+import { S3UrlInterceptor, LoggingInterceptor } from './common/interceptors';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bufferLogs: true, // Буферизируем начальные логи до подключения Winston
-  });
-
-  // Подключаем Winston как главный логгер приложения
-  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
-  app.flushLogs(); // Выводим буферизированные логи через Winston
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Включаем CORS
   const allowedOrigins = [
@@ -60,13 +53,14 @@ async function bootstrap() {
     }),
   );
 
-  // Глобальный interceptor для преобразования относительных путей в S3 URL
-  app.useGlobalInterceptors(new S3UrlInterceptor());
+  // Глобальные interceptors
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(), // Логирование HTTP/GraphQL запросов
+    new S3UrlInterceptor(), // Преобразование относительных путей в S3 URL
+  );
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-
-  // Логируем через Winston
-  app.get(WINSTON_MODULE_NEST_PROVIDER).log(`Приложение запущено на порту ${port}`, 'Bootstrap');
+  console.log(`Приложение запущено на порту ${port}`);
 }
 bootstrap();
