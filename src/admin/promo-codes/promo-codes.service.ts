@@ -85,6 +85,7 @@ export class PromoCodesService {
         specificProductIds: dto.specificProductIds || [],
         excludedProductIds: dto.excludedProductIds || [],
         allowedUserIds: dto.allowedUserIds || [],
+        requiresAuth: dto.requiresAuth ?? false,
         maxUses: dto.maxUses,
         maxUsesPerUser: dto.maxUsesPerUser,
         maxItems: dto.maxItems,
@@ -196,6 +197,8 @@ export class PromoCodesService {
       minOrderAmount: dto.minOrderAmount ?? existing.minOrderAmount,
       specificProductIds: dto.specificProductIds ?? existing.specificProductIds,
       excludedProductIds: dto.excludedProductIds ?? existing.excludedProductIds,
+      requiresAuth: dto.requiresAuth ?? existing.requiresAuth,
+      allowedUserIds: dto.allowedUserIds ?? existing.allowedUserIds,
     };
 
     const description = this.generateDescription(mergedData);
@@ -215,6 +218,9 @@ export class PromoCodesService {
         }),
         ...(dto.allowedUserIds !== undefined && {
           allowedUserIds: dto.allowedUserIds,
+        }),
+        ...(dto.requiresAuth !== undefined && {
+          requiresAuth: dto.requiresAuth,
         }),
         ...(dto.maxUses !== undefined && { maxUses: dto.maxUses }),
         ...(dto.maxUsesPerUser !== undefined && {
@@ -288,6 +294,8 @@ export class PromoCodesService {
     minOrderAmount?: number;
     specificProductIds?: number[];
     excludedProductIds?: number[];
+    requiresAuth?: boolean;
+    allowedUserIds?: string[];
   }): string {
     const parts: string[] = [];
 
@@ -311,6 +319,13 @@ export class PromoCodesService {
 
     if (data.minOrderAmount) {
       parts.push(`при заказе от ${data.minOrderAmount} ₽`);
+    }
+
+    // Добавляем информацию об ограничениях по пользователям
+    if (data.allowedUserIds && data.allowedUserIds.length > 0) {
+      parts.push(`(персональный для ${data.allowedUserIds.length} польз.)`);
+    } else if (data.requiresAuth) {
+      parts.push(`(только для зарегистрированных)`);
     }
 
     return parts.join('. ');

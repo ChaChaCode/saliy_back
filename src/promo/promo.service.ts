@@ -122,7 +122,16 @@ export class PromoService {
         };
       }
 
-      // Проверка allowedUserIds
+      // Проверка requiresAuth (требуется авторизация для всех зарегистрированных)
+      if (promoCode.requiresAuth && !userId) {
+        return {
+          isValid: false,
+          discount: 0,
+          message: 'Промокод доступен только для зарегистрированных пользователей',
+        };
+      }
+
+      // Проверка allowedUserIds (промокод для конкретных пользователей)
       if (
         promoCode.allowedUserIds &&
         promoCode.allowedUserIds.length > 0

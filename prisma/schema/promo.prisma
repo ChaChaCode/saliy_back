@@ -19,6 +19,7 @@ model PromoCode {
 
   // Ограничения по пользователям
   allowedUserIds      String[] @default([]) @map("allowed_user_ids")    // Массив UUID пользователей (пустой = для всех)
+  requiresAuth        Boolean  @default(false) @map("requires_auth")    // Требуется авторизация (true = только для зарегистрированных, false = для всех включая гостей)
 
   // Лимиты использований
   maxUses             Int?     @map("max_uses")                          // Общий лимит использований (null = без лимита)

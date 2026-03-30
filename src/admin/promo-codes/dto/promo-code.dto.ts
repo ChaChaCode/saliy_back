@@ -41,6 +41,10 @@ export class CreatePromoCodeDto {
   allowedUserIds?: string[]; // UUID массив
 
   @IsOptional()
+  @IsBoolean()
+  requiresAuth?: boolean; // Требуется авторизация (true = только для зарегистрированных)
+
+  @IsOptional()
   @IsNumber()
   @Min(1)
   maxUses?: number;
@@ -109,6 +113,10 @@ export class UpdatePromoCodeDto {
   @IsArray()
   @IsString({ each: true })
   allowedUserIds?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  requiresAuth?: boolean; // Требуется авторизация (true = только для зарегистрированных)
 
   @IsOptional()
   @IsNumber()
