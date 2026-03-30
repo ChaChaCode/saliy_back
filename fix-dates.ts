@@ -1,6 +1,16 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
+import * as dotenv from 'dotenv';
 
-const prisma = new PrismaClient();
+// Загружаем .env
+dotenv.config();
+
+// Создаём пул соединений
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+
+const prisma = new PrismaClient({ adapter });
 
 async function fixDates() {
   console.log('Fixing dates...');
@@ -33,4 +43,5 @@ fixDates()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    await pool.end();
   });
