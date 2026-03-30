@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
 import { AppController } from './app.controller';
@@ -20,6 +20,7 @@ import { OrdersModule } from './orders/orders.module';
 import { PromoCodesModule } from './admin/promo-codes/promo-codes.module';
 import { PromoModule } from './promo/promo.module';
 import { CacheModule } from './common/cache/cache.module';
+import { GqlThrottlerGuard } from './common/guards/graphql-throttler.guard';
 // import { PaymentModule } from './payment/payment.module'; // Отложено
 
 @Module({
@@ -33,12 +34,6 @@ import { CacheModule } from './common/cache/cache.module';
       {
         ttl: 60000, // 1 минута
         limit: 100, // 100 запросов
-        ignoreUserAgents: [],
-        skipIf: (context) => {
-          // Пропускаем GraphQL запросы (у GraphQL свой контекст)
-          const request = context.switchToHttp().getRequest();
-          return request?.url?.includes('/graphql');
-        },
       },
     ]),
     GraphQLModule.forRoot<ApolloDriverConfig>({
@@ -66,10 +61,10 @@ import { CacheModule } from './common/cache/cache.module';
   providers: [
     AppService,
     AppResolver,
-    // Глобальный rate limiting guard
+    // Глобальный rate limiting guard с поддержкой GraphQL
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: GqlThrottlerGuard,
     },
   ],
 })
