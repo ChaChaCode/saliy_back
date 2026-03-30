@@ -19,6 +19,7 @@ import { CartModule } from './cart/cart.module';
 import { OrdersModule } from './orders/orders.module';
 import { PromoCodesModule } from './admin/promo-codes/promo-codes.module';
 import { PromoModule } from './promo/promo.module';
+import { CacheModule } from './common/cache/cache.module';
 // import { PaymentModule } from './payment/payment.module'; // Отложено
 
 @Module({
@@ -26,6 +27,7 @@ import { PromoModule } from './promo/promo.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    CacheModule,
     // Rate limiting - 100 запросов в минуту на IP
     ThrottlerModule.forRoot([
       {

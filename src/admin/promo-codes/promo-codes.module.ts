@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 import { PromoCodesService } from './promo-codes.service';
 import { PromoCodesController } from './promo-codes.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
-import { AuthModule } from '../../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [
+    PrismaModule,
+    JwtModule.register({}),
+  ],
   controllers: [PromoCodesController],
   providers: [PromoCodesService],
   exports: [PromoCodesService],
