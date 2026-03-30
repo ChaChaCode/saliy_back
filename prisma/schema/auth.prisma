@@ -13,6 +13,10 @@ model User {
   middleName String? @map("middle_name")
   phone      String? @map("phone")
 
+  // Дата рождения (можно обновлять раз в год)
+  birthdate          DateTime? @map("birthdate")           // Дата рождения
+  birthdateUpdatedAt DateTime? @map("birthdate_updated_at") // Дата последнего обновления даты рождения
+
   // Контакт для связи (соц. сеть)
   socialContact String? @map("social_contact") // Telegram: @username или Instagram: @username
 

@@ -173,6 +173,7 @@ export class AuthService {
         lastName: true,
         middleName: true,
         phone: true,
+        birthdate: true,
         socialContact: true,
         street: true,
         apartment: true,
@@ -194,6 +195,35 @@ export class AuthService {
   }
 
   async updateProfile(userId: string, data: any) {
+    // Если обновляется дата рождения - проверяем ограничение
+    if (data.birthdate) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { birthdate: true, birthdateUpdatedAt: true },
+      });
+
+      // Если дата рождения уже установлена, проверяем можно ли обновить
+      if (user?.birthdate && user?.birthdateUpdatedAt) {
+        const now = new Date();
+        const lastUpdate = new Date(user.birthdateUpdatedAt);
+        const oneYearAgo = new Date(
+          now.getFullYear() - 1,
+          now.getMonth(),
+          now.getDate(),
+        );
+
+        // Если с последнего обновления прошло меньше года - запрещаем
+        if (lastUpdate > oneYearAgo) {
+          throw new BadRequestException(
+            'Дату рождения можно изменить только раз в год',
+          );
+        }
+      }
+
+      // Обновляем birthdateUpdatedAt при изменении birthdate
+      data.birthdateUpdatedAt = new Date();
+    }
+
     return this.prisma.user.update({
       where: { id: userId },
       data,
@@ -205,6 +235,7 @@ export class AuthService {
         lastName: true,
         middleName: true,
         phone: true,
+        birthdate: true,
         socialContact: true,
         street: true,
         apartment: true,

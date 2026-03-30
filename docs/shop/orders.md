@@ -130,9 +130,154 @@
 
 **GET** `/api/orders/:orderNumber`
 
+Возвращает детальную информацию о заказе по его номеру.
+
 ```bash
 curl https://saliy-shop.ru/api/orders/260329-0001
 ```
+
+### Response:
+```json
+{
+  "id": "uuid",
+  "orderNumber": "260329-0001",
+  "firstName": "Иван",
+  "lastName": "Петров",
+  "email": "test@example.com",
+  "phone": "+375291234567",
+  "socialContact": "Telegram: @ivan_test",
+  "deliveryType": "STANDARD",
+  "paymentMethod": "CARD_ONLINE",
+  "subtotal": 9500,
+  "deliveryTotal": 0,
+  "discountAmount": 950,
+  "total": 8550,
+  "status": "CONFIRMED",
+  "isPaid": true,
+  "currency": "RUB",
+  "createdAt": "2026-03-29T12:00:00.000Z",
+  "items": [
+    {
+      "id": "item-uuid",
+      "productId": 20,
+      "name": "Джинсовка SALIY чёрная",
+      "slug": "dzhinsovka-saliy-black",
+      "color": "black",
+      "size": "M",
+      "quantity": 1,
+      "price": 9500,
+      "discount": 0,
+      "finalPrice": 9500,
+      "totalPrice": 9500,
+      "imageUrl": {
+        "url": "https://storage.yandexcloud.net/saliy-shop/products/...",
+        "isPreview": true,
+        "previewOrder": 1
+      }
+    }
+  ],
+  "promoCode": {
+    "code": "SALE10",
+    "type": "PERCENTAGE",
+    "value": 10
+  }
+}
+```
+
+### Поля товаров (items):
+- **name** - название товара (снэпшот на момент заказа)
+- **slug** - слаг для ссылки на страницу товара
+- **imageUrl** - первое изображение товара
+- **size** - размер заказанного товара
+- **color** - цвет товара
+- **quantity** - количество
+- **price** - оригинальная цена за единицу
+- **discount** - скидка товара в процентах
+- **finalPrice** - финальная цена за единицу (с учетом скидки товара)
+- **totalPrice** - общая стоимость позиции (finalPrice × quantity)
+
+### Промокод:
+- **promoCode** - информация о примененном промокоде (null если не использовался)
+  - `code` - код промокода
+  - `type` - тип (PERCENTAGE, FIXED, FREE_DELIVERY)
+  - `value` - значение скидки
+
+---
+
+## 4. Получить мои заказы
+
+**GET** `/api/orders`
+
+**Требуется авторизация:** Да
+
+Возвращает список всех заказов текущего пользователя (отсортированы по дате создания, новые первые).
+
+```bash
+curl https://saliy-shop.ru/api/orders \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+### Response:
+```json
+[
+  {
+    "id": "uuid",
+    "orderNumber": "260330-0003",
+    "firstName": "Иван",
+    "lastName": "Петров",
+    "email": "test@example.com",
+    "phone": "+375291234567",
+    "socialContact": "Telegram: @ivan_test",
+    "deliveryType": "STANDARD",
+    "paymentMethod": "CARD_ONLINE",
+    "subtotal": 19000,
+    "deliveryTotal": 0,
+    "discountAmount": 1900,
+    "total": 17100,
+    "status": "CONFIRMED",
+    "isPaid": true,
+    "currency": "RUB",
+    "createdAt": "2026-03-30T10:30:00.000Z",
+    "items": [
+      {
+        "id": "item-uuid-1",
+        "productId": 20,
+        "name": "Джинсовка SALIY чёрная",
+        "slug": "dzhinsovka-saliy-black",
+        "color": "black",
+        "size": "M",
+        "quantity": 2,
+        "price": 9500,
+        "discount": 0,
+        "finalPrice": 9500,
+        "totalPrice": 19000,
+        "imageUrl": {
+          "url": "https://storage.yandexcloud.net/saliy-shop/products/...",
+          "isPreview": true,
+          "previewOrder": 1
+        }
+      }
+    ],
+    "promoCode": {
+      "code": "SALE10",
+      "type": "PERCENTAGE",
+      "value": 10
+    }
+  },
+  {
+    "id": "uuid-2",
+    "orderNumber": "260329-0001",
+    "...": "..."
+  }
+]
+```
+
+### Что возвращается:
+- ✅ Полная информация о каждом заказе
+- ✅ Все товары с фотографиями, slug, размерами
+- ✅ Информация о промокоде (если был использован)
+- ✅ Детали доставки и оплаты
+- ✅ Отсортировано по дате (новые первые)
 
 ---
 
@@ -167,7 +312,7 @@ curl https://saliy-shop.ru/api/orders/260329-0001
 
 ---
 
-## 4. Валидация промокода
+## 5. Валидация промокода
 
 **POST** `/api/promo/validate`
 
