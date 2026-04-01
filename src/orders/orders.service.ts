@@ -35,6 +35,10 @@ export class OrdersService {
     const validatedItems = await this.validateOrderItems(items);
 
     // 🔒 ШАГ 2: РАСЧЕТ СТОИМОСТИ (цены из БД, не от клиента!)
+    const originalSubtotal = validatedItems.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0,
+    );
     const subtotal = validatedItems.reduce(
       (sum, item) => sum + item.totalPrice,
       0,
@@ -130,7 +134,10 @@ export class OrdersService {
           quantity: item.quantity,
           price: item.finalPrice,
         })),
+        originalSubtotal,
         subtotal,
+        discountAmount,
+        promoCode: promoCode || null,
         deliveryPrice,
         total,
         paymentMethod: orderInfo.paymentMethod,
@@ -153,7 +160,23 @@ export class OrdersService {
       }
     }
 
-    return order;
+    return {
+      ...order,
+      items: validatedItems.map((item) => ({
+        productId: item.productId,
+        name: item.productName,
+        size: item.size,
+        color: item.color,
+        quantity: item.quantity,
+        price: item.price,
+        discount: item.discount,
+        finalPrice: item.finalPrice,
+        totalPrice: item.totalPrice,
+        imageUrl: item.imageUrl,
+      })),
+      originalSubtotal,
+      promoCode: promoCode ? { code: promoCode } : null,
+    };
   }
 
   /**
@@ -167,10 +190,15 @@ export class OrdersService {
     const validatedItems = await this.validateOrderItems(items);
 
     // 🔒 ШАГ 2: РАСЧЕТ СТОИМОСТИ (цены из БД, не от клиента!)
+    const originalSubtotal = validatedItems.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0,
+    );
     const subtotal = validatedItems.reduce(
       (sum, item) => sum + item.totalPrice,
       0,
     );
+    const productDiscountAmount = originalSubtotal - subtotal;
 
     // 🔒 ШАГ 3: ПРИМЕНЕНИЕ ПРОМОКОДА (если есть)
     let discountAmount = 0;
@@ -207,8 +235,11 @@ export class OrdersService {
         totalPrice: item.totalPrice,
         imageUrl: item.imageUrl,
       })),
+      originalSubtotal,
+      productDiscountAmount,
       subtotal,
       discountAmount,
+      promoCode: promoCode || null,
       deliveryPrice,
       total,
       currency: 'RUB',
@@ -433,27 +464,35 @@ export class OrdersService {
     }
 
     // Форматируем данные
+    const formattedItems = order.items.map((item) => {
+      const images = item.product?.images as any;
+      const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+      const finalPrice = Math.floor(item.price - (item.price * item.discount) / 100);
+
+      return {
+        id: item.id,
+        productId: item.productId,
+        name: item.name,
+        slug: item.product?.slug || null,
+        color: item.color,
+        size: item.size,
+        quantity: item.quantity,
+        price: item.price,
+        discount: item.discount,
+        finalPrice,
+        totalPrice: finalPrice * item.quantity,
+        imageUrl,
+      };
+    });
+
+    const originalSubtotal = formattedItems.reduce(
+      (sum, item) => sum + item.price * item.quantity, 0,
+    );
+
     return {
       ...order,
-      items: order.items.map((item) => {
-        const images = item.product?.images as any;
-        const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
-
-        return {
-          id: item.id,
-          productId: item.productId,
-          name: item.name,
-          slug: item.product?.slug || null,
-          color: item.color,
-          size: item.size,
-          quantity: item.quantity,
-          price: item.price,
-          discount: item.discount,
-          finalPrice: Math.floor(item.price - (item.price * item.discount) / 100),
-          totalPrice: Math.floor(item.price - (item.price * item.discount) / 100) * item.quantity,
-          imageUrl,
-        };
-      }),
+      items: formattedItems,
+      originalSubtotal,
       promoCode: order.promoCodeUsages.length > 0
         ? order.promoCodeUsages[0].promoCode
         : null,
@@ -493,12 +532,11 @@ export class OrdersService {
     });
 
     // Форматируем данные для удобства
-    return orders.map((order) => ({
-      ...order,
-      items: order.items.map((item) => {
-        // Получаем первое изображение товара
+    return orders.map((order) => {
+      const formattedItems = order.items.map((item) => {
         const images = item.product?.images as any;
         const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+        const finalPrice = Math.floor(item.price - (item.price * item.discount) / 100);
 
         return {
           id: item.id,
@@ -510,15 +548,25 @@ export class OrdersService {
           quantity: item.quantity,
           price: item.price,
           discount: item.discount,
-          finalPrice: Math.floor(item.price - (item.price * item.discount) / 100),
-          totalPrice: Math.floor(item.price - (item.price * item.discount) / 100) * item.quantity,
+          finalPrice,
+          totalPrice: finalPrice * item.quantity,
           imageUrl,
         };
-      }),
-      promoCode: order.promoCodeUsages.length > 0
-        ? order.promoCodeUsages[0].promoCode
-        : null,
-    }));
+      });
+
+      const originalSubtotal = formattedItems.reduce(
+        (sum, item) => sum + item.price * item.quantity, 0,
+      );
+
+      return {
+        ...order,
+        items: formattedItems,
+        originalSubtotal,
+        promoCode: order.promoCodeUsages.length > 0
+          ? order.promoCodeUsages[0].promoCode
+          : null,
+      };
+    });
   }
 
   /**

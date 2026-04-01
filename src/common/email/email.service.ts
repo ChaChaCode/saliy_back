@@ -48,7 +48,10 @@ export class EmailService {
       firstName: string;
       lastName: string;
       items: Array<{ name: string; size: string; quantity: number; price: number }>;
+      originalSubtotal: number;
       subtotal: number;
+      discountAmount: number;
+      promoCode?: string | null;
       deliveryPrice: number;
       total: number;
       paymentMethod: string;
@@ -151,8 +154,18 @@ export class EmailService {
                 <table style="width: 100%; border-collapse: collapse;">
                   <tr>
                     <td style="color: #000000; padding: 4px 0;">ТОВАРЫ</td>
-                    <td style="color: #000000; text-align: right; padding: 4px 0;">${orderData.subtotal.toFixed(2)} ₽</td>
+                    <td style="color: #000000; text-align: right; padding: 4px 0;">${orderData.originalSubtotal.toFixed(2)} ₽</td>
                   </tr>
+                  ${orderData.originalSubtotal > orderData.subtotal ? `
+                  <tr>
+                    <td style="color: #000000; padding: 4px 0;">СКИДКА НА ТОВАРЫ</td>
+                    <td style="color: #28a745; text-align: right; padding: 4px 0;">-${(orderData.originalSubtotal - orderData.subtotal).toFixed(2)} ₽</td>
+                  </tr>` : ''}
+                  ${orderData.discountAmount > 0 ? `
+                  <tr>
+                    <td style="color: #000000; padding: 4px 0;">ПРОМОКОД${orderData.promoCode ? ` ${orderData.promoCode.toUpperCase()}` : ''}</td>
+                    <td style="color: #28a745; text-align: right; padding: 4px 0;">-${orderData.discountAmount.toFixed(2)} ₽</td>
+                  </tr>` : ''}
                   <tr>
                     <td style="color: #000000; padding: 4px 0;">ДОСТАВКА</td>
                     <td style="color: #000000; text-align: right; padding: 4px 0;">${orderData.deliveryPrice.toFixed(2)} ₽</td>

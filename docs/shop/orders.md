@@ -82,9 +82,9 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
       "color": "black",
       "quantity": 1,
       "price": 9500,
-      "discount": 0,
-      "finalPrice": 9500,
-      "totalPrice": 9500,
+      "discount": 10,
+      "finalPrice": 8550,
+      "totalPrice": 8550,
       "imageUrl": {
         "url": "https://storage.yandexcloud.net/saliy-shop/products/...",
         "isPreview": true,
@@ -92,13 +92,25 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
       }
     }
   ],
-  "subtotal": 9500,
-  "discountAmount": 0,
-  "deliveryPrice": 0,
-  "total": 9500,
+  "originalSubtotal": 9500,
+  "productDiscountAmount": 950,
+  "subtotal": 8550,
+  "discountAmount": 855,
+  "promoCode": "SALE10",
+  "deliveryPrice": 800,
+  "total": 8495,
   "currency": "RUB"
 }
 ```
+
+### Поля расчёта цены:
+- **originalSubtotal** — сумма товаров без каких-либо скидок
+- **productDiscountAmount** — сколько сэкономлено на скидках самих товаров
+- **subtotal** — сумма после скидок на товары (до промокода и доставки)
+- **discountAmount** — скидка от промокода (в рублях)
+- **promoCode** — применённый промокод (null если не использовался)
+- **deliveryPrice** — стоимость доставки
+- **total** — итоговая сумма к оплате (`subtotal - discountAmount + deliveryPrice`)
 
 ---
 
@@ -168,16 +180,37 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
   "socialContact": "Telegram: @ivan_petrov",
   "deliveryType": "STANDARD",
   "paymentMethod": "CARD_ONLINE",
-  "subtotal": 9500,
-  "deliveryTotal": 0,
-  "discountAmount": 0,
-  "total": 9500,
+  "originalSubtotal": 9500,
+  "subtotal": 8550,
+  "deliveryTotal": 800,
+  "discountAmount": 855,
+  "total": 8495,
   "status": "CONFIRMED",
   "isPaid": true,
   "currency": "RUB",
-  "items": [...]
+  "promoCode": { "code": "SALE10" },
+  "items": [
+    {
+      "productId": 20,
+      "name": "Джинсовка SALIY чёрная",
+      "size": "M",
+      "color": "black",
+      "quantity": 1,
+      "price": 9500,
+      "discount": 10,
+      "finalPrice": 8550,
+      "totalPrice": 8550,
+      "imageUrl": {
+        "url": "https://storage.yandexcloud.net/saliy-shop/products/...",
+        "isPreview": true,
+        "previewOrder": 1
+      }
+    }
+  ]
 }
 ```
+
+> **Примечание:** `promoCode` при создании возвращает только `{ code }`. Для полных данных промокода (type, value) используйте `GET /api/orders/:orderNumber`.
 
 ---
 
@@ -203,10 +236,11 @@ curl https://saliy-shop.ru/api/orders/SALIY2603290001
   "socialContact": "Telegram: @ivan_test",
   "deliveryType": "STANDARD",
   "paymentMethod": "CARD_ONLINE",
-  "subtotal": 9500,
-  "deliveryTotal": 0,
-  "discountAmount": 950,
-  "total": 8550,
+  "originalSubtotal": 9500,
+  "subtotal": 8550,
+  "deliveryTotal": 800,
+  "discountAmount": 855,
+  "total": 8495,
   "status": "CONFIRMED",
   "isPaid": true,
   "currency": "RUB",
@@ -221,9 +255,9 @@ curl https://saliy-shop.ru/api/orders/SALIY2603290001
       "size": "M",
       "quantity": 1,
       "price": 9500,
-      "discount": 0,
-      "finalPrice": 9500,
-      "totalPrice": 9500,
+      "discount": 10,
+      "finalPrice": 8550,
+      "totalPrice": 8550,
       "imageUrl": {
         "url": "https://storage.yandexcloud.net/saliy-shop/products/...",
         "isPreview": true,
@@ -285,10 +319,11 @@ curl https://saliy-shop.ru/api/orders \
     "socialContact": "Telegram: @ivan_test",
     "deliveryType": "STANDARD",
     "paymentMethod": "CARD_ONLINE",
+    "originalSubtotal": 21000,
     "subtotal": 19000,
-    "deliveryTotal": 0,
+    "deliveryTotal": 800,
     "discountAmount": 1900,
-    "total": 17100,
+    "total": 17900,
     "status": "CONFIRMED",
     "isPaid": true,
     "currency": "RUB",
@@ -329,8 +364,9 @@ curl https://saliy-shop.ru/api/orders \
 
 ### Что возвращается:
 - ✅ Полная информация о каждом заказе
-- ✅ Все товары с фотографиями, slug, размерами
-- ✅ Информация о промокоде (если был использован)
+- ✅ Все товары с фотографиями, slug, размерами, `finalPrice`, `totalPrice`
+- ✅ `originalSubtotal` — сумма до всех скидок
+- ✅ Информация о промокоде (code, type, value) если был использован
 - ✅ Детали доставки и оплаты
 - ✅ Отсортировано по дате (новые первые)
 
