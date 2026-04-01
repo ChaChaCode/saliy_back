@@ -14,6 +14,7 @@ model Order {
   phone         String
   email         String
   socialContact String? @map("social_contact") // Telegram: @username или Instagram: @username
+  comment       String? // Комментарий к заказу
 
   // Адрес доставки (снэпшот на момент заказа)
   countryName  String?  @map("country_name")

@@ -149,13 +149,18 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
   "phone": "+375291234567",
   "socialContact": "Telegram: @ivan_petrov",
   "deliveryType": "STANDARD",
-  "paymentMethod": "CARD_ONLINE"
+  "paymentMethod": "CARD_ONLINE",
+  "promoCode": "SALE10",
+  "comment": "Пожалуйста, упакуйте в подарочную упаковку"
 }
 ```
 
 ### Новое поле для связи:
 - `socialContact` - Контакт в соц. сети (опционально)
   - Примеры: "Telegram: @ivan_petrov" или "Instagram: @ivan.p"
+
+### Комментарий к заказу:
+- `comment` - Любое пожелание или уточнение к заказу (опционально, до произвольной длины)
 
 ### DeliveryType (выбор типа доставки):
 - `CDEK_PICKUP` - Самовывоз из ПВЗ CDEK (500₽) - только для России и Беларуси

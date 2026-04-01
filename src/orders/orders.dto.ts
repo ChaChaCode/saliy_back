@@ -96,4 +96,9 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   promoCode?: string;
+
+  // Комментарий к заказу (опционально)
+  @IsOptional()
+  @IsString()
+  comment?: string;
 }
