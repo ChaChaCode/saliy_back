@@ -27,7 +27,7 @@ export class AdminAuthController {
    */
   @Post('request-login')
   @HttpCode(200)
-  @Throttle({ default: { limit: 5, ttl: 600000 } }) // 5 запросов в 10 минут
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 запросов в минуту
   async requestLogin(@Req() request: Request) {
     const ip = this.getClientIP(request);
     const userAgent = request.headers['user-agent'] || '';
