@@ -18,6 +18,7 @@ async function bootstrap() {
     'https://www.saliy-shop.ru', // Production с www
     'https://admin.saliy-shop.ru', // Production админка
     'https://saliyclothes.vercel.app',
+    'https://saliyadmin.vercel.app',
   ];
 
   app.enableCors({
