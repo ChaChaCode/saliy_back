@@ -122,7 +122,9 @@ export class ReviewsService {
     ]);
 
     // Подтягиваем имена товаров отдельно (нет relation в prisma)
-    const productIds = [...new Set(reviews.map((r) => r.productId))];
+    const productIds: number[] = Array.from(
+      new Set(reviews.map((r) => r.productId)),
+    );
     const products = await this.prisma.product.findMany({
       where: { id: { in: productIds } },
       select: { id: true, name: true, slug: true },
