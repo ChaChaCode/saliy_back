@@ -499,7 +499,6 @@ type Product {
   finalPrice: Float!
   images: JSON!          # Массив объектов с url, isPreview, previewOrder
   stock: JSON!           # Объект с размерами и количеством: {"S": 10, "M": 5}
-  sizeChart: JSON        # Размерная таблица (опционально)
   isActive: Boolean!
   viewCount: Int!
   salesCount: Int!
@@ -591,7 +590,6 @@ type ValidatedCartItem {
   totalPrice: Float!
   inStock: Boolean!
   availableQuantity: Int!
-  sizeChart: String
   imageUrl: String!
 }
 ```

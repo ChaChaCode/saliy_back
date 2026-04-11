@@ -70,7 +70,6 @@
 | `discount` | `number` | Скидка в процентах (0-100) |
 | `images` | `Array<ImageObject>` | Массив изображений |
 | `stock` | `object` | Остатки по размерам: `{"S": 10, "M": 5}` |
-| `sizeChart` | `object` | Размерная таблица |
 | `isActive` | `boolean` | Активен ли товар |
 | `viewCount` | `number` | Количество просмотров |
 | `salesCount` | `number` | Количество продаж |
@@ -198,10 +197,6 @@ Authorization: Bearer <admin_token>
   "discount": 10,
   "images": [...],
   "stock": {"S": 5, "M": 10, "L": 3},
-  "sizeChart": {
-    "S": {"chest": 90, "waist": 75},
-    "M": {"chest": 95, "waist": 80}
-  },
   "isActive": true,
   "categories": [...],
   "viewCount": 245,
@@ -276,7 +271,6 @@ Authorization: Bearer <admin_token>
 | `price` | `number` | Цена в рублях |
 | `discount` | `number` | Скидка (0-100) |
 | `stock` | `object` | Остатки: `{"S": 10, "M": 5}` |
-| `sizeChart` | `object` | Размерная таблица |
 | `isActive` | `boolean` | Активность |
 | `categoryIds` | `Array<number>` | ID категорий |
 | `images[]` | `File[]` | Новые фотографии (до 10 файлов) |
@@ -468,9 +462,9 @@ Content-Type: application/json
    - Формат: `{"размер": количество}`
    - Пример: `{"S": 10, "M": 5, "L": 0}`
 
-4. **Размерная таблица (sizeChart):**
-   - Произвольная структура JSON
-   - Пример: `{"S": {"chest": 90, "waist": 75}}`
+4. **Размерная таблица:**
+   - Размерная сетка больше не хранится отдельным полем
+   - Загружайте фото таблицы как обычное изображение товара через `images[]`
 
 5. **Авторизация:**
    - Все эндпоинты требуют AdminGuard
@@ -498,7 +492,6 @@ Content-Type: application/json
 | `color` | string | ❌ | Цвет |
 | `weight` | number | ❌ | Вес в граммах |
 | `stock` | JSON | ❌ | `{"S": 10, "M": 5, "L": 0}` |
-| `sizeChart` | JSON | ❌ | Размерная таблица |
 | `isActive` | boolean | ❌ | По умолчанию `true` |
 | `categoryIds` | number[] | ❌ | ID категорий для привязки |
 | `images[]` | file[] | ❌ | До 10 изображений (jpg/png/webp, до 10MB каждое) |

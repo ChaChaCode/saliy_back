@@ -20,9 +20,8 @@
   discount: number;        // Скидка в процентах (0-100)
 
   // JSON поля
-  images: Array;           // Массив изображений
+  images: Array;           // Массив изображений (включая фото размерной таблицы)
   stock: Object;           // Остатки по размерам
-  sizeChart?: Object;      // Размерная таблица (опционально)
 
   // Счётчики
   isActive: boolean;       // Активен ли товар
@@ -78,38 +77,9 @@
 }
 ```
 
-### Формат sizeChart (размерная таблица)
+### Размерная таблица
 
-**Вариант 1: Просто URL картинки** (рекомендуется)
-```json
-"sizeChart/photo_2026-03-30_00-20-26.jpg"
-```
-
-**Вариант 2: Структурированные данные**
-```json
-{
-  "XS": {
-    "chest": 88,      // Обхват груди (см)
-    "waist": 70,      // Обхват талии (см)
-    "hips": 90,       // Обхват бёдер (см)
-    "length": 65      // Длина изделия (см)
-  },
-  "S": {
-    "chest": 92,
-    "waist": 74,
-    "hips": 94,
-    "length": 67
-  },
-  "M": {
-    "chest": 96,
-    "waist": 78,
-    "hips": 98,
-    "length": 69
-  }
-}
-```
-
-**Примечание:** Формат гибкий - можно хранить как готовую картинку с размерной сеткой (строка с URL), так и структурированные данные (объект с размерами).
+Отдельное поле `sizeChart` больше не используется. Фото размерной таблицы добавляется как обычное изображение товара в массив `images` (обычно последним).
 
 ---
 
@@ -157,7 +127,6 @@ curl -X GET "https://saliy-shop.ru/api/products"
         "L": 10,
         "XL": 5
       },
-      "sizeChart": "sizeChart/hoodie-size-chart.jpg",
       "isActive": true,
       "viewCount": 0,
       "salesCount": 0,
@@ -341,7 +310,6 @@ curl -X GET https://saliy-shop.ru/api/products/black-oversized-hoodie
     "L": 10,
     "XL": 5
   },
-  "sizeChart": "sizeChart/hoodie-size-chart.jpg",
   "isActive": true,
   "viewCount": 1,
   "salesCount": 0,

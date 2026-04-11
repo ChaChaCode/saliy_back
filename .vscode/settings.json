@@ -1,0 +1,14 @@
+{
+  "prisma.fileWatcher": true,
+  "prisma.schemaPath": "prisma",
+  "files.associations": {
+    "**/node_modules/.prisma/**/*.prisma": "plaintext"
+  },
+  "files.exclude": {
+    "**/node_modules/.prisma": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true
+  }
+}

@@ -204,7 +204,6 @@ Authorization: Bearer <token>
       "totalPrice": 19000,
       "inStock": true,
       "availableQuantity": 5,
-      "sizeChart": "https://storage.yandexcloud.net/saliy-shop/sizeChart/photo_2026-03-30_00-20-26.jpg",
       "imageUrl": "https://storage.yandexcloud.net/saliy-shop/products/dzhinsovka-black/Глеб фото 2.jpg"
     },
     {
@@ -219,7 +218,6 @@ Authorization: Bearer <token>
       "totalPrice": 8550,
       "inStock": true,
       "availableQuantity": 5,
-      "sizeChart": "https://storage.yandexcloud.net/saliy-shop/sizeChart/photo_2026-03-30_00-20-26.jpg",
       "imageUrl": "https://storage.yandexcloud.net/saliy-shop/products/dzhinsovka-blue/Глеб фото син 1.jpg"
     }
   ],
