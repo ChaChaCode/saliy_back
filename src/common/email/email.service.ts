@@ -233,4 +233,19 @@ export class EmailService {
     await this.transporter.sendMail(mailOptions);
   }
 
+  /**
+   * Отправить произвольное письмо (для админа — рассылки, уведомления)
+   */
+  async sendRaw(
+    to: string,
+    subject: string,
+    html: string,
+  ): Promise<void> {
+    await this.transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to,
+      subject,
+      html,
+    });
+  }
 }

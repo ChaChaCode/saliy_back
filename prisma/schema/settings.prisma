@@ -1,0 +1,10 @@
+// Универсальные настройки сайта (key-value)
+
+model Setting {
+  key         String   @id
+  value       String   // JSON-строка или простое значение
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

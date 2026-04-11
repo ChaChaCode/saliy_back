@@ -1,0 +1,22 @@
+// Аудит действий администраторов
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  adminId     String?  @map("admin_id")
+  adminName   String?  @map("admin_name")
+  action      String   // CREATE / UPDATE / DELETE / CUSTOM
+  method      String   // HTTP метод
+  path        String   // URL path
+  entityType  String?  @map("entity_type") // orders / products / users ...
+  entityId    String?  @map("entity_id")
+  changes     Json?    // body / изменения
+  ip          String?
+  userAgent   String?  @map("user_agent")
+  statusCode  Int?     @map("status_code")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([adminId])
+  @@index([entityType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

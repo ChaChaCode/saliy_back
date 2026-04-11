@@ -79,6 +79,10 @@ export class CreatePromoCodeDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }
 
 export class UpdatePromoCodeDto {
@@ -153,6 +157,10 @@ export class UpdatePromoCodeDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 }
 
 export class ValidatePromoCodeDto {

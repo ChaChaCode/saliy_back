@@ -12,10 +12,12 @@
 
 - [Типы данных](#типы-данных)
 - [Эндпоинты](#эндпоинты)
+  - [POST /api/admin/products](#post-apiadminproducts) - Создать товар
   - [GET /api/admin/products](#get-apiadminproducts) - Получить список товаров
   - [GET /api/admin/products/:id](#get-apiadminproductsid) - Получить товар по ID
   - [GET /api/admin/products/enums/all](#get-apiadminproductsenums) - Получить enums
   - [PATCH /api/admin/products/:id](#patch-apiadminproductsid) - Обновить товар
+  - [DELETE /api/admin/products/:id](#delete-apiadminproductsid) - Удалить товар
   - [PATCH /api/admin/products/:id/delete-image](#patch-apiadminproductsiddelete-image) - Удалить изображение
 - [Примеры](#примеры)
 
@@ -265,6 +267,7 @@ Authorization: Bearer <admin_token>
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `name` | `string` | Название |
+| `slug` | `string` | Уникальный слаг (URL) |
 | `description` | `string` | Описание |
 | `cardStatus` | `CardStatus` | Статус карточки |
 | `gender` | `GenderType` | Пол |
@@ -472,3 +475,122 @@ Content-Type: application/json
 5. **Авторизация:**
    - Все эндпоинты требуют AdminGuard
    - Токен передается в заголовке `Authorization: Bearer <token>`
+
+---
+
+## POST /api/admin/products
+
+Создать новый товар. Поддерживает `multipart/form-data` для загрузки изображений.
+
+**Первое загруженное изображение автоматически становится превью** (`isPreview: true, previewOrder: 1`).
+
+### Request (multipart/form-data):
+
+| Поле | Тип | Обяз. | Описание |
+|------|-----|-------|----------|
+| `name` | string | ✅ | Название товара |
+| `slug` | string | ✅ | Уникальный слаг (URL) |
+| `description` | string | ❌ | Описание |
+| `price` | number | ✅ | Цена в рублях |
+| `discount` | number | ❌ | Скидка 0-100 |
+| `cardStatus` | enum | ❌ | NONE / NEW / SALE / SOLD_OUT / PRE_ORDER / COMING_SOON |
+| `gender` | enum | ❌ | male / female / unisex |
+| `color` | string | ❌ | Цвет |
+| `weight` | number | ❌ | Вес в граммах |
+| `stock` | JSON | ❌ | `{"S": 10, "M": 5, "L": 0}` |
+| `sizeChart` | JSON | ❌ | Размерная таблица |
+| `isActive` | boolean | ❌ | По умолчанию `true` |
+| `categoryIds` | number[] | ❌ | ID категорий для привязки |
+| `images[]` | file[] | ❌ | До 10 изображений (jpg/png/webp, до 10MB каждое) |
+
+### Пример (curl):
+```bash
+curl -X POST https://saliy-shop.ru/api/admin/products \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "name=Джинсовка SALIY чёрная" \
+  -F "slug=dzhinsovka-saliy-black" \
+  -F "price=9500" \
+  -F "gender=unisex" \
+  -F "color=black" \
+  -F 'stock={"S":10,"M":5,"L":3}' \
+  -F "categoryIds=1" \
+  -F "categoryIds=3" \
+  -F "images=@./photo1.jpg" \
+  -F "images=@./photo2.jpg"
+```
+
+### Response `200 OK`:
+Возвращает созданный товар с связями категорий.
+
+### Ошибки:
+- `400` — slug уже используется
+- `400` — неверный формат файла (только jpg/png/webp)
+
+---
+
+## DELETE /api/admin/products/:id
+
+Удалить товар.
+
+### Логика удаления:
+- **Если у товара НЕТ связанных заказов** — товар физически удаляется из БД, файлы изображений удаляются с диска. Каскадно удаляются: связи с категориями, записи в корзинах пользователей.
+- **Если у товара ЕСТЬ связанные заказы** — товар **деактивируется** (`isActive = false`), чтобы не нарушить историю заказов.
+
+### Response (физическое удаление):
+```json
+{
+  "success": true,
+  "deleted": true,
+  "message": "Товар удалён"
+}
+```
+
+### Response (деактивация):
+```json
+{
+  "success": true,
+  "deleted": false,
+  "message": "Товар деактивирован, так как есть связанные заказы (5)",
+  "product": { "id": 20, "isActive": false, "...": "..." }
+}
+```
+
+### Ошибки:
+- `404` — товар не найден
+- `400` — неверный ID
+
+---
+
+## GET /api/admin/products/low-stock
+
+Товары с низким остатком на складе. Полезно для отслеживания, что нужно заказать/дозакупить.
+
+### Query параметры:
+- `threshold` — порог (default: 5). Возвращаются размеры где остаток ≤ threshold.
+
+### Response:
+```json
+{
+  "threshold": 5,
+  "count": 3,
+  "products": [
+    {
+      "id": 20,
+      "name": "Джинсовка SALIY чёрная",
+      "slug": "dzhinsovka-saliy-black",
+      "price": 9500,
+      "discount": 10,
+      "imageUrl": { "url": "...", "isPreview": true },
+      "lowSizes": [
+        { "size": "S", "quantity": 2 },
+        { "size": "L", "quantity": 0 }
+      ],
+      "totalStock": 7
+    }
+  ]
+}
+```
+
+### Поля:
+- **lowSizes** — только те размеры, где остаток ≤ threshold
+- **totalStock** — суммарный остаток по всем размерам

@@ -1,7 +1,9 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
+  Delete,
   Param,
   Body,
   Query,
@@ -14,7 +16,7 @@ import {
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { AdminProductsService } from './admin-products.service';
-import { UpdateProductDto } from './dto/admin-product.dto';
+import { CreateProductDto, UpdateProductDto } from './dto/admin-product.dto';
 
 @Controller('admin/products')
 @UseGuards(AdminGuard)
@@ -75,6 +77,63 @@ export class AdminProductsController {
   @Get('enums/all')
   async getEnums() {
     return this.adminProductsService.getEnums();
+  }
+
+  /**
+   * Товары с низким остатком на складе
+   * GET /admin/products/low-stock?threshold=5
+   */
+  @Get('low-stock')
+  async getLowStock(@Query('threshold') threshold?: string) {
+    const t = threshold ? parseInt(threshold, 10) : 5;
+    return this.adminProductsService.getLowStockProducts(t);
+  }
+
+  /**
+   * Создать товар (с загрузкой фотографий)
+   * POST /admin/products
+   *
+   * Поддерживает multipart/form-data. Первое изображение становится preview.
+   */
+  @Post()
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'images', maxCount: 10 }], {
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+          return callback(
+            new BadRequestException('Only image files are allowed'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  async createProduct(
+    @Body() createProductDto: CreateProductDto,
+    @UploadedFiles()
+    files?: { images?: Express.Multer.File[] },
+  ) {
+    return this.adminProductsService.createProduct(
+      createProductDto,
+      files?.images,
+    );
+  }
+
+  /**
+   * Удалить товар
+   * DELETE /admin/products/:id
+   *
+   * Если есть связанные заказы — товар деактивируется, иначе удаляется физически.
+   */
+  @Delete(':id')
+  async deleteProduct(@Param('id') id: string) {
+    const productId = parseInt(id, 10);
+    if (isNaN(productId)) {
+      throw new BadRequestException('Invalid product ID');
+    }
+    return this.adminProductsService.deleteProduct(productId);
   }
 
   /**

@@ -11,6 +11,7 @@ import { CreateOrderDto } from './orders.dto';
 import { EmailService } from '../common/email/email.service';
 import { PromoService } from '../promo/promo.service';
 import { CartService } from '../cart/cart.service';
+import { AdminSettingsService } from '../admin/settings/admin-settings.service';
 
 @Injectable()
 export class OrdersService {
@@ -22,6 +23,7 @@ export class OrdersService {
     private readonly cartService: CartService,
     @Inject(forwardRef(() => PromoService))
     private readonly promoService: PromoService,
+    private readonly settingsService: AdminSettingsService,
   ) {}
 
   /**
@@ -392,14 +394,16 @@ export class OrdersService {
     deliveryType: string,
     cdekCityCode?: number,
   ): Promise<number> {
-    // CDEK_PICKUP - самовывоз из пункта выдачи (Россия/Беларусь)
+    // Цены берутся из настроек (Settings), а не из хардкода
     if (deliveryType === 'CDEK_PICKUP') {
-      return 500; // Фиксированная цена для самовывоза
+      return this.settingsService.getValue<number>('delivery_price_cdek', 500);
     }
 
-    // STANDARD - почтовая доставка (все страны кроме России/Беларуси)
     if (deliveryType === 'STANDARD') {
-      return 800; // Фиксированная цена для почты
+      return this.settingsService.getValue<number>(
+        'delivery_price_standard',
+        800,
+      );
     }
 
     return 0;

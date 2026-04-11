@@ -1,0 +1,21 @@
+// Отзывы на товары
+
+model Review {
+  id          String    @id @default(uuid())
+  productId   Int       @map("product_id")
+  userId      String?   @map("user_id")
+  authorName  String    @map("author_name")
+  rating      Int       // 1-5
+  text        String?
+  status      String    @default("PENDING") // PENDING / APPROVED / REJECTED
+  moderatedAt DateTime? @map("moderated_at")
+  moderatedBy String?   @map("moderated_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([productId])
+  @@index([userId])
+  @@index([status])
+  @@index([productId, status])
+  @@map("reviews")
+}

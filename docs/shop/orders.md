@@ -183,6 +183,7 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
   "email": "test@example.com",
   "phone": "+375291234567",
   "socialContact": "Telegram: @ivan_petrov",
+  "comment": "Пожалуйста, упакуйте в подарочную упаковку",
   "deliveryType": "STANDARD",
   "paymentMethod": "CARD_ONLINE",
   "originalSubtotal": 9500,
@@ -239,6 +240,7 @@ curl https://saliy-shop.ru/api/orders/SALIY2603290001
   "email": "test@example.com",
   "phone": "+375291234567",
   "socialContact": "Telegram: @ivan_test",
+  "comment": "Пожалуйста, упакуйте в подарочную упаковку",
   "deliveryType": "STANDARD",
   "paymentMethod": "CARD_ONLINE",
   "originalSubtotal": 9500,
@@ -290,6 +292,9 @@ curl https://saliy-shop.ru/api/orders/SALIY2603290001
 - **finalPrice** - финальная цена за единицу (с учетом скидки товара)
 - **totalPrice** - общая стоимость позиции (finalPrice × quantity)
 
+### Комментарий:
+- **comment** - комментарий к заказу (null если не указан)
+
 ### Промокод:
 - **promoCode** - информация о примененном промокоде (null если не использовался)
   - `code` - код промокода
@@ -322,6 +327,7 @@ curl https://saliy-shop.ru/api/orders \
     "email": "test@example.com",
     "phone": "+375291234567",
     "socialContact": "Telegram: @ivan_test",
+    "comment": null,
     "deliveryType": "STANDARD",
     "paymentMethod": "CARD_ONLINE",
     "originalSubtotal": 21000,

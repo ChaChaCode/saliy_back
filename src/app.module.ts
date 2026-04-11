@@ -19,6 +19,7 @@ import { CartModule } from './cart/cart.module';
 import { OrdersModule } from './orders/orders.module';
 import { PromoCodesModule } from './admin/promo-codes/promo-codes.module';
 import { PromoModule } from './promo/promo.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { CacheModule } from './common/cache/cache.module';
 import { GqlThrottlerGuard } from './common/guards/graphql-throttler.guard';
 // import { PaymentModule } from './payment/payment.module'; // Отложено
@@ -55,6 +56,7 @@ import { GqlThrottlerGuard } from './common/guards/graphql-throttler.guard';
     OrdersModule,
     PromoCodesModule,
     PromoModule,
+    ReviewsModule,
     // PaymentModule, // Отложено - пока заказы сразу оплачены
   ],
   controllers: [AppController],

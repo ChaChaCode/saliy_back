@@ -1,0 +1,22 @@
+// Массовые email-рассылки
+
+model EmailCampaign {
+  id           String    @id @default(uuid())
+  subject      String
+  html         String
+  targetType   String    @default("ALL") @map("target_type") // ALL / WITH_ORDERS / WITHOUT_ORDERS
+  status       String    @default("DRAFT") // DRAFT / SENDING / COMPLETED / FAILED
+  totalCount   Int       @default(0) @map("total_count")
+  sentCount    Int       @default(0) @map("sent_count")
+  failedCount  Int       @default(0) @map("failed_count")
+  error        String?
+  startedAt    DateTime? @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  createdBy    String?   @map("created_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("email_campaigns")
+}
