@@ -9,6 +9,8 @@ import { EmailService } from '../common/email/email.service';
 import { DeliveryService } from '../delivery/delivery.service';
 import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
 import * as crypto from 'crypto';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
 @Injectable()
 export class AuthService {
@@ -173,6 +175,7 @@ export class AuthService {
         lastName: true,
         middleName: true,
         phone: true,
+        avatarUrl: true,
         birthdate: true,
         socialContact: true,
         street: true,
@@ -192,6 +195,82 @@ export class AuthService {
         updatedAt: true,
       },
     });
+  }
+
+  /**
+   * Загрузить аватар пользователя
+   */
+  async uploadAvatar(userId: string, file: Express.Multer.File) {
+    const uploadsDir = join(process.cwd(), 'uploads', 'avatars');
+    await fs.mkdir(uploadsDir, { recursive: true });
+
+    // Удаляем старый аватар если был
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarUrl: true },
+    });
+
+    if (user?.avatarUrl) {
+      const oldFilename = user.avatarUrl.split('/').pop();
+      if (oldFilename) {
+        try {
+          await fs.unlink(join(uploadsDir, oldFilename));
+        } catch {
+          // Файл мог не существовать — игнорируем
+        }
+      }
+    }
+
+    // Сохраняем новый файл
+    const ext = file.originalname.split('.').pop() || 'jpg';
+    const filename = `avatar-${userId}-${Date.now()}.${ext}`;
+    const filepath = join(uploadsDir, filename);
+    await fs.writeFile(filepath, file.buffer);
+
+    const avatarUrl = `/uploads/avatars/${filename}`;
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        avatarUrl: true,
+      },
+    });
+  }
+
+  /**
+   * Удалить аватар пользователя
+   */
+  async removeAvatar(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { avatarUrl: true },
+    });
+
+    if (!user?.avatarUrl) {
+      throw new BadRequestException('Аватар не установлен');
+    }
+
+    const filename = user.avatarUrl.split('/').pop();
+    if (filename) {
+      const uploadsDir = join(process.cwd(), 'uploads', 'avatars');
+      try {
+        await fs.unlink(join(uploadsDir, filename));
+      } catch {
+        // Файл мог не существовать — игнорируем
+      }
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: null },
+    });
+
+    return { success: true };
   }
 
   async updateProfile(userId: string, data: any) {
@@ -244,6 +323,7 @@ export class AuthService {
         lastName: true,
         middleName: true,
         phone: true,
+        avatarUrl: true,
         birthdate: true,
         socialContact: true,
         street: true,

@@ -12,6 +12,7 @@ model User {
   lastName   String? @map("last_name")
   middleName String? @map("middle_name")
   phone      String? @map("phone")
+  avatarUrl  String? @map("avatar_url") // URL аватара пользователя
 
   // Дата рождения (можно обновлять раз в год)
   birthdate          DateTime? @map("birthdate")           // Дата рождения

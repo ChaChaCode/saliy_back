@@ -99,6 +99,7 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
   "firstName": "Иван",
   "lastName": "Петров",
   "phone": "+79991234567",
+  "avatarUrl": "/uploads/avatars/avatar-uuid-123-1712920000000.jpg",
   "birthdate": "1990-05-15",
   "socialContact": "Telegram: @ivan",
   "deliveryType": "CDEK",
@@ -448,3 +449,66 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
     "postalCode": "00-001"
   }'
 ```
+
+
+---
+
+### 4. Загрузить аватар
+
+**POST** `/api/auth/avatar`
+
+**Требуется авторизация:** Да
+**Content-Type:** `multipart/form-data`
+
+Загружает изображение профиля. Старый аватар (если был) удаляется автоматически.
+
+**Параметры:**
+- `avatar` (file) — изображение (jpg/jpeg/png/webp, до 5 MB)
+
+**Пример:**
+```bash
+curl -X POST https://saliy-shop.ru/api/auth/avatar \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -F "avatar=@./photo.jpg"
+```
+
+**Ответ (200 OK):**
+```json
+{
+  "id": "uuid-123",
+  "email": "user@example.com",
+  "firstName": "Иван",
+  "lastName": "Петров",
+  "avatarUrl": "/uploads/avatars/avatar-uuid-123-1712920000000.jpg"
+}
+```
+
+**Ошибки:**
+- `400` — файл не загружен / неверный формат (не jpg/png/webp)
+- `413` — файл больше 5 MB
+- `401` — не авторизован
+
+---
+
+### 5. Удалить аватар
+
+**DELETE** `/api/auth/avatar`
+
+**Требуется авторизация:** Да
+
+Удаляет текущий аватар пользователя (файл + ссылку в БД).
+
+**Пример:**
+```bash
+curl -X DELETE https://saliy-shop.ru/api/auth/avatar \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+
+**Ответ (200 OK):**
+```json
+{ "success": true }
+```
+
+**Ошибки:**
+- `400` — аватар не установлен
+- `401` — не авторизован
