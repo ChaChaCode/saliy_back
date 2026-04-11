@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Saliy Admin — Дашборд</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-weight: 300;
+    color: #000;
+    background: #fff;
+    padding: 40px 160px;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+  }
+
+  /* === HEADER === */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 80px;
+  }
+
+  .logo {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+  }
+  .logo span {
+    font-weight: 300;
+    color: #999;
+    font-size: 11px;
+  }
+
+  .logout {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: #000;
+  }
+
+  /* === LAYOUT === */
+  .layout {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 120px;
+  }
+
+  /* === NAV === */
+  .nav { display: flex; flex-direction: column; gap: 18px; }
+  .nav a {
+    font-size: 13px;
+    color: #bbb;
+    text-decoration: none;
+    font-weight: 300;
+    letter-spacing: 0.02em;
+  }
+  .nav a.active { color: #000; font-weight: 400; }
+  .nav a:hover { color: #000; }
+
+  /* === MAIN === */
+  .main { min-width: 0; }
+
+  .page-title {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 40px;
+  }
+
+  /* === KPI === */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-bottom: 100px;
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+  }
+
+  .kpi {
+    padding: 40px 32px;
+    border-right: 1px solid #eee;
+  }
+  .kpi:last-child { border-right: none; }
+
+  .kpi-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 16px;
+  }
+  .kpi-value {
+    font-size: 32px;
+    font-weight: 200;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  .kpi-sub {
+    font-size: 11px;
+    color: #999;
+    font-weight: 300;
+  }
+  .kpi-sub.up { color: #000; }
+
+  /* === ALERTS === */
+  .alerts {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 100px;
+  }
+  .alert {
+    flex: 1;
+    padding: 24px 0;
+    border-top: 1px solid #000;
+  }
+  .alert-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 12px;
+  }
+  .alert-value {
+    font-size: 20px;
+    font-weight: 300;
+    margin-bottom: 4px;
+  }
+  .alert-link {
+    font-size: 11px;
+    color: #000;
+    text-decoration: none;
+    border-bottom: 1px solid #000;
+    padding-bottom: 1px;
+  }
+
+  /* === SECTIONS === */
+  .section {
+    margin-bottom: 100px;
+  }
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 32px;
+  }
+  .section-title {
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 400;
+  }
+  .section-switch {
+    display: flex;
+    gap: 24px;
+  }
+  .section-switch span {
+    font-size: 11px;
+    color: #bbb;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+  }
+  .section-switch span.active { color: #000; }
+
+  /* === CHART === */
+  .chart {
+    height: 260px;
+    position: relative;
+    padding: 0 0 32px 0;
+  }
+  .chart svg { width: 100%; height: 100%; }
+  .chart-xaxis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 10px;
+    color: #999;
+    letter-spacing: 0.05em;
+  }
+
+  /* === TWO COLUMNS === */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 80px;
+  }
+
+  /* === ORDERS LIST === */
+  .orders-list { display: flex; flex-direction: column; }
+  .order-row {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 0.8fr 0.8fr;
+    padding: 18px 0;
+    border-bottom: 1px solid #f0f0f0;
+    align-items: baseline;
+    font-size: 12px;
+    font-weight: 300;
+  }
+  .order-row:hover { color: #000; }
+  .order-num { font-weight: 400; letter-spacing: 0.02em; }
+  .order-client { color: #666; }
+  .order-status {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #999;
+  }
+  .order-status.paid { color: #000; }
+  .order-total { text-align: right; font-weight: 400; }
+
+  /* === TOP PRODUCTS === */
+  .top-products { display: flex; flex-direction: column; }
+  .product-row {
+    display: grid;
+    grid-template-columns: 60px 1fr auto;
+    gap: 20px;
+    padding: 18px 0;
+    border-bottom: 1px solid #f0f0f0;
+    align-items: center;
+  }
+  .product-thumb {
+    width: 60px;
+    height: 60px;
+    background: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: #bbb;
+    letter-spacing: 0.1em;
+  }
+  .product-info {
+    font-size: 12px;
+    font-weight: 300;
+  }
+  .product-name { margin-bottom: 6px; font-weight: 400; }
+  .product-sold { font-size: 10px; color: #999; letter-spacing: 0.05em; }
+  .product-revenue {
+    font-size: 12px;
+    font-weight: 400;
+    text-align: right;
+  }
+
+  /* === STATUS CHART === */
+  .status-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .status-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 40px;
+    gap: 16px;
+    align-items: center;
+    font-size: 11px;
+  }
+  .status-name {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #666;
+  }
+  .status-bar {
+    height: 1px;
+    background: #eee;
+    position: relative;
+  }
+  .status-bar-fill {
+    position: absolute;
+    left: 0; top: 0;
+    height: 1px;
+    background: #000;
+  }
+  .status-count { text-align: right; font-weight: 400; }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">SALIYCLOTHES<span>ADMIN</span></div>
+  <button class="logout">ВЫЙТИ</button>
+</div>
+
+<div class="layout">
+
+  <!-- NAV -->
+  <nav class="nav">
+    <a href="#" class="active">Дашборд</a>
+    <a href="#">Пользователи</a>
+    <a href="#">Заказы</a>
+    <a href="#">Отзывы</a>
+    <a href="#">Товары</a>
+    <a href="#">Категории</a>
+    <a href="#">Баннеры</a>
+    <a href="#">Промокоды</a>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="page-title">Обзор / 12 апреля 2026</div>
+
+    <!-- KPI -->
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="kpi-label">Выручка сегодня</div>
+        <div class="kpi-value">8 495 ₽</div>
+        <div class="kpi-sub up">180 000 ₽ за месяц</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Заказов сегодня</div>
+        <div class="kpi-value">3</div>
+        <div class="kpi-sub">72 за месяц</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Новых клиентов</div>
+        <div class="kpi-value">4</div>
+        <div class="kpi-sub">87 за месяц</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Средний чек</div>
+        <div class="kpi-value">10 416 ₽</div>
+        <div class="kpi-sub">по всем заказам</div>
+      </div>
+    </div>
+
+    <!-- ALERTS -->
+    <div class="alerts">
+      <div class="alert">
+        <div class="alert-label">Требуют модерации</div>
+        <div class="alert-value">5 отзывов</div>
+        <a href="#" class="alert-link">Проверить</a>
+      </div>
+      <div class="alert">
+        <div class="alert-label">Низкий остаток</div>
+        <div class="alert-value">3 товара</div>
+        <a href="#" class="alert-link">Посмотреть</a>
+      </div>
+      <div class="alert">
+        <div class="alert-label">Ожидают оплаты</div>
+        <div class="alert-value">2 заказа</div>
+        <a href="#" class="alert-link">Перейти</a>
+      </div>
+    </div>
+
+    <!-- TWO COLUMNS: Orders + Top Products -->
+    <div class="two-col">
+
+      <!-- LAST ORDERS -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">Последние заказы</div>
+          <div class="section-switch"><span>смотреть все</span></div>
+        </div>
+        <div class="orders-list">
+          <div class="order-row">
+            <div class="order-num">SALIY2604120003</div>
+            <div class="order-client">Иван Петров</div>
+            <div class="order-status paid">Оплачен</div>
+            <div class="order-total">8 495 ₽</div>
+          </div>
+          <div class="order-row">
+            <div class="order-num">SALIY2604120002</div>
+            <div class="order-client">Мария Сидорова</div>
+            <div class="order-status">В обработке</div>
+            <div class="order-total">17 100 ₽</div>
+          </div>
+          <div class="order-row">
+            <div class="order-num">SALIY2604120001</div>
+            <div class="order-client">Алексей Ковалёв</div>
+            <div class="order-status paid">Отправлен</div>
+            <div class="order-total">25 600 ₽</div>
+          </div>
+          <div class="order-row">
+            <div class="order-num">SALIY2604110007</div>
+            <div class="order-client">Ольга Белова</div>
+            <div class="order-status">Ожидает</div>
+            <div class="order-total">9 500 ₽</div>
+          </div>
+          <div class="order-row">
+            <div class="order-num">SALIY2604110006</div>
+            <div class="order-client">Дмитрий Новиков</div>
+            <div class="order-status paid">Доставлен</div>
+            <div class="order-total">12 300 ₽</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOP PRODUCTS -->
+      <div class="section">
+        <div class="section-head">
+          <div class="section-title">Топ товаров</div>
+          <div class="section-switch"><span>все товары</span></div>
+        </div>
+        <div class="top-products">
+          <div class="product-row">
+            <div class="product-thumb">IMG</div>
+            <div class="product-info">
+              <div class="product-name">Джинсовка SALIY чёрная</div>
+              <div class="product-sold">47 продаж</div>
+            </div>
+            <div class="product-revenue">446 500 ₽</div>
+          </div>
+          <div class="product-row">
+            <div class="product-thumb">IMG</div>
+            <div class="product-info">
+              <div class="product-name">Худи SALIY белое</div>
+              <div class="product-sold">32 продажи</div>
+            </div>
+            <div class="product-revenue">240 000 ₽</div>
+          </div>
+          <div class="product-row">
+            <div class="product-thumb">IMG</div>
+            <div class="product-info">
+              <div class="product-name">Футболка oversize чёрная</div>
+              <div class="product-sold">28 продаж</div>
+            </div>
+            <div class="product-revenue">112 000 ₽</div>
+          </div>
+          <div class="product-row">
+            <div class="product-thumb">IMG</div>
+            <div class="product-info">
+              <div class="product-name">Брюки карго серые</div>
+              <div class="product-sold">19 продаж</div>
+            </div>
+            <div class="product-revenue">152 000 ₽</div>
+          </div>
+          <div class="product-row">
+            <div class="product-thumb">IMG</div>
+            <div class="product-info">
+              <div class="product-name">Кепка SALIY</div>
+              <div class="product-sold">15 продаж</div>
+            </div>
+            <div class="product-revenue">30 000 ₽</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- STATUS CHART -->
+    <div class="section">
+      <div class="section-head">
+        <div class="section-title">Заказы по статусам</div>
+      </div>
+      <div class="status-chart">
+        <div class="status-row">
+          <div class="status-name">Ожидают</div>
+          <div class="status-bar"><div class="status-bar-fill" style="width: 4%"></div></div>
+          <div class="status-count">3</div>
+        </div>
+        <div class="status-row">
+          <div class="status-name">Подтверждены</div>
+          <div class="status-bar"><div class="status-bar-fill" style="width: 30%"></div></div>
+          <div class="status-count">45</div>
+        </div>
+        <div class="status-row">
+          <div class="status-name">В обработке</div>
+          <div class="status-bar"><div class="status-bar-fill" style="width: 14%"></div></div>
+          <div class="status-count">20</div>
+        </div>
+        <div class="status-row">
+          <div class="status-name">Отправлены</div>
+          <div class="status-bar"><div class="status-bar-fill" style="width: 20%"></div></div>
+          <div class="status-count">30</div>
+        </div>
+        <div class="status-row">
+          <div class="status-name">Доставлены</div>
+          <div class="status-bar"><div class="status-bar-fill" style="width: 34%"></div></div>
+          <div class="status-count">50</div>
+        </div>
+        <div class="status-row">
+          <div class="status-name">Отменены</div>
+          <div class="status-bar"><div class="status-bar-fill" style="width: 1%"></div></div>
+          <div class="status-count">2</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>

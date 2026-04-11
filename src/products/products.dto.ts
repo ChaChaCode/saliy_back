@@ -8,6 +8,7 @@ import {
   Min,
   IsInt,
 } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 
 // Enum'ы
 export enum CardStatus {
@@ -162,16 +163,19 @@ export class FilterProductsDto {
   status?: CardStatus;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   minPrice?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   maxPrice?: number;
 
   @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   inStock?: boolean;
 
@@ -184,11 +188,13 @@ export class FilterProductsDto {
   sortOrder?: string; // asc, desc
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   limit?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   offset?: number;
