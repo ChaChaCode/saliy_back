@@ -13,6 +13,7 @@ async function bootstrap() {
   const allowedOrigins = [
     'http://localhost:3000', // Фронтенд в разработке
     'http://localhost:3001', // Админка в разработке
+    'http://localhost:5173', // Vite dev server
     'https://saliy-shop.ru', // Production основной сайт
     'https://www.saliy-shop.ru', // Production с www
     'https://admin.saliy-shop.ru', // Production админка
