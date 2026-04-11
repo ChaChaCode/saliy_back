@@ -16,8 +16,17 @@ export class AuditInterceptor implements NestInterceptor {
   constructor(private readonly auditService: AuditService) {}
 
   intercept(ctx: ExecutionContext, next: CallHandler): Observable<any> {
+    // Интерцептор работает только для HTTP запросов, не для GraphQL/WS
+    if (ctx.getType() !== 'http') {
+      return next.handle();
+    }
+
     const request = ctx.switchToHttp().getRequest();
     const response = ctx.switchToHttp().getResponse();
+
+    if (!request) {
+      return next.handle();
+    }
 
     const method: string = request.method;
     const path: string = request.originalUrl || request.url;
