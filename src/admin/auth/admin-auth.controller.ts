@@ -4,13 +4,17 @@ import {
   Get,
   Param,
   Req,
+  Res,
   UseGuards,
   HttpCode,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminGuard } from '../../common/guards/admin.guard';
+
+const ADMIN_COOKIE_NAME = 'adminToken';
+const ADMIN_COOKIE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 часа
 
 @Controller('admin/auth')
 export class AdminAuthController {
@@ -34,10 +38,22 @@ export class AdminAuthController {
   /**
    * Проверить статус входа (для polling)
    * GET /admin/auth/check-status/:loginId
+   *
+   * Когда вход подтверждён — ставит httpOnly cookie и НЕ возвращает токен в body.
    */
   @Get('check-status/:loginId')
-  async checkStatus(@Param('loginId') loginId: string) {
-    return this.adminAuthService.checkStatus(loginId);
+  async checkStatus(
+    @Param('loginId') loginId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.adminAuthService.checkStatus(loginId);
+
+    if (result.approved && result.token) {
+      this.setAdminCookie(res, result.token);
+      return { approved: true };
+    }
+
+    return { approved: false };
   }
 
   /**
@@ -47,9 +63,59 @@ export class AdminAuthController {
    */
   @Post('refresh')
   @UseGuards(AdminGuard)
-  async refreshToken(@Req() request: Request) {
-    const token = this.extractTokenFromHeader(request);
-    return this.adminAuthService.refreshToken(token);
+  async refreshToken(
+    @Req() request: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token = this.extractToken(request);
+    const result = await this.adminAuthService.refreshToken(token);
+    this.setAdminCookie(res, result.token);
+    return { success: true, expiresIn: result.expiresIn };
+  }
+
+  /**
+   * Выход (очистить cookie и отозвать токен)
+   * POST /admin/auth/logout
+   */
+  @Post('logout')
+  @HttpCode(200)
+  @UseGuards(AdminGuard)
+  async logout(
+    @Req() request: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token = this.extractToken(request);
+    if (token) {
+      await this.adminAuthService.revokeToken(token);
+    }
+    res.clearCookie(ADMIN_COOKIE_NAME, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    });
+    return { success: true };
+  }
+
+  /**
+   * Поставить админский httpOnly cookie
+   */
+  private setAdminCookie(res: Response, token: string) {
+    res.cookie(ADMIN_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: ADMIN_COOKIE_MAX_AGE,
+      path: '/',
+    });
+  }
+
+  /**
+   * Извлечь токен из cookie или из заголовка
+   */
+  private extractToken(request: any): string {
+    const cookieToken = request.cookies?.adminToken;
+    if (cookieToken) return cookieToken;
+    return this.extractTokenFromHeader(request);
   }
 
   /**

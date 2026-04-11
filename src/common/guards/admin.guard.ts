@@ -38,6 +38,9 @@ export class AdminGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const ip = this.getClientIP(request);
     const userAgent = request.headers['user-agent'] || '';
+
+    // Токен из cookie (приоритет), fallback — Authorization header
+    const cookieToken = request.cookies?.adminToken;
     const authHeader = request.headers['authorization'];
 
     // Проверяем постоянную блокировку
@@ -73,19 +76,21 @@ export class AdminGuard implements CanActivate {
       );
     }
 
-    if (!authHeader) {
+    // Извлекаем токен
+    let token: string | null = null;
+    if (cookieToken) {
+      token = cookieToken;
+    } else if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.slice(7);
+    }
+
+    if (!token) {
       await this.recordFailedAttempt(ip, userAgent);
       throw new UnauthorizedException('Требуется авторизация');
     }
 
     try {
-      // Только Bearer токен (вход через Telegram)
-      if (!authHeader.startsWith('Bearer ')) {
-        await this.recordFailedAttempt(ip, userAgent);
-        throw new UnauthorizedException('Требуется авторизация через Telegram');
-      }
-
-      const result = await this.validateBearerToken(request, authHeader);
+      const result = await this.validateToken(request, token);
 
       // Успешная авторизация - сбрасываем счётчик
       if (result) {
@@ -103,14 +108,12 @@ export class AdminGuard implements CanActivate {
   }
 
   /**
-   * Проверка Bearer токена (вход по секретному коду)
+   * Проверка JWT токена (из cookie или Bearer header)
    */
-  private async validateBearerToken(
+  private async validateToken(
     request: any,
-    authHeader: string,
+    token: string,
   ): Promise<boolean> {
-    const token = authHeader.slice(7);
-
     try {
       // Проверяем, не отозван ли токен
       const revokedKey = `${REVOKED_TOKEN_PREFIX}${token}`;
