@@ -54,6 +54,7 @@ export class AdminUsersService {
           firstName: true,
           lastName: true,
           phone: true,
+          avatarUrl: true,
           socialContact: true,
           createdAt: true,
           _count: {
@@ -74,6 +75,7 @@ export class AdminUsersService {
         firstName: u.firstName,
         lastName: u.lastName,
         phone: u.phone,
+        avatarUrl: u.avatarUrl,
         socialContact: u.socialContact,
         createdAt: u.createdAt,
         ordersCount: u._count.orders,

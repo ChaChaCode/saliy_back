@@ -52,6 +52,7 @@ curl "https://saliy-shop.ru/api/admin/users?search=ivan&page=1" \
       "firstName": "Иван",
       "lastName": "Петров",
       "phone": "+375291234567",
+      "avatarUrl": "/uploads/avatars/avatar-uuid-1712920000000.jpg",
       "socialContact": "Telegram: @ivan_petrov",
       "createdAt": "2026-03-15T10:00:00.000Z",
       "ordersCount": 5
@@ -65,6 +66,8 @@ curl "https://saliy-shop.ru/api/admin/users?search=ivan&page=1" \
   }
 }
 ```
+
+> **avatarUrl** — относительный путь к файлу аватара (или `null` если не загружен). Полный URL строится как `<BASE_URL>/uploads/avatars/...`
 
 ---
 
@@ -83,6 +86,7 @@ curl "https://saliy-shop.ru/api/admin/users?search=ivan&page=1" \
   "lastName": "Петров",
   "middleName": null,
   "phone": "+375291234567",
+  "avatarUrl": "/uploads/avatars/avatar-uuid-1712920000000.jpg",
   "birthdate": "1995-05-20T00:00:00.000Z",
   "socialContact": "Telegram: @ivan_petrov",
   "countryName": "Россия",
