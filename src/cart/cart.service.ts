@@ -278,7 +278,6 @@ export class CartService {
         totalPrice,
         inStock,
         availableQuantity,
-        sizeChart: product.sizeChart,
         imageUrl,
       });
     }

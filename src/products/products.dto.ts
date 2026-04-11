@@ -74,10 +74,6 @@ export class CreateProductDto {
   stock?: any; // JSON
 
   @IsOptional()
-  @IsObject()
-  sizeChart?: any; // JSON - размерная таблица
-
-  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 
@@ -134,10 +130,6 @@ export class UpdateProductDto {
   @IsOptional()
   @IsObject()
   stock?: any;
-
-  @IsOptional()
-  @IsObject()
-  sizeChart?: any;
 
   @IsOptional()
   @IsBoolean()

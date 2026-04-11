@@ -66,9 +66,6 @@ export class ValidatedCartItem {
   @Field(() => Int)
   availableQuantity: number; // Доступное количество
 
-  @Field({ nullable: true })
-  sizeChart?: string; // Размерная сетка
-
   @Field()
   imageUrl: string; // Превью изображения
 }

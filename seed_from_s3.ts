@@ -34,7 +34,6 @@ async function seed() {
     const blackDzhinsovka = await prisma.product.upsert({
       where: { slug: 'dzhinsovka-saliy-black' },
       update: {
-        sizeChart: 'sizeChart/photo_2026-03-30_00-20-26.jpg',
       },
       create: {
         name: 'Джинсовка SALIY чёрная',
@@ -69,7 +68,6 @@ async function seed() {
           L: Math.floor(Math.random() * 10) + 5,   // 5-14 шт
           XL: Math.floor(Math.random() * 10) + 5,  // 5-14 шт
         },
-        sizeChart: 'sizeChart/photo_2026-03-30_00-20-26.jpg',
         isActive: true,
         categories: {
           create: [{ categoryId: category.id }],
@@ -84,7 +82,6 @@ async function seed() {
     const blueDzhinsovka = await prisma.product.upsert({
       where: { slug: 'dzhinsovka-saliy-blue' },
       update: {
-        sizeChart: 'sizeChart/photo_2026-03-30_00-20-26.jpg',
       },
       create: {
         name: 'Джинсовка SALIY синяя',
@@ -124,7 +121,6 @@ async function seed() {
           L: Math.floor(Math.random() * 10) + 5,   // 5-14 шт
           XL: Math.floor(Math.random() * 10) + 5,  // 5-14 шт
         },
-        sizeChart: 'sizeChart/photo_2026-03-30_00-20-26.jpg',
         isActive: true,
         categories: {
           create: [{ categoryId: category.id }],

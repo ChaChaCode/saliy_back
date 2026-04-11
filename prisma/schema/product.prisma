@@ -43,7 +43,6 @@ model Product {
   // JSON поля
   images      Json          @default("[]")  // [{"url": "...", "isPreview": true, "previewOrder": 1}, ...]
   stock       Json          @default("{}")  // {"S": 10, "M": 5, "L": 0}
-  sizeChart   Json?         @map("size_chart") // Размерная таблица: {"S": {"chest": 90, "waist": 75}, "M": {...}}
 
   // Счётчики
   isActive    Boolean       @default(true) @map("is_active")

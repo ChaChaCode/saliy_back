@@ -63,7 +63,6 @@ export class S3UrlInterceptor implements NestInterceptor {
   private isUrlField(key: string): boolean {
     return (
       key === 'url' ||
-      key === 'sizeChart' ||
       key.endsWith('Url') ||
       key.endsWith('ImageUrl') ||
       key.endsWith('BannerUrl')

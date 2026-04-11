@@ -57,10 +57,6 @@ export class CreateProductDto {
   stock?: Record<string, number>;
 
   @IsOptional()
-  @IsObject()
-  sizeChart?: Record<string, any>;
-
-  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 
@@ -114,10 +110,6 @@ export class UpdateProductDto {
   @IsOptional()
   @IsObject()
   stock?: Record<string, number>; // {"S": 10, "M": 5, "L": 0}
-
-  @IsOptional()
-  @IsObject()
-  sizeChart?: Record<string, any>; // Размерная таблица
 
   @IsOptional()
   @IsBoolean()
