@@ -21,6 +21,7 @@ import { PromoCodesModule } from './admin/promo-codes/promo-codes.module';
 import { PromoModule } from './promo/promo.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { CacheModule } from './common/cache/cache.module';
+import { StorageModule } from './common/storage/storage.module';
 import { GqlThrottlerGuard } from './common/guards/graphql-throttler.guard';
 import { PaymentModule } from './payment/payment.module';
 
@@ -30,6 +31,7 @@ import { PaymentModule } from './payment/payment.module';
       isGlobal: true,
     }),
     CacheModule,
+    StorageModule,
     // Rate limiting - 100 запросов в минуту на IP
     ThrottlerModule.forRoot([
       {

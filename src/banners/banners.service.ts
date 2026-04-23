@@ -6,29 +6,17 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { S3StorageService } from '../common/storage/s3-storage.service';
 
 @Injectable()
 export class BannersService {
-  private readonly uploadsDir = path.join(process.cwd(), 'uploads', 'banners');
+  private readonly s3Prefix = 'banners';
 
-  constructor(private readonly prisma: PrismaService) {
-    // Создаем директорию для загрузок при старте
-    this.ensureUploadsDirExists();
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly s3: S3StorageService,
+  ) {}
 
-  private async ensureUploadsDirExists() {
-    try {
-      await fs.mkdir(this.uploadsDir, { recursive: true });
-    } catch (error) {
-      console.error('Failed to create uploads directory:', error);
-    }
-  }
-
-  /**
-   * Создать новый баннер
-   */
   async create(
     dto: CreateBannerDto,
     desktopImage: Express.Multer.File,
@@ -40,11 +28,9 @@ export class BannersService {
       );
     }
 
-    // Сохраняем файлы
-    const desktopImageUrl = await this.saveFile(desktopImage, 'desktop');
-    const mobileImageUrl = await this.saveFile(mobileImage, 'mobile');
+    const desktopImageUrl = await this.uploadFile(desktopImage, 'desktop');
+    const mobileImageUrl = await this.uploadFile(mobileImage, 'mobile');
 
-    // Создаем баннер в БД
     return this.prisma.banner.create({
       data: {
         title: dto.title,
@@ -58,18 +44,10 @@ export class BannersService {
     });
   }
 
-  /**
-   * Получить все баннеры
-   */
   async findAll() {
-    return this.prisma.banner.findMany({
-      orderBy: { order: 'asc' },
-    });
+    return this.prisma.banner.findMany({ orderBy: { order: 'asc' } });
   }
 
-  /**
-   * Получить только активные баннеры (для главной страницы)
-   */
   async findActive() {
     return this.prisma.banner.findMany({
       where: { isActive: true },
@@ -77,24 +55,14 @@ export class BannersService {
     });
   }
 
-  /**
-   * Получить баннер по ID
-   */
   async findOne(id: string) {
-    const banner = await this.prisma.banner.findUnique({
-      where: { id },
-    });
-
+    const banner = await this.prisma.banner.findUnique({ where: { id } });
     if (!banner) {
       throw new NotFoundException(`Banner with ID ${id} not found`);
     }
-
     return banner;
   }
 
-  /**
-   * Обновить баннер
-   */
   async update(
     id: string,
     dto: UpdateBannerDto,
@@ -103,24 +71,16 @@ export class BannersService {
   ) {
     const banner = await this.findOne(id);
 
-    const updateData: any = {
-      ...dto,
-    };
+    const updateData: any = { ...dto };
 
-    // Если загружено новое изображение для десктопа
     if (desktopImage) {
-      // Удаляем старое
-      await this.deleteFile(banner.desktopImageUrl);
-      // Сохраняем новое
-      updateData.desktopImageUrl = await this.saveFile(desktopImage, 'desktop');
+      await this.s3.delete(banner.desktopImageUrl);
+      updateData.desktopImageUrl = await this.uploadFile(desktopImage, 'desktop');
     }
 
-    // Если загружено новое изображение для мобильной версии
     if (mobileImage) {
-      // Удаляем старое
-      await this.deleteFile(banner.mobileImageUrl);
-      // Сохраняем новое
-      updateData.mobileImageUrl = await this.saveFile(mobileImage, 'mobile');
+      await this.s3.delete(banner.mobileImageUrl);
+      updateData.mobileImageUrl = await this.uploadFile(mobileImage, 'mobile');
     }
 
     return this.prisma.banner.update({
@@ -129,52 +89,21 @@ export class BannersService {
     });
   }
 
-  /**
-   * Удалить баннер
-   */
   async remove(id: string) {
     const banner = await this.findOne(id);
 
-    // Удаляем файлы
-    await this.deleteFile(banner.desktopImageUrl);
-    await this.deleteFile(banner.mobileImageUrl);
+    await this.s3.delete(banner.desktopImageUrl);
+    await this.s3.delete(banner.mobileImageUrl);
 
-    // Удаляем из БД
-    return this.prisma.banner.delete({
-      where: { id },
-    });
+    return this.prisma.banner.delete({ where: { id } });
   }
 
-  /**
-   * Сохранить файл на диск
-   */
-  private async saveFile(
+  private async uploadFile(
     file: Express.Multer.File,
     type: 'desktop' | 'mobile',
   ): Promise<string> {
-    const timestamp = Date.now();
-    const ext = path.extname(file.originalname);
-    const filename = `${type}-${timestamp}${ext}`;
-    const filepath = path.join(this.uploadsDir, filename);
-
-    await fs.writeFile(filepath, file.buffer);
-
-    // Возвращаем относительный URL
-    return `/uploads/banners/${filename}`;
-  }
-
-  /**
-   * Удалить файл с диска
-   */
-  private async deleteFile(url: string) {
-    try {
-      // Извлекаем имя файла из URL
-      const filename = path.basename(url);
-      const filepath = path.join(this.uploadsDir, filename);
-
-      await fs.unlink(filepath);
-    } catch (error) {
-      console.error(`Failed to delete file ${url}:`, error);
-    }
+    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
+    const key = `${this.s3Prefix}/${type}-${Date.now()}.${ext}`;
+    return this.s3.upload(key, file.buffer, file.mimetype);
   }
 }
