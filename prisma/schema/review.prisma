@@ -7,6 +7,7 @@ model Review {
   authorName  String    @map("author_name")
   rating      Int       // 1-5
   text        String?
+  images      Json      @default("[]") // массив S3-ключей, до 5 штук
   status      String    @default("PENDING") // PENDING / APPROVED / REJECTED
   moderatedAt DateTime? @map("moderated_at")
   moderatedBy String?   @map("moderated_by")

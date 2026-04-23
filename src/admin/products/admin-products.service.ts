@@ -7,26 +7,25 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateProductDto, UpdateProductDto } from './dto/admin-product.dto';
 import { card_status, gender_type, category_type } from '@prisma/client';
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import { S3StorageService } from '../../common/storage/s3-storage.service';
+
+interface ProductImage {
+  url: string;           // S3-ключ (products/...jpg)
+  isPreview: boolean;    // true, если previewOrder ∈ {1,2}
+  previewOrder: number;  // 1 — primary, 2 — hover, 999 — не превью
+}
+
+const NON_PREVIEW_ORDER = 999;
 
 @Injectable()
 export class AdminProductsService {
   private readonly logger = new Logger(AdminProductsService.name);
-  private readonly uploadsDir = join(process.cwd(), 'uploads', 'products');
+  private readonly s3Prefix = 'products';
 
-  constructor(private prisma: PrismaService) {
-    // Создаём директорию для загрузок, если её нет
-    this.ensureUploadsDir();
-  }
-
-  private async ensureUploadsDir() {
-    try {
-      await fs.mkdir(this.uploadsDir, { recursive: true });
-    } catch (error) {
-      this.logger.error('Failed to create uploads directory', error);
-    }
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly s3: S3StorageService,
+  ) {}
 
   /**
    * Получить все товары с фильтрацией и пагинацией
@@ -237,24 +236,17 @@ export class AdminProductsService {
       throw new BadRequestException(`Slug "${dto.slug}" уже используется`);
     }
 
-    // Обработка изображений
-    const images: any[] = [];
+    // Загружаем фото в S3. Первая — primary (previewOrder=1), вторая — hover (2), остальные — не превью.
+    const images: ProductImage[] = [];
     if (imageFiles && imageFiles.length > 0) {
       for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i];
-        const filename = `product-${Date.now()}-${i}-${file.originalname}`;
-        const filepath = join(this.uploadsDir, filename);
-
-        try {
-          await fs.writeFile(filepath, file.buffer);
-          images.push({
-            url: `/uploads/products/${filename}`,
-            isPreview: i === 0,
-            previewOrder: i + 1,
-          });
-        } catch (error) {
-          this.logger.error(`Failed to save image: ${filename}`, error);
-        }
+        const key = await this.uploadImage(imageFiles[i], i);
+        const order = i === 0 ? 1 : i === 1 ? 2 : NON_PREVIEW_ORDER;
+        images.push({
+          url: key,
+          isPreview: order <= 2,
+          previewOrder: order,
+        });
       }
     }
 
@@ -263,7 +255,7 @@ export class AdminProductsService {
     const product = await this.prisma.product.create({
       data: {
         ...productData,
-        images,
+        images: images as any,
         stock: dto.stock || {},
         ...(categoryIds && categoryIds.length > 0
           ? {
@@ -328,24 +320,12 @@ export class AdminProductsService {
     }
 
     // Нет заказов — можно удалить физически
-    await this.prisma.$transaction(async (tx) => {
-      // Удаляем изображения с диска
-      const images = (product.images as any[]) || [];
-      for (const img of images) {
-        const filename = img.url?.split('/').pop();
-        if (filename) {
-          const filepath = join(this.uploadsDir, filename);
-          try {
-            await fs.unlink(filepath);
-          } catch (error) {
-            this.logger.debug(`File not found: ${filename}`);
-          }
-        }
-      }
-
-      // Cascade удалит: productCategories, cartItems
-      await tx.product.delete({ where: { id } });
-    });
+    const images = (product.images as unknown as ProductImage[]) || [];
+    for (const img of images) {
+      await this.s3.delete(img.url);
+    }
+    // Cascade удалит: productCategories, cartItems
+    await this.prisma.product.delete({ where: { id } });
 
     this.logger.warn(`Товар удалён: ${id} - ${product.name}`);
 
@@ -373,28 +353,21 @@ export class AdminProductsService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    // Обработка загруженных изображений
-    const newImages: any[] = [];
+    // Обработка новых загруженных изображений — пишем в S3, добавляем без превью
+    const newImages: ProductImage[] = [];
     if (imageFiles && imageFiles.length > 0) {
-      for (const file of imageFiles) {
-        const filename = `product-${id}-${Date.now()}-${file.originalname}`;
-        const filepath = join(this.uploadsDir, filename);
-
-        try {
-          await fs.writeFile(filepath, file.buffer);
-          newImages.push({
-            url: `/uploads/products/${filename}`,
-            isPreview: false,
-            previewOrder: 999,
-          });
-        } catch (error) {
-          this.logger.error(`Failed to save image: ${filename}`, error);
-        }
+      for (let i = 0; i < imageFiles.length; i++) {
+        const key = await this.uploadImage(imageFiles[i], i, id);
+        newImages.push({
+          url: key,
+          isPreview: false,
+          previewOrder: NON_PREVIEW_ORDER,
+        });
       }
     }
 
     // Объединяем существующие и новые изображения
-    let images = existingProduct.images as any[];
+    let images = existingProduct.images as unknown as ProductImage[];
     if (newImages.length > 0) {
       images = [...images, ...newImages];
     }
@@ -452,48 +425,154 @@ export class AdminProductsService {
   }
 
   /**
-   * Удалить конкретное изображение товара
+   * Удалить конкретное изображение товара.
+   * Принимает полный URL или голый S3-ключ — нормализуем перед сравнением.
    */
   async deleteProductImage(id: number, imageUrl: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
-    });
-
+    const product = await this.prisma.product.findUnique({ where: { id } });
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    let images = product.images as any[];
+    const targetKey = this.s3.extractKey(imageUrl);
+    if (!targetKey) {
+      throw new BadRequestException('imageUrl is empty after normalization');
+    }
 
-    // Находим изображение
-    const imageIndex = images.findIndex((img) => img.url === imageUrl);
-    if (imageIndex === -1) {
+    const images = (product.images as unknown as ProductImage[]) || [];
+    const index = images.findIndex(
+      (img) => this.s3.extractKey(img.url) === targetKey,
+    );
+    if (index === -1) {
       throw new BadRequestException('Image not found in product');
     }
 
-    // Удаляем файл с диска
-    const filename = imageUrl.split('/').pop();
-    if (filename) {
-      const filepath = join(this.uploadsDir, filename);
-      try {
-        await fs.unlink(filepath);
-      } catch (error) {
-        this.logger.warn(`Failed to delete image file: ${filename}`, error);
-      }
-    }
+    const [removed] = images.splice(index, 1);
+    await this.s3.delete(removed.url);
 
-    // Удаляем из массива
-    images.splice(imageIndex, 1);
-
-    // Обновляем товар
     const updatedProduct = await this.prisma.product.update({
       where: { id },
-      data: { images },
+      data: { images: images as any },
     });
 
     return {
       message: 'Image deleted successfully',
       product: updatedProduct,
     };
+  }
+
+  /**
+   * Добавить новые фотографии к товару (без замены существующих).
+   * Новые фото добавляются как НЕ превью.
+   */
+  async addProductImages(id: number, files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('Нужно прикрепить хотя бы одно фото');
+    }
+
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    const existing = (product.images as unknown as ProductImage[]) || [];
+    const added: ProductImage[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const key = await this.uploadImage(files[i], existing.length + i, id);
+      added.push({
+        url: key,
+        isPreview: false,
+        previewOrder: NON_PREVIEW_ORDER,
+      });
+    }
+
+    const updated = await this.prisma.product.update({
+      where: { id },
+      data: { images: [...existing, ...added] as any },
+    });
+
+    return {
+      message: `Добавлено ${added.length} фото`,
+      product: updated,
+    };
+  }
+
+  /**
+   * Установить превью-фото: до 2 штук.
+   *   primary — основное (previewOrder=1), обязательное.
+   *   hover   — показывается при наведении (previewOrder=2), опциональное.
+   * Остальные фото получают previewOrder = 999 и isPreview=false.
+   * Параметры принимают как полный URL, так и голый S3-ключ.
+   */
+  async setProductPreviews(
+    id: number,
+    params: { primary: string; hover?: string | null },
+  ) {
+    const product = await this.prisma.product.findUnique({ where: { id } });
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    const primaryKey = this.s3.extractKey(params.primary);
+    const hoverKey = params.hover ? this.s3.extractKey(params.hover) : null;
+
+    if (!primaryKey) {
+      throw new BadRequestException('primary изображение обязательно');
+    }
+    if (hoverKey && hoverKey === primaryKey) {
+      throw new BadRequestException(
+        'primary и hover не могут быть одним и тем же изображением',
+      );
+    }
+
+    const images = (product.images as unknown as ProductImage[]) || [];
+    const keys = images.map((i) => this.s3.extractKey(i.url));
+
+    if (!keys.includes(primaryKey)) {
+      throw new BadRequestException('primary изображение не найдено у товара');
+    }
+    if (hoverKey && !keys.includes(hoverKey)) {
+      throw new BadRequestException('hover изображение не найдено у товара');
+    }
+
+    const updatedImages = images.map<ProductImage>((img) => {
+      const key = this.s3.extractKey(img.url);
+      if (key === primaryKey) {
+        return { ...img, isPreview: true, previewOrder: 1 };
+      }
+      if (hoverKey && key === hoverKey) {
+        return { ...img, isPreview: true, previewOrder: 2 };
+      }
+      return { ...img, isPreview: false, previewOrder: NON_PREVIEW_ORDER };
+    });
+
+    const updated = await this.prisma.product.update({
+      where: { id },
+      data: { images: updatedImages as any },
+    });
+
+    return {
+      message: 'Превью обновлены',
+      product: updated,
+    };
+  }
+
+  /**
+   * Загрузить файл в S3 по ключу `products/{productId?}/{timestamp}-{i}.ext`.
+   */
+  private async uploadImage(
+    file: Express.Multer.File,
+    index: number,
+    productId?: number,
+  ): Promise<string> {
+    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
+    const dir = productId ? `${this.s3Prefix}/${productId}` : this.s3Prefix;
+    const key = `${dir}/${Date.now()}-${index}.${ext}`;
+    try {
+      return await this.s3.upload(key, file.buffer, file.mimetype);
+    } catch (error: any) {
+      this.logger.error(`Failed to upload product image to S3: ${key}`, error);
+      throw new BadRequestException('Не удалось загрузить изображение');
+    }
   }
 }

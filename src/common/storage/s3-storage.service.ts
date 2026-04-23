@@ -60,6 +60,40 @@ export class S3StorageService implements OnModuleInit {
   }
 
   /**
+   * Собрать публичный URL из S3-ключа.
+   * Пригодится там, где ключи лежат в массивах (не все попадают в S3UrlInterceptor).
+   */
+  keyToUrl(key: string): string {
+    if (!key) return key;
+    if (key.startsWith('http://') || key.startsWith('https://')) return key;
+    const clean = key.replace(/^\/+/, '').replace(/^uploads\//, '');
+    return `${this.publicBaseUrl}/${clean}`;
+  }
+
+  /**
+   * Срезать публичный префикс/ведущие слэши, вернуть «голое» значение для сравнения/матчинга.
+   * В отличие от normalizeKey — НЕ отсекает унаследованный "uploads/" (нужно для поиска
+   * таких записей в product.images при ручном удалении).
+   */
+  extractKey(input: string | null | undefined): string {
+    if (!input) return '';
+    let value = input.trim();
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      if (value.startsWith(this.publicBaseUrl)) {
+        value = value.slice(this.publicBaseUrl.length);
+      } else {
+        try {
+          const u = new URL(value);
+          value = u.pathname;
+        } catch {
+          // игнорируем парс-ошибки
+        }
+      }
+    }
+    return value.replace(/^\/+/, '');
+  }
+
+  /**
    * Удалить объект из S3. Отсутствующий объект — не ошибка.
    * Принимает либо голый key ("banners/foo.jpg"), либо полный URL —
    * отсекает префикс bucket'а и `/uploads/` (унаследованные записи).

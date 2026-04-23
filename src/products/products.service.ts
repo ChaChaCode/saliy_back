@@ -10,14 +10,16 @@ import {
   UpdateProductDto,
   FilterProductsDto,
 } from './products.dto';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { S3StorageService } from '../common/storage/s3-storage.service';
 
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly s3: S3StorageService,
+  ) {}
 
   // ==================== CRUD ОПЕРАЦИИ ====================
 
@@ -555,58 +557,44 @@ export class ProductsService {
       throw new NotFoundException(`Category with ID ${categoryId} not found`);
     }
 
-    const updateData: any = {};
-    const uploadsDir = path.join(process.cwd(), 'uploads', 'categories');
+    const updateData: { desktopBannerUrl?: string; mobileBannerUrl?: string } = {};
 
-    // Создаем директорию если её нет
-    await fs.mkdir(uploadsDir, { recursive: true });
-
-    // Обновляем десктопный баннер
     if (desktopBanner) {
-      // Удаляем старый файл если есть
-      if (category.desktopBannerUrl) {
-        try {
-          const oldFile = path.join(process.cwd(), category.desktopBannerUrl.replace(/^\//, ''));
-          await fs.unlink(oldFile);
-        } catch (error) {
-          this.logger.warn(`Failed to delete old desktop banner: ${error.message}`);
-        }
-      }
-
-      // Сохраняем новый файл
-      const timestamp = Date.now();
-      const ext = path.extname(desktopBanner.originalname);
-      const filename = `desktop-cat${categoryId}-${timestamp}${ext}`;
-      const filepath = path.join(uploadsDir, filename);
-      await fs.writeFile(filepath, desktopBanner.buffer);
-      updateData.desktopBannerUrl = `/uploads/categories/${filename}`;
+      await this.s3.delete(category.desktopBannerUrl);
+      updateData.desktopBannerUrl = await this.uploadCategoryBanner(
+        desktopBanner,
+        categoryId,
+        'desktop',
+      );
     }
 
-    // Обновляем мобильный баннер
     if (mobileBanner) {
-      // Удаляем старый файл если есть
-      if (category.mobileBannerUrl) {
-        try {
-          const oldFile = path.join(process.cwd(), category.mobileBannerUrl.replace(/^\//, ''));
-          await fs.unlink(oldFile);
-        } catch (error) {
-          this.logger.warn(`Failed to delete old mobile banner: ${error.message}`);
-        }
-      }
-
-      // Сохраняем новый файл
-      const timestamp = Date.now();
-      const ext = path.extname(mobileBanner.originalname);
-      const filename = `mobile-cat${categoryId}-${timestamp}${ext}`;
-      const filepath = path.join(uploadsDir, filename);
-      await fs.writeFile(filepath, mobileBanner.buffer);
-      updateData.mobileBannerUrl = `/uploads/categories/${filename}`;
+      await this.s3.delete(category.mobileBannerUrl);
+      updateData.mobileBannerUrl = await this.uploadCategoryBanner(
+        mobileBanner,
+        categoryId,
+        'mobile',
+      );
     }
 
-    // Обновляем категорию в БД
     return this.prisma.category.update({
       where: { id: categoryId },
       data: updateData,
     });
+  }
+
+  private async uploadCategoryBanner(
+    file: Express.Multer.File,
+    categoryId: number,
+    type: 'desktop' | 'mobile',
+  ): Promise<string> {
+    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
+    const key = `categories/${type}-cat${categoryId}-${Date.now()}.${ext}`;
+    try {
+      return await this.s3.upload(key, file.buffer, file.mimetype);
+    } catch (error: any) {
+      this.logger.error(`Failed to upload category banner to S3: ${key}`, error);
+      throw new BadRequestException('Failed to save banner file');
+    }
   }
 }

@@ -180,8 +180,8 @@ export class AdminProductsController {
 
   /**
    * Удалить конкретное изображение товара
-   * DELETE /admin/products/:id/images
-   * Body: { imageUrl: string }
+   * PATCH /admin/products/:id/delete-image
+   * Body: { imageUrl: string }  (полный URL или S3-ключ)
    */
   @Patch(':id/delete-image')
   async deleteProductImage(
@@ -192,11 +192,66 @@ export class AdminProductsController {
     if (isNaN(productId)) {
       throw new BadRequestException('Invalid product ID');
     }
-
     if (!imageUrl) {
       throw new BadRequestException('imageUrl is required');
     }
-
     return this.adminProductsService.deleteProductImage(productId, imageUrl);
+  }
+
+  /**
+   * Добавить новые фото к существующему товару (без замены)
+   * POST /admin/products/:id/images
+   * multipart/form-data: поле images[] (до 10 файлов)
+   */
+  @Post(':id/images')
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'images', maxCount: 10 }], {
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter: (_req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+          return callback(
+            new BadRequestException('Only image files are allowed'),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  async addProductImages(
+    @Param('id') id: string,
+    @UploadedFiles() files?: { images?: Express.Multer.File[] },
+  ) {
+    const productId = parseInt(id, 10);
+    if (isNaN(productId)) {
+      throw new BadRequestException('Invalid product ID');
+    }
+    return this.adminProductsService.addProductImages(
+      productId,
+      files?.images || [],
+    );
+  }
+
+  /**
+   * Установить превью-фото: primary (основное) + hover (опционально, при наведении).
+   * PATCH /admin/products/:id/set-previews
+   * Body: { primary: string, hover?: string | null }
+   */
+  @Patch(':id/set-previews')
+  async setProductPreviews(
+    @Param('id') id: string,
+    @Body() body: { primary: string; hover?: string | null },
+  ) {
+    const productId = parseInt(id, 10);
+    if (isNaN(productId)) {
+      throw new BadRequestException('Invalid product ID');
+    }
+    if (!body?.primary) {
+      throw new BadRequestException('primary is required');
+    }
+    return this.adminProductsService.setProductPreviews(productId, {
+      primary: body.primary,
+      hover: body.hover ?? null,
+    });
   }
 }

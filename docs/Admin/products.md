@@ -19,6 +19,8 @@
   - [PATCH /api/admin/products/:id](#patch-apiadminproductsid) - Обновить товар
   - [DELETE /api/admin/products/:id](#delete-apiadminproductsid) - Удалить товар
   - [PATCH /api/admin/products/:id/delete-image](#patch-apiadminproductsiddelete-image) - Удалить изображение
+  - [POST /api/admin/products/:id/images](#post-apiadminproductsidimages) - Добавить фото
+  - [PATCH /api/admin/products/:id/set-previews](#patch-apiadminproductsidset-previews) - Назначить превью (до 2)
 - [Примеры](#примеры)
 
 ---
@@ -322,23 +324,19 @@ fetch('/api/admin/products/1', {
 
 ### PATCH /api/admin/products/:id/delete-image
 
-Удалить конкретное изображение товара.
+Удалить конкретное изображение товара (из S3 и из `images`).
 
 **Content-Type:** `application/json`
-
-**Параметры пути:**
-
-| Параметр | Тип | Описание |
-|----------|-----|----------|
-| `id` | `number` | ID товара |
 
 **Тело запроса:**
 
 ```json
 {
-  "imageUrl": "/uploads/products/product-1-1234567890.jpg"
+  "imageUrl": "https://storage.yandexcloud.net/saliy-shop/products/21/1714000000000-0.jpg"
 }
 ```
+
+> `imageUrl` может быть полным URL (после `S3UrlInterceptor`) ИЛИ голым S3-ключом (`products/21/foo.jpg`) — бэк нормализует строку перед поиском в массиве.
 
 **Пример ответа:**
 
@@ -346,13 +344,87 @@ fetch('/api/admin/products/1', {
 {
   "message": "Image deleted successfully",
   "product": {
-    "id": 1,
+    "id": 21,
     "images": [
-      {"url": "/uploads/products/product-1-old.jpg", "isPreview": true}
+      { "url": "products/21/1714000000001-1.jpg", "isPreview": true, "previewOrder": 1 }
     ]
   }
 }
 ```
+
+**Ошибки:**
+- `400 "Image not found in product"` — такого изображения у товара нет
+- `404` — товара не существует
+
+---
+
+### POST /api/admin/products/:id/images
+
+Добавить новые фото к существующему товару (без замены остальных).
+Новые фото добавляются как **не превью** (`previewOrder = 999`). Установить их превью-статус — через `set-previews`.
+
+**Content-Type:** `multipart/form-data`
+
+**Поля формы:**
+
+| Поле       | Тип    | Обяз. | Описание                                              |
+|------------|--------|-------|-------------------------------------------------------|
+| `images[]` | file[] | ✅    | До 10 файлов (jpg/png/webp, до 10MB каждое)           |
+
+**Пример (JS):**
+```js
+const fd = new FormData();
+photos.forEach(f => fd.append('images', f));
+await fetch('/api/admin/products/21/images', {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${token}` },
+  body: fd,
+});
+```
+
+**Ответ:**
+```json
+{
+  "message": "Добавлено 2 фото",
+  "product": { "id": 21, "images": [ ... ] }
+}
+```
+
+---
+
+### PATCH /api/admin/products/:id/set-previews
+
+Назначить **до 2 превью-фото** товара.
+
+- `primary` — основное фото, показывается в карточке (`previewOrder = 1`) — **обязательно**
+- `hover`   — фото при наведении (`previewOrder = 2`) — опционально
+- Остальные фото товара автоматически теряют статус превью (`previewOrder = 999`)
+
+**Content-Type:** `application/json`
+
+**Тело запроса:**
+```json
+{
+  "primary": "products/21/1714000000000-0.jpg",
+  "hover":   "products/21/1714000000001-1.jpg"
+}
+```
+
+> Значения принимают полный URL ИЛИ S3-ключ. Чтобы оставить только одно превью — передай `primary` без `hover` (либо `hover: null`).
+
+**Ответ:**
+```json
+{
+  "message": "Превью обновлены",
+  "product": { "id": 21, "images": [ ... ] }
+}
+```
+
+**Ошибки:**
+- `400 "primary is required"` — не передан основной превью
+- `400 "primary и hover не могут быть одним и тем же изображением"`
+- `400 "primary изображение не найдено у товара"` (или `hover`)
+- `404` — товара не существует
 
 ---
 

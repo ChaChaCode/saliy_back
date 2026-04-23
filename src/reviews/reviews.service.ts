@@ -2,32 +2,59 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3StorageService } from '../common/storage/s3-storage.service';
 
 export type ReviewStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-interface CreateReviewDto {
+export interface CreateReviewInput {
   productId: number;
   authorName: string;
   rating: number;
   text?: string;
 }
 
+export const REVIEW_MAX_TEXT = 1000;
+export const REVIEW_MAX_IMAGES = 5;
+
 @Injectable()
 export class ReviewsService {
   private readonly logger = new Logger(ReviewsService.name);
+  private readonly s3Prefix = 'reviews';
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly s3: S3StorageService,
+  ) {}
 
   /**
-   * Создать отзыв (публично, требуется авторизация для userId)
+   * Создать отзыв. Только для авторизованных пользователей,
+   * у которых есть DELIVERED-заказ с этим товаром.
    */
-  async create(dto: CreateReviewDto, userId?: string) {
+  async create(
+    dto: CreateReviewInput,
+    userId: string,
+    images: Express.Multer.File[] = [],
+  ) {
+    if (!userId) {
+      throw new ForbiddenException('Только авторизованные могут оставлять отзывы');
+    }
     if (dto.rating < 1 || dto.rating > 5) {
       throw new BadRequestException('Рейтинг должен быть от 1 до 5');
+    }
+    if (dto.text && dto.text.length > REVIEW_MAX_TEXT) {
+      throw new BadRequestException(
+        `Текст отзыва не может превышать ${REVIEW_MAX_TEXT} символов`,
+      );
+    }
+    if (images.length > REVIEW_MAX_IMAGES) {
+      throw new BadRequestException(
+        `Можно прикрепить не более ${REVIEW_MAX_IMAGES} фото`,
+      );
     }
 
     const product = await this.prisma.product.findUnique({
@@ -38,14 +65,47 @@ export class ReviewsService {
       throw new NotFoundException(`Товар ${dto.productId} не найден`);
     }
 
-    // Один пользователь — один отзыв на товар
-    if (userId) {
-      const existing = await this.prisma.review.findFirst({
-        where: { productId: dto.productId, userId },
-      });
-      if (existing) {
-        throw new BadRequestException('Вы уже оставили отзыв на этот товар');
+    // Проверяем, что у пользователя был полученный заказ с этим товаром
+    const delivered = await this.prisma.orderItem.findFirst({
+      where: {
+        productId: dto.productId,
+        order: {
+          userId,
+          status: 'DELIVERED',
+        },
+      },
+      select: { id: true },
+    });
+    if (!delivered) {
+      throw new ForbiddenException(
+        'Оставить отзыв можно только на товар из полученного заказа',
+      );
+    }
+
+    // Один отзыв на товар от одного пользователя
+    const existing = await this.prisma.review.findFirst({
+      where: { productId: dto.productId, userId },
+    });
+    if (existing) {
+      throw new BadRequestException('Вы уже оставили отзыв на этот товар');
+    }
+
+    // Загружаем изображения в S3
+    const uploadedKeys: string[] = [];
+    try {
+      for (const file of images) {
+        const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
+        const key = `${this.s3Prefix}/${dto.productId}/${userId}-${Date.now()}-${uploadedKeys.length}.${ext}`;
+        await this.s3.upload(key, file.buffer, file.mimetype);
+        uploadedKeys.push(key);
       }
+    } catch (error: any) {
+      // Откатываем уже залитые картинки, если упали посреди
+      for (const key of uploadedKeys) {
+        await this.s3.delete(key);
+      }
+      this.logger.error(`Не удалось загрузить фото отзыва: ${error.message}`);
+      throw new BadRequestException('Не удалось загрузить фото отзыва');
     }
 
     const review = await this.prisma.review.create({
@@ -55,12 +115,52 @@ export class ReviewsService {
         authorName: dto.authorName,
         rating: dto.rating,
         text: dto.text,
+        images: uploadedKeys as Prisma.InputJsonValue,
         status: 'PENDING',
       },
     });
 
-    this.logger.log(`Отзыв создан: ${review.id} для товара ${dto.productId}`);
-    return review;
+    this.logger.log(
+      `Отзыв создан: ${review.id} для товара ${dto.productId} (фото: ${uploadedKeys.length})`,
+    );
+    return this.withImageUrls(review);
+  }
+
+  private withImageUrls<T extends { images: unknown }>(review: T): T {
+    const keys = Array.isArray(review.images) ? (review.images as string[]) : [];
+    return { ...review, images: keys.map((k) => this.s3.keyToUrl(k)) as any };
+  }
+
+  /**
+   * Может ли пользователь оставить отзыв на товар?
+   * Пригодится фронту для показа/скрытия формы отзыва.
+   */
+  async canReview(productId: number, userId: string) {
+    if (!userId) {
+      return { canReview: false, reason: 'NOT_AUTHENTICATED' as const };
+    }
+
+    const [alreadyReviewed, delivered] = await Promise.all([
+      this.prisma.review.findFirst({
+        where: { productId, userId },
+        select: { id: true },
+      }),
+      this.prisma.orderItem.findFirst({
+        where: {
+          productId,
+          order: { userId, status: 'DELIVERED' },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (alreadyReviewed) {
+      return { canReview: false, reason: 'ALREADY_REVIEWED' as const };
+    }
+    if (!delivered) {
+      return { canReview: false, reason: 'NO_DELIVERED_ORDER' as const };
+    }
+    return { canReview: true };
   }
 
   /**
@@ -75,6 +175,7 @@ export class ReviewsService {
         authorName: true,
         rating: true,
         text: true,
+        images: true,
         createdAt: true,
       },
     });
@@ -86,7 +187,7 @@ export class ReviewsService {
     });
 
     return {
-      reviews,
+      reviews: reviews.map((r) => this.withImageUrls(r)),
       averageRating: aggregate._avg.rating
         ? Math.round(aggregate._avg.rating * 10) / 10
         : 0,
@@ -121,7 +222,6 @@ export class ReviewsService {
       this.prisma.review.count({ where }),
     ]);
 
-    // Подтягиваем имена товаров отдельно (нет relation в prisma)
     const productIds: number[] = Array.from(
       new Set(reviews.map((r) => r.productId)),
     );
@@ -133,7 +233,7 @@ export class ReviewsService {
 
     return {
       reviews: reviews.map((r) => ({
-        ...r,
+        ...this.withImageUrls(r),
         product: productMap.get(r.productId) || null,
       })),
       pagination: {
@@ -178,15 +278,19 @@ export class ReviewsService {
   }
 
   /**
-   * Админ: удалить
+   * Админ: удалить. Картинки из S3 тоже убираем.
    */
   async remove(id: string) {
-    try {
-      await this.prisma.review.delete({ where: { id } });
-      return { success: true };
-    } catch {
-      throw new NotFoundException(`Отзыв ${id} не найден`);
+    const review = await this.prisma.review.findUnique({ where: { id } });
+    if (!review) throw new NotFoundException(`Отзыв ${id} не найден`);
+
+    const keys = Array.isArray(review.images) ? (review.images as string[]) : [];
+    for (const key of keys) {
+      await this.s3.delete(key);
     }
+
+    await this.prisma.review.delete({ where: { id } });
+    return { success: true };
   }
 
   /**
