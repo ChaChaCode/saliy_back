@@ -425,10 +425,10 @@ curl https://saliy-shop.ru/api/orders \
 5. **Редирект на оплату (только `CARD_ONLINE`):**
    - Фронт: `window.location.href = response.paymentUrl`
    - Пользователь вводит карту на форме Альфы, проходит 3DS
-   - Альфа редиректит обратно на `{FRONTEND_URL}/orders/{orderNumber}?payment=success|fail`
+   - Альфа редиректит обратно на `{FRONTEND_URL}/order/{orderNumber}?payment=success|fail`
    - Альфа параллельно дёргает `GET /api/payment/alfa/callback` → backend обновляет статус заказа
 
-6. **Страница `/orders/:orderNumber` на фронте:**
+6. **Страница `/order/:orderNumber` на фронте:**
    - Читает `?payment=success|fail`
    - На всякий случай вызывает `POST /api/payment/alfa/check-status` (если callback не дошёл)
    - Показывает актуальный статус заказа

@@ -165,10 +165,10 @@ FRONTEND_URL=https://saliyclothes.vercel.app/
 ### URL возврата клиента после оплаты
 
 Формируются автоматически:
-- `returnUrl`: `${FRONTEND_URL}/orders/{orderNumber}?payment=success`
-- `failUrl`:   `${FRONTEND_URL}/orders/{orderNumber}?payment=fail`
+- `returnUrl`: `${FRONTEND_URL}/order/{orderNumber}?payment=success`
+- `failUrl`:   `${FRONTEND_URL}/order/{orderNumber}?payment=fail`
 
-Фронт на странице `orders/:orderNumber` читает query-параметр `payment`:
+Фронт на странице `order/:orderNumber` читает query-параметр `payment`:
 - `success` → показать «Оплата прошла», при необходимости дёрнуть `POST /api/payment/alfa/check-status` для актуализации статуса.
 - `fail`    → «Оплата не прошла, попробуйте ещё раз» + ссылка на повтор заказа.
 

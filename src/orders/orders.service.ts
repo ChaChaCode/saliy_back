@@ -140,8 +140,8 @@ export class OrdersService {
           amount: total,
           description: `Заказ ${order.orderNumber}`,
           email: orderInfo.email,
-          returnUrl: `${frontendBase}/orders/${order.orderNumber}?payment=success`,
-          failUrl: `${frontendBase}/orders/${order.orderNumber}?payment=fail`,
+          returnUrl: `${frontendBase}/order/${order.orderNumber}?payment=success`,
+          failUrl: `${frontendBase}/order/${order.orderNumber}?payment=fail`,
         });
         paymentUrl = alfa.formUrl;
         await this.prisma.order.update({

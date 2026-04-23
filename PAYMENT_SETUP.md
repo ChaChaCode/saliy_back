@@ -126,7 +126,7 @@ curl -X POST http://localhost:3000/api/orders \
 ### 3. После оплаты статус заказа обновляется
 
 - Альфа дёргает `/api/payment/alfa/callback` → backend вызывает `getOrderStatusExtended.do` → обновляет БД.
-- Альфа редиректит клиента на `{FRONTEND_URL}/orders/{orderNumber}?payment=success|fail`.
+- Альфа редиректит клиента на `{FRONTEND_URL}/order/{orderNumber}?payment=success|fail`.
 
 ### 4. Принудительно проверить статус
 
