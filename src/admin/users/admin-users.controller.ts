@@ -24,14 +24,18 @@ export class AdminUsersController {
   }
 
   /**
-   * Список пользователей
+   * Список пользователей с фильтрами, агрегатами и сортировкой.
    * GET /api/admin/users
+   * Query: search, dateFrom, dateTo, hasOrders, sortBy, sortOrder, page, limit
    */
   @Get()
   findAll(
     @Query('search') search?: string,
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
+    @Query('hasOrders') hasOrders?: string,
+    @Query('sortBy') sortBy?: 'createdAt' | 'ordersCount' | 'totalSpent' | 'lastOrderAt',
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -39,6 +43,10 @@ export class AdminUsersController {
       search,
       dateFrom,
       dateTo,
+      hasOrders:
+        hasOrders === 'true' ? true : hasOrders === 'false' ? false : undefined,
+      sortBy,
+      sortOrder,
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
     });

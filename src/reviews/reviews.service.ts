@@ -196,19 +196,28 @@ export class ReviewsService {
   }
 
   /**
-   * Админ: список всех отзывов с фильтром
+   * Админ: список всех отзывов с фильтром + информация об авторе
    */
   async findAllAdmin(params: {
     status?: ReviewStatus;
     productId?: number;
+    userId?: string;
+    search?: string; // поиск по authorName / text
     page?: number;
     limit?: number;
   }) {
-    const { status, productId, page = 1, limit = 20 } = params;
+    const { status, productId, userId, search, page = 1, limit = 20 } = params;
 
     const where: Prisma.ReviewWhereInput = {};
     if (status) where.status = status;
     if (productId) where.productId = productId;
+    if (userId) where.userId = userId;
+    if (search) {
+      where.OR = [
+        { authorName: { contains: search, mode: 'insensitive' } },
+        { text: { contains: search, mode: 'insensitive' } },
+      ];
+    }
 
     const skip = (page - 1) * limit;
 
@@ -222,20 +231,11 @@ export class ReviewsService {
       this.prisma.review.count({ where }),
     ]);
 
-    const productIds: number[] = Array.from(
-      new Set(reviews.map((r) => r.productId)),
-    );
-    const products = await this.prisma.product.findMany({
-      where: { id: { in: productIds } },
-      select: { id: true, name: true, slug: true },
-    });
-    const productMap = new Map(products.map((p) => [p.id, p]));
+    const products = await this.fetchProductsForReviews(reviews);
+    const users = await this.fetchUsersForReviews(reviews);
 
     return {
-      reviews: reviews.map((r) => ({
-        ...this.withImageUrls(r),
-        product: productMap.get(r.productId) || null,
-      })),
+      reviews: reviews.map((r) => this.enrichAdminReview(r, products, users)),
       pagination: {
         page,
         limit,
@@ -243,6 +243,18 @@ export class ReviewsService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * Админ: получить отзыв по id с полной инфой (автор + товар)
+   */
+  async findAdminById(id: string) {
+    const review = await this.prisma.review.findUnique({ where: { id } });
+    if (!review) throw new NotFoundException(`Отзыв ${id} не найден`);
+
+    const products = await this.fetchProductsForReviews([review]);
+    const users = await this.fetchUsersForReviews([review]);
+    return this.enrichAdminReview(review, products, users);
   }
 
   /**
@@ -303,5 +315,256 @@ export class ReviewsService {
       this.prisma.review.count({ where: { status: 'REJECTED' } }),
     ]);
     return { pending, approved, rejected, total: pending + approved + rejected };
+  }
+
+  // ================= ADMIN CRUD =================
+
+  /**
+   * Админ: создать отзыв. Обходит проверку DELIVERED-заказа.
+   * Может задать userId явно (если нужно привязать к существующему юзеру) или оставить пустым.
+   */
+  async createAsAdmin(
+    dto: {
+      productId: number;
+      authorName: string;
+      rating: number;
+      text?: string;
+      status?: ReviewStatus;
+      userId?: string;
+    },
+    images: Express.Multer.File[] = [],
+    adminId?: string,
+  ) {
+    if (dto.rating < 1 || dto.rating > 5) {
+      throw new BadRequestException('Рейтинг должен быть от 1 до 5');
+    }
+    if (dto.text && dto.text.length > REVIEW_MAX_TEXT) {
+      throw new BadRequestException(
+        `Текст отзыва не может превышать ${REVIEW_MAX_TEXT} символов`,
+      );
+    }
+    if (images.length > REVIEW_MAX_IMAGES) {
+      throw new BadRequestException(
+        `Можно прикрепить не более ${REVIEW_MAX_IMAGES} фото`,
+      );
+    }
+
+    const product = await this.prisma.product.findUnique({
+      where: { id: dto.productId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new NotFoundException(`Товар ${dto.productId} не найден`);
+    }
+
+    if (dto.userId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: dto.userId },
+        select: { id: true },
+      });
+      if (!user) {
+        throw new NotFoundException(`Пользователь ${dto.userId} не найден`);
+      }
+    }
+
+    const uploadedKeys: string[] = [];
+    try {
+      for (const file of images) {
+        const key = await this.uploadImage(file, dto.productId, dto.userId);
+        uploadedKeys.push(key);
+      }
+    } catch (error: any) {
+      for (const key of uploadedKeys) await this.s3.delete(key);
+      throw new BadRequestException('Не удалось загрузить фото отзыва');
+    }
+
+    const isImmediatelyApproved = dto.status === 'APPROVED';
+    const review = await this.prisma.review.create({
+      data: {
+        productId: dto.productId,
+        userId: dto.userId ?? null,
+        authorName: dto.authorName,
+        rating: dto.rating,
+        text: dto.text,
+        images: uploadedKeys as Prisma.InputJsonValue,
+        status: dto.status ?? 'PENDING',
+        moderatedAt: isImmediatelyApproved ? new Date() : null,
+        moderatedBy: isImmediatelyApproved ? adminId : null,
+      },
+    });
+
+    this.logger.log(
+      `Админ создал отзыв ${review.id} на товар ${dto.productId} (status=${review.status})`,
+    );
+    return this.findAdminById(review.id);
+  }
+
+  /**
+   * Админ: обновить отзыв. Можно менять text, rating, authorName, status.
+   * Изображения — отдельными методами addImagesAdmin / removeImageAdmin.
+   */
+  async updateAsAdmin(
+    id: string,
+    dto: {
+      authorName?: string;
+      rating?: number;
+      text?: string | null;
+      status?: ReviewStatus;
+    },
+    adminId?: string,
+  ) {
+    const existing = await this.prisma.review.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException(`Отзыв ${id} не найден`);
+
+    if (dto.rating !== undefined && (dto.rating < 1 || dto.rating > 5)) {
+      throw new BadRequestException('Рейтинг должен быть от 1 до 5');
+    }
+    if (dto.text !== undefined && dto.text !== null && dto.text.length > REVIEW_MAX_TEXT) {
+      throw new BadRequestException(
+        `Текст отзыва не может превышать ${REVIEW_MAX_TEXT} символов`,
+      );
+    }
+
+    const data: Prisma.ReviewUpdateInput = {};
+    if (dto.authorName !== undefined) data.authorName = dto.authorName;
+    if (dto.rating !== undefined) data.rating = dto.rating;
+    if (dto.text !== undefined) data.text = dto.text;
+    if (dto.status !== undefined) {
+      data.status = dto.status;
+      data.moderatedAt = new Date();
+      data.moderatedBy = adminId ?? null;
+    }
+
+    await this.prisma.review.update({ where: { id }, data });
+    return this.findAdminById(id);
+  }
+
+  /**
+   * Админ: добавить фото к существующему отзыву.
+   */
+  async addImagesAdmin(id: string, files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('Нужно прикрепить хотя бы одно фото');
+    }
+
+    const review = await this.prisma.review.findUnique({ where: { id } });
+    if (!review) throw new NotFoundException(`Отзыв ${id} не найден`);
+
+    const existing = Array.isArray(review.images) ? (review.images as string[]) : [];
+    if (existing.length + files.length > REVIEW_MAX_IMAGES) {
+      throw new BadRequestException(
+        `У отзыва уже ${existing.length} фото, максимум ${REVIEW_MAX_IMAGES}`,
+      );
+    }
+
+    const uploaded: string[] = [];
+    try {
+      for (const file of files) {
+        const key = await this.uploadImage(file, review.productId, review.userId ?? undefined);
+        uploaded.push(key);
+      }
+    } catch {
+      for (const key of uploaded) await this.s3.delete(key);
+      throw new BadRequestException('Не удалось загрузить фото');
+    }
+
+    await this.prisma.review.update({
+      where: { id },
+      data: { images: [...existing, ...uploaded] as Prisma.InputJsonValue },
+    });
+
+    return this.findAdminById(id);
+  }
+
+  /**
+   * Админ: удалить одну фотку из отзыва (по URL или S3-ключу).
+   */
+  async removeImageAdmin(id: string, imageUrl: string) {
+    const review = await this.prisma.review.findUnique({ where: { id } });
+    if (!review) throw new NotFoundException(`Отзыв ${id} не найден`);
+
+    const target = this.s3.extractKey(imageUrl);
+    if (!target) {
+      throw new BadRequestException('imageUrl is empty after normalization');
+    }
+
+    const existing = Array.isArray(review.images) ? (review.images as string[]) : [];
+    const index = existing.findIndex((k) => this.s3.extractKey(k) === target);
+    if (index === -1) {
+      throw new BadRequestException('Image not found in review');
+    }
+
+    const [removed] = existing.splice(index, 1);
+    await this.s3.delete(removed);
+
+    await this.prisma.review.update({
+      where: { id },
+      data: { images: existing as Prisma.InputJsonValue },
+    });
+
+    return this.findAdminById(id);
+  }
+
+  // ================= HELPERS =================
+
+  private async uploadImage(
+    file: Express.Multer.File,
+    productId: number,
+    userId?: string,
+  ): Promise<string> {
+    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
+    const author = userId || 'admin';
+    const key = `reviews/${productId}/${author}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
+    try {
+      return await this.s3.upload(key, file.buffer, file.mimetype);
+    } catch (error: any) {
+      this.logger.error(`Не удалось загрузить фото отзыва: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private async fetchProductsForReviews(
+    reviews: Array<{ productId: number }>,
+  ) {
+    const ids = Array.from(new Set(reviews.map((r) => r.productId)));
+    if (ids.length === 0) return new Map<number, { id: number; name: string; slug: string }>();
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, slug: true },
+    });
+    return new Map(products.map((p) => [p.id, p]));
+  }
+
+  private async fetchUsersForReviews(reviews: Array<{ userId: string | null }>) {
+    const ids = Array.from(
+      new Set(reviews.map((r) => r.userId).filter((v): v is string => !!v)),
+    );
+    if (ids.length === 0) return new Map<string, { id: string; email: string; name: string | null; firstName: string | null; lastName: string | null }>();
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+    return new Map(users.map((u) => [u.id, u]));
+  }
+
+  private enrichAdminReview(
+    review: any,
+    productMap: Map<number, { id: number; name: string; slug: string }>,
+    userMap: Map<
+      string,
+      { id: string; email: string; name: string | null; firstName: string | null; lastName: string | null }
+    >,
+  ) {
+    return {
+      ...this.withImageUrls(review),
+      product: productMap.get(review.productId) ?? null,
+      user: review.userId ? userMap.get(review.userId) ?? null : null,
+    };
   }
 }

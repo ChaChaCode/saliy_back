@@ -138,6 +138,12 @@ curl "https://saliy-shop.ru/api/admin/orders?status=CONFIRMED&page=1&limit=20" \
   "total": 8495,
   "status": "CONFIRMED",
   "isPaid": true,
+  "cdekNumber": "1234567890",
+  "cdekUuid": "cdek-order-uuid",
+  "cdekStatus": "ACCEPTED_AT_PICK_UP_POINT",
+  "cdekStatusName": "Прибыл в пункт выдачи",
+  "cdekStatusDate": "2026-04-24T10:15:00.000Z",
+  "cdekTrackingUrl": "https://www.cdek.ru/ru/tracking?order_id=1234567890",
   "items": [...],
   "promoCode": {
     "code": "SALE10",
@@ -146,6 +152,16 @@ curl "https://saliy-shop.ru/api/admin/orders?status=CONFIRMED&page=1&limit=20" \
   }
 }
 ```
+
+### CDEK-поля (где заказ сейчас)
+- `cdekNumber` — номер накладной CDEK (для отображения клиенту)
+- `cdekUuid` — внутренний идентификатор CDEK
+- `cdekStatus` — текущий код статуса из CDEK (см. маппинг ниже)
+- `cdekStatusName` — человекочитаемое название статуса
+- `cdekStatusDate` — когда статус получен (из webhook или ручного refresh)
+- `cdekTrackingUrl` — готовая ссылка для клиента, `null` если накладная ещё не выписана
+
+Эти же поля присутствуют в каждом элементе `GET /api/admin/orders`.
 
 ---
 
@@ -294,6 +310,78 @@ curl -X PATCH https://saliy-shop.ru/api/admin/orders/SALIY2603290001 \
 ```
 
 При передаче `cdekStatus` автоматически обновляется `cdekStatusDate`.
+
+---
+
+## 8.1. Подтянуть актуальный статус из CDEK
+
+**POST** `/api/admin/orders/:orderNumber/cdek/refresh`
+
+Когда нужно: webhook потерялся / не настроен / клиент звонит «а где мой заказ» — админ жмёт кнопку «обновить статус», бэк запрашивает у CDEK API статус напрямую по `cdekUuid` (или `cdekNumber`) и сохраняет в БД.
+
+### Что делает:
+1. Берёт `cdekUuid` (или `cdekNumber`) из заказа в БД.
+2. `GET /orders/{identifier}` в CDEK API.
+3. Берёт последний элемент массива `entity.statuses`.
+4. Обновляет `cdekStatus`, `cdekStatusName`, `cdekStatusDate`, `status` (если CDEK-статус маппится в продвижение вперёд).
+5. Не понизит статус заказа (не даст `DELIVERED → SHIPPED` из-за late webhook).
+
+### Response:
+```json
+{
+  "orderNumber": "SALIY2604240001",
+  "cdekStatus": "RECEIVED",
+  "cdekStatusName": "Вручён",
+  "cdekStatusDate": "2026-04-24T10:15:00.000Z",
+  "status": "DELIVERED",
+  "trackingUrl": "https://www.cdek.ru/ru/tracking?order_id=1234567890"
+}
+```
+
+### Ошибки:
+- `404 "Заказ N не найден"` — нет такого заказа
+- `404 "У заказа N нет CDEK-идентификаторов"` — у заказа нет `cdekUuid` и `cdekNumber` (ещё не создана накладная)
+
+---
+
+## 8.2. Webhook от CDEK
+
+**POST** `/api/delivery/webhook` — **не под AdminGuard**, принимает уведомления от CDEK напрямую.
+
+CDEK отправляет JSON вида:
+```json
+{
+  "type": "ORDER_STATUS",
+  "uuid": "cdek-order-uuid",
+  "attributes": {
+    "cdek_number": "1234567890",
+    "code": "RECEIVED",
+    "name": "Вручён получателю",
+    "date_time": "2026-04-24T10:15:00+03:00"
+  }
+}
+```
+
+Поведение бэка:
+1. Ищет заказ по `cdekUuid` ИЛИ `cdekNumber`.
+2. Обновляет `cdekStatus`/`cdekStatusName`/`cdekStatusDate`.
+3. Маппит статус CDEK на `OrderStatus` заказа и меняет, **если** это продвижение вперёд и заказ не отменён/не возвращён.
+4. Логирует `CDEK webhook: обновлён заказ SALIY26... , cdekStatus=RECEIVED, status=DELIVERED`.
+
+### Настройка webhook в личном кабинете CDEK
+
+Указать URL: `https://saliy-shop.ru/api/delivery/webhook`. Тип события: `ORDER_STATUS`. Метод: `POST`.
+
+### Маппинг CDEK → OrderStatus
+
+| CDEK код | Описание | Наш статус |
+|---|---|---|
+| `CREATED`, `ACCEPTED` | Заказ создан/принят | `CONFIRMED` |
+| `RECEIVED_AT_SHIPMENT_WAREHOUSE`, `READY_FOR_SHIPMENT_IN_SENDER_CITY` | На складе | `PROCESSING` |
+| `TAKEN_BY_TRANSPORTER_*`, `SENT_TO_*`, `ACCEPTED_IN_TRANSIT_CITY`, `ACCEPTED_AT_RECIPIENT_CITY_WAREHOUSE`, `ACCEPTED_AT_PICK_UP_POINT`, `READY_TO_BE_HANDED_OVER`, `TAKEN_BY_COURIER` | В пути / прибыл в ПВЗ / у курьера | `SHIPPED` |
+| `RECEIVED`, `DELIVERED` | Вручён | `DELIVERED` |
+| `NOT_DELIVERED` | Не доставлен | `CANCELLED` |
+| `RETURNED`, `RETURNED_TO_SENDER` | Возврат | `REFUNDED` |
 
 ---
 

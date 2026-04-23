@@ -7,6 +7,7 @@ import {
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email/email.service';
+import { DeliveryService } from '../../delivery/delivery.service';
 
 interface FindAllParams {
   status?: OrderStatus;
@@ -25,7 +26,16 @@ export class AdminOrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly deliveryService: DeliveryService,
   ) {}
+
+  /**
+   * Попросить CDEK отдать актуальный статус по заказу и записать в БД.
+   * Прокси к DeliveryService.refreshCdekStatusForOrder, чтобы вызывать из админ-контроллера.
+   */
+  async refreshCdekStatus(orderNumber: string) {
+    return this.deliveryService.refreshCdekStatusForOrder(orderNumber);
+  }
 
   /**
    * Получить список всех заказов с фильтрами
@@ -452,6 +462,9 @@ export class AdminOrdersService {
         order.promoCodeUsages?.length > 0
           ? order.promoCodeUsages[0].promoCode
           : null,
+      cdekTrackingUrl: order.cdekNumber
+        ? this.deliveryService.getCdekTrackingUrl(order.cdekNumber)
+        : null,
     };
   }
 }

@@ -175,6 +175,15 @@ export class AdminOrdersController {
   }
 
   /**
+   * Подтянуть актуальный статус из CDEK API (на случай если webhook потерялся)
+   * POST /api/admin/orders/:orderNumber/cdek/refresh
+   */
+  @Post(':orderNumber/cdek/refresh')
+  refreshCdekStatus(@Param('orderNumber') orderNumber: string) {
+    return this.adminOrdersService.refreshCdekStatus(orderNumber);
+  }
+
+  /**
    * Отправить произвольное письмо клиенту
    * POST /api/admin/orders/:orderNumber/send-email
    */

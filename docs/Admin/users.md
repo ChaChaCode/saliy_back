@@ -2,7 +2,18 @@
 
 **Базовый URL:** `/api/admin/users`
 
-**Требуется авторизация:** Admin Bearer Token
+**Требуется авторизация:** Admin Bearer Token (`AdminGuard`)
+
+Админ видит полный профиль пользователя: контакты, адрес, способ доставки, историю заказов с составом, оставленные отзывы, агрегаты (сколько потратил, когда последний заказ).
+
+---
+
+## Содержание
+
+- [GET /api/admin/users/stats](#1-статистика-пользователей) — агрегаты для дашборда
+- [GET /api/admin/users](#2-список-пользователей) — список с фильтрами/сортировкой
+- [GET /api/admin/users/:id](#3-полная-карточка-пользователя) — все данные + заказы + отзывы
+- [DELETE /api/admin/users/:id](#4-удалить-пользователя) — удаление (заказы/отзывы остаются)
 
 ---
 
@@ -10,7 +21,6 @@
 
 **GET** `/api/admin/users/stats`
 
-### Response:
 ```json
 {
   "total": 523,
@@ -27,19 +37,29 @@
 
 **GET** `/api/admin/users`
 
+Возвращает плоский список с агрегатами `ordersCount` / `totalSpent` / `lastOrderAt` по каждому юзеру — удобно для дашборда «топ покупателей».
+
 ### Query параметры:
 | Параметр | Тип | Описание |
 |----------|-----|----------|
-| `search` | `string` | Поиск по email, имени, фамилии, телефону |
-| `dateFrom` | `ISO date` | Зарегистрированы от даты |
-| `dateTo` | `ISO date` | Зарегистрированы до даты |
-| `page` | `number` | Страница (default: 1) |
-| `limit` | `number` | Размер страницы (default: 20) |
+| `search` | `string` | Поиск по email, `name`, `firstName`, `lastName`, `phone` (case-insensitive) |
+| `dateFrom` / `dateTo` | `ISO date` | Диапазон регистрации |
+| `hasOrders` | `true \| false` | Только с заказами / только без заказов |
+| `sortBy` | `createdAt \| ordersCount \| totalSpent \| lastOrderAt` | По умолчанию `createdAt` |
+| `sortOrder` | `asc \| desc` | По умолчанию `desc` |
+| `page`, `limit` | `number` | Пагинация (default 1 / 20) |
 
-### Пример:
+> Сортировки по агрегатам (`ordersCount`/`totalSpent`/`lastOrderAt`) выполняются в памяти после фильтрации — на больших объёмах может быть медленно. Для `createdAt` сортировка идёт в БД.
+
+### Примеры:
 ```bash
-curl "https://saliy-shop.ru/api/admin/users?search=ivan&page=1" \
-  -H "Authorization: Bearer YOUR_TOKEN"
+# ТОП покупателей по сумме
+curl "https://saliy-shop.ru/api/admin/users?sortBy=totalSpent&hasOrders=true&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Поиск по email + последние заказы
+curl "https://saliy-shop.ru/api/admin/users?search=ivan&sortBy=lastOrderAt" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### Response:
@@ -49,76 +69,119 @@ curl "https://saliy-shop.ru/api/admin/users?search=ivan&page=1" \
     {
       "id": "uuid",
       "email": "ivan@example.com",
+      "name": null,
       "firstName": "Иван",
       "lastName": "Петров",
       "phone": "+375291234567",
-      "avatarUrl": "/uploads/avatars/avatar-uuid-1712920000000.jpg",
+      "avatarUrl": "https://storage.yandexcloud.net/saliy-shop/avatars/...",
       "socialContact": "Telegram: @ivan_petrov",
       "createdAt": "2026-03-15T10:00:00.000Z",
-      "ordersCount": 5
+      "ordersCount": 5,
+      "totalSpent": 47500,
+      "lastOrderAt": "2026-04-20T14:30:00.000Z"
     }
   ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 523,
-    "totalPages": 27
-  }
+  "pagination": { "page": 1, "limit": 20, "total": 523, "totalPages": 27 }
 }
 ```
 
-> **avatarUrl** — относительный путь к файлу аватара (или `null` если не загружен). Полный URL строится как `<BASE_URL>/uploads/avatars/...`
+> `totalSpent` считается по **оплаченным** заказам (`isPaid=true`) в статусах ≠ `CANCELLED`.
 
 ---
 
-## 3. Получить пользователя по ID
+## 3. Полная карточка пользователя
 
 **GET** `/api/admin/users/:id`
-
-Возвращает детальную информацию о пользователе, историю заказов и общую сумму покупок.
 
 ### Response:
 ```json
 {
   "id": "uuid",
   "email": "ivan@example.com",
+  "name": "Иван",
   "firstName": "Иван",
   "lastName": "Петров",
   "middleName": null,
   "phone": "+375291234567",
-  "avatarUrl": "/uploads/avatars/avatar-uuid-1712920000000.jpg",
+  "avatarUrl": "https://storage.yandexcloud.net/saliy-shop/avatars/...",
   "birthdate": "1995-05-20T00:00:00.000Z",
   "socialContact": "Telegram: @ivan_petrov",
-  "countryName": "Россия",
-  "cityName": "Москва",
-  "street": "ул. Ленина",
-  "apartment": "42",
-  "postalCode": "101000",
-  "deliveryType": "CDEK",
-  "cdekPickupPointCode": "MSK42",
-  "createdAt": "2026-03-15T10:00:00.000Z",
-  "ordersCount": 5,
-  "cartItemsCount": 2,
-  "totalSpent": 47500,
+
+  "address": {
+    "street": "ул. Ленина",
+    "apartment": "42",
+    "postalCode": "101000",
+    "countryName": "Россия",
+    "cityName": "Москва"
+  },
+
+  "delivery": {
+    "deliveryType": "CDEK",
+    "cdekCityCode": 44,
+    "cdekCountryCode": "RU",
+    "cdekRegionCode": 81,
+    "cdekPickupPointCode": "MSK42"
+  },
+
+  "stats": {
+    "ordersCount": 5,
+    "cartItemsCount": 2,
+    "totalSpent": 47500,
+    "lastOrderAt": "2026-04-20T14:30:00.000Z"
+  },
+
   "orders": [
     {
       "id": "order-uuid",
-      "orderNumber": "SALIY2603290001",
+      "orderNumber": "SALIY2604200001",
       "status": "DELIVERED",
       "isPaid": true,
+      "paymentMethod": "CARD_ONLINE",
       "total": 8495,
       "currency": "RUB",
-      "createdAt": "2026-03-29T12:00:00.000Z"
+      "deliveryType": "CDEK_PICKUP",
+      "cdekStatus": "RECEIVED",
+      "cdekStatusName": "Вручён",
+      "createdAt": "2026-04-20T14:30:00.000Z",
+      "items": [
+        {
+          "productId": 20,
+          "name": "Джинсовка SALIY чёрная",
+          "size": "M",
+          "quantity": 1,
+          "price": 9500,
+          "discount": 10
+        }
+      ]
     }
-  ]
+  ],
+
+  "reviews": [
+    {
+      "id": "review-uuid",
+      "productId": 20,
+      "rating": 5,
+      "text": "Отличное качество!",
+      "status": "APPROVED",
+      "createdAt": "2026-04-22T10:00:00.000Z",
+      "product": { "id": 20, "name": "Джинсовка SALIY чёрная", "slug": "dzhinsovka-saliy-black" }
+    }
+  ],
+
+  "createdAt": "2026-03-15T10:00:00.000Z",
+  "updatedAt": "2026-04-20T14:30:00.000Z"
 }
 ```
 
-### Поля:
-- **ordersCount** — общее количество заказов
-- **cartItemsCount** — товаров в корзине сейчас
-- **totalSpent** — сумма оплаченных заказов (без отменённых)
-- **orders** — история заказов (краткая инфа, для полной — `GET /api/admin/orders/:orderNumber`)
+### Структура
+- **`address`** — домашний адрес (для стандартной доставки)
+- **`delivery`** — настройки доставки, выбранные пользователем (CDEK-коды ПВЗ/города)
+- **`stats`** — агрегаты: заказы, сумма, дата последнего заказа, товаров в корзине
+- **`orders`** — все заказы с составом (items). Для полной инфы по одному заказу — `GET /api/admin/orders/:orderNumber`
+- **`reviews`** — отзывы пользователя с привязкой к товару и статусом модерации (`PENDING` / `APPROVED` / `REJECTED`)
+
+### Ошибки
+- `404` — пользователь не найден
 
 ---
 
@@ -126,20 +189,21 @@ curl "https://saliy-shop.ru/api/admin/users?search=ivan&page=1" \
 
 **DELETE** `/api/admin/users/:id`
 
-⚠️ **Осторожно:** Удаляет пользователя навсегда.
+⚠️ Физическое удаление.
 
-### Что происходит при удалении:
-1. ✅ Удаляются: refresh токены, verification codes, корзина
-2. ✅ **Заказы сохраняются** как гостевые (`userId = null`) — бухгалтерия не теряется
-3. ✅ Всё выполняется в транзакции
+### Что происходит:
+1. ✅ Удаляются: refresh-токены, verification codes, корзина (cascade)
+2. ✅ **Заказы сохраняются** с `userId = null` (бухгалтерия не теряется)
+3. ✅ **Отзывы сохраняются** с `userId = null` (оставленные отзывы остаются на товаре)
+4. ✅ Всё в транзакции
 
-### Response:
+### Response
 ```json
 {
   "success": true,
-  "message": "Пользователь удалён, заказы сохранены как гостевые"
+  "message": "Пользователь удалён, заказы и отзывы сохранены (userId = null)"
 }
 ```
 
-### Ошибки:
+### Ошибки
 - `404` — пользователь не найден

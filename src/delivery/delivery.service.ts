@@ -1,8 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import * as countries from 'i18n-iso-countries';
+import { OrderStatus } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class DeliveryService {
@@ -13,6 +19,7 @@ export class DeliveryService {
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
   ) {
     // Регистрируем локали для разных языков
     countries.registerLocale(require('i18n-iso-countries/langs/ru.json'));
@@ -596,49 +603,186 @@ export class DeliveryService {
   };
 
   /**
-   * Обработка webhook от CDEK
+   * Обработка webhook от CDEK — обновляет статус заказа в БД.
+   * CDEK шлёт JSON вида:
+   *   { type: 'ORDER_STATUS', uuid: '...', attributes: { code: 'RECEIVED', cdek_number: '...', date_time: '...' } }
    */
   async handleCdekWebhook(payload: any): Promise<{
+    orderNumber?: string;
     orderId?: string;
     newStatus?: string;
     cdekStatus?: string;
+    cdekStatusName?: string;
   }> {
-    // CDEK отправляет разные типы событий
-    if (payload.type !== 'ORDER_STATUS') {
-      this.logger.log(`Ignoring CDEK webhook type: ${payload.type}`);
+    if (payload?.type !== 'ORDER_STATUS') {
+      this.logger.log(`Ignoring CDEK webhook type: ${payload?.type}`);
       return {};
     }
 
-    const uuid = payload.uuid;
-    const cdekNumber = payload.attributes?.cdek_number;
-    const cdekStatusCode = payload.attributes?.code;
+    const uuid: string | undefined = payload.uuid;
+    const cdekNumber: string | undefined = payload.attributes?.cdek_number;
+    const cdekStatusCode: string | undefined = payload.attributes?.code;
     const cdekStatusName =
-      this.cdekStatusNames[cdekStatusCode] ||
+      (cdekStatusCode && this.cdekStatusNames[cdekStatusCode]) ||
       payload.attributes?.name ||
       cdekStatusCode;
+    const statusDate = payload.attributes?.date_time
+      ? new Date(payload.attributes.date_time)
+      : new Date();
 
     if (!uuid && !cdekNumber) {
       this.logger.warn('CDEK webhook missing uuid and cdek_number');
       return {};
     }
 
+    const order = await this.prisma.order.findFirst({
+      where: {
+        OR: [
+          ...(uuid ? [{ cdekUuid: uuid }] : []),
+          ...(cdekNumber ? [{ cdekNumber: cdekNumber }] : []),
+        ],
+      },
+    });
+
+    if (!order) {
+      this.logger.warn(
+        `CDEK webhook: заказ не найден (uuid=${uuid}, cdekNumber=${cdekNumber})`,
+      );
+      return {
+        cdekStatus: cdekStatusCode,
+        cdekStatusName,
+        newStatus: cdekStatusCode ? this.cdekStatusMap[cdekStatusCode] : undefined,
+      };
+    }
+
+    const mappedStatus = cdekStatusCode ? this.cdekStatusMap[cdekStatusCode] : undefined;
+    const shouldUpdateOrderStatus =
+      mappedStatus &&
+      order.status !== OrderStatus.CANCELLED &&
+      order.status !== OrderStatus.REFUNDED &&
+      this.isStatusTransitionAllowed(order.status, mappedStatus as OrderStatus);
+
+    const updated = await this.prisma.order.update({
+      where: { id: order.id },
+      data: {
+        ...(cdekNumber && !order.cdekNumber ? { cdekNumber } : {}),
+        ...(uuid && !order.cdekUuid ? { cdekUuid: uuid } : {}),
+        cdekStatus: cdekStatusCode,
+        cdekStatusName,
+        cdekStatusDate: statusDate,
+        ...(shouldUpdateOrderStatus
+          ? { status: mappedStatus as OrderStatus }
+          : {}),
+      },
+    });
+
     this.logger.log(
-      `CDEK status update: uuid=${uuid}, cdekNumber=${cdekNumber}, status=${cdekStatusCode} (${cdekStatusName})`,
+      `CDEK webhook: обновлён заказ ${updated.orderNumber}, cdekStatus=${cdekStatusCode}` +
+        (shouldUpdateOrderStatus ? `, status=${mappedStatus}` : ''),
     );
 
-    // Здесь нужна интеграция с вашей базой данных
-    // Пример для будущей реализации:
-    // const order = await this.prisma.order.findFirst({
-    //   where: {
-    //     OR: [{ cdekUuid: uuid }, { cdekNumber: cdekNumber }],
-    //   },
-    // });
-
-    // Возвращаем информацию для логирования
     return {
-      orderId: undefined, // Заполнится когда будет интеграция с БД
-      newStatus: this.cdekStatusMap[cdekStatusCode],
+      orderNumber: updated.orderNumber,
+      orderId: updated.id,
+      newStatus: mappedStatus,
       cdekStatus: cdekStatusCode,
+      cdekStatusName,
     };
+  }
+
+  /**
+   * Запросить актуальный статус заказа напрямую в CDEK API и записать в БД.
+   * Полезно если webhook потерялся.
+   */
+  async refreshCdekStatusForOrder(orderNumber: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+    });
+    if (!order) {
+      throw new NotFoundException(`Заказ ${orderNumber} не найден`);
+    }
+    if (!order.cdekUuid && !order.cdekNumber) {
+      throw new NotFoundException(
+        `У заказа ${orderNumber} нет CDEK-идентификаторов`,
+      );
+    }
+
+    // Предпочитаем uuid — работает стабильнее на всех средах
+    const identifier = order.cdekUuid ?? order.cdekNumber!;
+    const cdekOrder = await this.cdekRequest<any>(
+      'GET',
+      `/orders/${identifier}`,
+    );
+
+    // CDEK может вернуть статусы в `entity.statuses` (массив) — берём последний
+    const statuses = cdekOrder?.entity?.statuses || [];
+    const latest = statuses[statuses.length - 1];
+    const cdekStatusCode: string | undefined = latest?.code;
+    const cdekStatusName =
+      (cdekStatusCode && this.cdekStatusNames[cdekStatusCode]) ||
+      latest?.name ||
+      cdekStatusCode;
+    const statusDate = latest?.date_time
+      ? new Date(latest.date_time)
+      : new Date();
+
+    const mappedStatus = cdekStatusCode ? this.cdekStatusMap[cdekStatusCode] : undefined;
+    const shouldUpdateOrderStatus =
+      mappedStatus &&
+      order.status !== OrderStatus.CANCELLED &&
+      order.status !== OrderStatus.REFUNDED &&
+      this.isStatusTransitionAllowed(order.status, mappedStatus as OrderStatus);
+
+    const cdekNumber = cdekOrder?.entity?.cdek_number;
+
+    const updated = await this.prisma.order.update({
+      where: { orderNumber },
+      data: {
+        ...(cdekNumber && !order.cdekNumber ? { cdekNumber } : {}),
+        ...(cdekStatusCode ? { cdekStatus: cdekStatusCode } : {}),
+        ...(cdekStatusName ? { cdekStatusName } : {}),
+        ...(cdekStatusCode ? { cdekStatusDate: statusDate } : {}),
+        ...(shouldUpdateOrderStatus
+          ? { status: mappedStatus as OrderStatus }
+          : {}),
+      },
+    });
+
+    this.logger.log(
+      `CDEK pull-refresh: ${orderNumber} → ${cdekStatusCode} (${cdekStatusName})`,
+    );
+
+    return {
+      orderNumber: updated.orderNumber,
+      cdekStatus: updated.cdekStatus,
+      cdekStatusName: updated.cdekStatusName,
+      cdekStatusDate: updated.cdekStatusDate,
+      status: updated.status,
+      trackingUrl: updated.cdekNumber
+        ? this.getCdekTrackingUrl(updated.cdekNumber)
+        : null,
+    };
+  }
+
+  /**
+   * Не даём CDEK-статусу «откатить» заказ назад.
+   * Например: статус заказа уже DELIVERED — CDEK не должен вернуть SHIPPED.
+   */
+  private isStatusTransitionAllowed(
+    current: OrderStatus,
+    next: OrderStatus,
+  ): boolean {
+    const weight: Record<OrderStatus, number> = {
+      PENDING: 0,
+      PAYMENT_FAILED: 0,
+      CONFIRMED: 1,
+      PROCESSING: 2,
+      SHIPPED: 3,
+      DELIVERED: 4,
+      CANCELLED: 99,
+      REFUNDED: 99,
+    };
+    // Меняем только если это ДВИЖЕНИЕ ВПЕРЁД по пайплайну доставки
+    return weight[next] > weight[current];
   }
 }
