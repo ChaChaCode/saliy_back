@@ -11,12 +11,14 @@
 ## Содержание
 
 - [Типы данных](#типы-данных)
+- [Баннеры категории](#баннеры-категории) — как загружать/заменять/удалять фото
 - [Эндпоинты](#эндпоинты)
   - [GET /api/admin/categories](#get-apiadmincategories) - Получить список категорий
   - [GET /api/admin/categories/:id](#get-apiadmincategoriesid) - Получить категорию по ID
-  - [POST /api/admin/categories](#post-apiadmincategories) - Создать категорию
-  - [PATCH /api/admin/categories/:id](#patch-apiadmincategoriesid) - Обновить категорию
-  - [DELETE /api/admin/categories/:id](#delete-apiadmincategoriesid) - Удалить категорию
+  - [POST /api/admin/categories](#post-apiadmincategories) - Создать категорию (+ загрузка баннеров)
+  - [PATCH /api/admin/categories/:id](#patch-apiadmincategoriesid) - Обновить категорию (+ замена баннеров)
+  - [DELETE /api/admin/categories/:id](#delete-apiadmincategoriesid) - Удалить категорию (баннеры из S3 тоже)
+  - [DELETE /api/admin/categories/:id/banner/:type](#delete-apiadmincategoriesidbannertype) - Удалить один баннер (desktop/mobile)
 - [Примеры](#примеры)
 
 ---
@@ -51,6 +53,32 @@
 
 ---
 
+## Баннеры категории
+
+У каждой категории есть **два** баннера: `desktopBanner` и `mobileBanner`. Оба опциональны, оба хранятся в S3 (Yandex Object Storage).
+
+### Где они устанавливаются/меняются
+
+- **Создание:** `POST /api/admin/categories` — передать файлы `desktopBanner` / `mobileBanner` в `multipart/form-data`.
+- **Замена:** `PATCH /api/admin/categories/:id` — передать новые файлы с теми же именами полей. Старые удалятся из S3 автоматически.
+- **Удаление по одному:** `DELETE /api/admin/categories/:id/banner/:type` (где `type` = `desktop` или `mobile`) — файл удаляется из S3, соответствующее поле в БД становится `null`.
+- **Удаление вместе с категорией:** `DELETE /api/admin/categories/:id` — оба баннера чистятся из S3.
+
+### Формат URL баннеров
+
+- В БД хранится S3-ключ, например: `categories/desktop-cat5-1714000000000.jpg`
+- В ответе API (после `S3UrlInterceptor`) клиент видит полный URL: `https://storage.yandexcloud.net/saliy-shop/categories/desktop-cat5-1714000000000.jpg`
+
+### Ограничения на файл
+
+| Параметр | Значение |
+|---|---|
+| Форматы | `jpg`, `jpeg`, `png`, `webp` |
+| Макс. размер | 5 MB на файл |
+| Макс. количество | 1 `desktopBanner` + 1 `mobileBanner` за запрос |
+
+---
+
 ## Эндпоинты
 
 ### GET /api/admin/categories
@@ -74,8 +102,8 @@ Authorization: Bearer <admin_token>
     "slug": "jackets",
     "type": "TOP",
     "description": "Верхняя одежда для холодной погоды",
-    "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
-    "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
+    "desktopBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/desktop-cat1-1234567890.jpg",
+    "mobileBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/mobile-cat1-1234567890.jpg",
     "isActive": true,
     "productsCount": 15,
     "createdAt": "2026-03-30T10:00:00.000Z",
@@ -125,8 +153,8 @@ Authorization: Bearer <admin_token>
   "slug": "jackets",
   "type": "TOP",
   "description": "Верхняя одежда для холодной погоды",
-  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
-  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
+  "desktopBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/desktop-cat1-1234567890.jpg",
+  "mobileBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/mobile-cat1-1234567890.jpg",
   "isActive": true,
   "createdAt": "2026-03-30T10:00:00.000Z",
   "updatedAt": "2026-03-30T12:00:00.000Z",
@@ -158,8 +186,8 @@ Authorization: Bearer <admin_token>
 | `type` | `CategoryType` | `OTHER` | Тип категории |
 | `description` | `string` | - | Описание |
 | `isActive` | `boolean` | `true` | Активность |
-| `desktopBanner` | `File` | - | Баннер для десктопа (JPG, PNG, WEBP, макс. 10MB) |
-| `mobileBanner` | `File` | - | Баннер для мобильных (JPG, PNG, WEBP, макс. 10MB) |
+| `desktopBanner` | `File` | - | Баннер для десктопа (JPG, PNG, WEBP, макс. 5MB) |
+| `mobileBanner` | `File` | - | Баннер для мобильных (JPG, PNG, WEBP, макс. 5MB) |
 
 **Пример запроса (FormData):**
 
@@ -191,8 +219,8 @@ fetch('/api/admin/categories', {
   "slug": "jackets",
   "type": "TOP",
   "description": "Верхняя одежда для холодной погоды",
-  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1711800000000.jpg",
-  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1711800000000.jpg",
+  "desktopBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/desktop-cat1-1711800000000.jpg",
+  "mobileBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/mobile-cat1-1711800000000.jpg",
   "isActive": true,
   "createdAt": "2026-03-30T10:00:00.000Z",
   "updatedAt": "2026-03-30T10:00:00.000Z"
@@ -251,8 +279,8 @@ fetch('/api/admin/categories/1', {
   "slug": "jackets",
   "type": "TOP",
   "description": "Обновленное описание",
-  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1711805000000.jpg",
-  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1711800000000.jpg",
+  "desktopBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/desktop-cat1-1711805000000.jpg",
+  "mobileBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/mobile-cat1-1711800000000.jpg",
   "isActive": true,
   "createdAt": "2026-03-30T10:00:00.000Z",
   "updatedAt": "2026-03-30T14:30:00.000Z"
@@ -295,6 +323,47 @@ Authorization: Bearer <admin_token>
   "error": "Bad Request"
 }
 ```
+
+---
+
+### DELETE /api/admin/categories/:id/banner/:type
+
+Удалить один баннер категории (desktop или mobile), не трогая саму категорию и второй баннер. Файл удаляется из S3, соответствующее поле в БД выставляется в `null`.
+
+**Параметры пути:**
+
+| Параметр | Тип | Описание |
+|----------|-----|----------|
+| `id` | `number` | ID категории |
+| `type` | `"desktop" \| "mobile"` | Какой баннер удалить |
+
+**Пример запроса:**
+
+```http
+DELETE /api/admin/categories/5/banner/desktop
+Authorization: Bearer <admin_token>
+```
+
+**Пример ответа:**
+
+```json
+{
+  "message": "desktopBanner удалён",
+  "category": {
+    "id": 5,
+    "name": "Джинсовки",
+    "desktopBannerUrl": null,
+    "mobileBannerUrl": "https://storage.yandexcloud.net/saliy-shop/categories/mobile-cat5-1714000000.jpg",
+    "...": "..."
+  }
+}
+```
+
+**Если баннера уже нет:** возвращает `200 OK` с сообщением `"desktopBanner уже отсутствует"` (идемпотентно).
+
+**Ошибки:**
+- `400 "type must be \"desktop\" or \"mobile\""`
+- `404` — категория не найдена
 
 ---
 
@@ -377,7 +446,7 @@ Content-Type: application/json
 | 401 | Unauthorized - отсутствует токен |
 | 403 | Forbidden - недостаточно прав |
 | 404 | Not Found - категория не найдена |
-| 413 | Payload Too Large - файл слишком большой (лимит 10MB) |
+| 413 | Payload Too Large - файл слишком большой (лимит 5MB) |
 | 500 | Internal Server Error - ошибка сервера |
 
 ---
@@ -389,14 +458,14 @@ Content-Type: application/json
    - При попытке создать/обновить категорию с существующим slug вернется ошибка 400
 
 2. **Загрузка баннеров:**
-   - Максимальный размер файла: 10MB
+   - Максимальный размер файла: 5MB
    - Поддерживаемые форматы: JPG, JPEG, PNG, WEBP
-   - Файлы сохраняются в `/uploads/categories/`
-   - При обновлении старые файлы автоматически удаляются
+   - Файлы загружаются в Yandex Object Storage (бакет `saliy-shop`, префикс `categories/`)
+   - При обновлении старый файл в S3 удаляется автоматически
 
 3. **Удаление категории:**
    - Нельзя удалить категорию, у которой есть связанные товары
-   - При удалении автоматически удаляются файлы баннеров
+   - При удалении баннеры тоже удаляются из S3
 
 4. **Автоматические значения:**
    - `type` по умолчанию: `OTHER`

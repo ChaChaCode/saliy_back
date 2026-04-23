@@ -158,6 +158,38 @@ export class AdminCategoriesService {
     });
   }
 
+  /**
+   * Удалить один баннер (desktop или mobile), оставив остальное нетронутым.
+   */
+  async deleteCategoryBanner(id: number, type: 'desktop' | 'mobile') {
+    const category = await this.prisma.category.findUnique({ where: { id } });
+    if (!category) {
+      throw new NotFoundException(`Category with ID ${id} not found`);
+    }
+
+    const field = type === 'desktop' ? 'desktopBannerUrl' : 'mobileBannerUrl';
+    const currentUrl = category[field];
+
+    if (!currentUrl) {
+      return {
+        message: `${type}Banner уже отсутствует`,
+        category,
+      };
+    }
+
+    await this.s3.delete(currentUrl);
+
+    const updated = await this.prisma.category.update({
+      where: { id },
+      data: { [field]: null },
+    });
+
+    return {
+      message: `${type}Banner удалён`,
+      category: updated,
+    };
+  }
+
   async deleteCategory(id: number) {
     const category = await this.prisma.category.findUnique({
       where: { id },

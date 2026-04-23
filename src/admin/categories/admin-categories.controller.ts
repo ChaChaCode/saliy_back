@@ -160,4 +160,24 @@ export class AdminCategoriesController {
 
     return this.adminCategoriesService.deleteCategory(categoryId);
   }
+
+  /**
+   * Удалить один баннер категории (без удаления самой категории)
+   * DELETE /admin/categories/:id/banner/:type
+   * :type — desktop | mobile
+   */
+  @Delete(':id/banner/:type')
+  async deleteCategoryBanner(
+    @Param('id') id: string,
+    @Param('type') type: string,
+  ) {
+    const categoryId = parseInt(id, 10);
+    if (isNaN(categoryId)) {
+      throw new BadRequestException('Invalid category ID');
+    }
+    if (type !== 'desktop' && type !== 'mobile') {
+      throw new BadRequestException('type must be "desktop" or "mobile"');
+    }
+    return this.adminCategoriesService.deleteCategoryBanner(categoryId, type);
+  }
 }
