@@ -71,9 +71,9 @@ export class S3StorageService implements OnModuleInit {
   }
 
   /**
-   * Срезать публичный префикс/ведущие слэши, вернуть «голое» значение для сравнения/матчинга.
-   * В отличие от normalizeKey — НЕ отсекает унаследованный "uploads/" (нужно для поиска
-   * таких записей в product.images при ручном удалении).
+   * Привести любое строковое представление (полный URL, S3-ключ, /uploads/-легаси)
+   * к единому "голому" ключу вида "products/foo.jpg" — для сравнения/матчинга.
+   * Должно совпадать с тем, что выдаёт S3UrlInterceptor клиенту.
    */
   extractKey(input: string | null | undefined): string {
     if (!input) return '';
@@ -90,7 +90,7 @@ export class S3StorageService implements OnModuleInit {
         }
       }
     }
-    return value.replace(/^\/+/, '');
+    return value.replace(/^\/+/, '').replace(/^uploads\//, '');
   }
 
   /**
