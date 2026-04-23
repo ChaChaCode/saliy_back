@@ -36,11 +36,15 @@ export class AlfaPayService {
   private readonly baseUrl: string;
   private readonly userName: string;
   private readonly password: string;
+  private readonly currency: string;
 
   constructor() {
     this.baseUrl = (process.env.ALFA_BASE_URL || 'https://alfa.rbsuat.com').replace(/\/+$/, '');
     this.userName = process.env.ALFA_API_USERNAME || '';
     this.password = process.env.ALFA_API_PASSWORD || '';
+    // В процессинге Альфы RUB = 810 (легаси), не 643.
+    // Другие валюты: 933=BYN, 840=USD, 398=KZT.
+    this.currency = process.env.ALFA_CURRENCY || '810';
 
     if (!this.userName || !this.password) {
       this.logger.warn('ALFA_API_USERNAME/ALFA_API_PASSWORD не заданы — платежи Alfa работать не будут');
@@ -56,11 +60,11 @@ export class AlfaPayService {
       password: this.password,
       orderNumber: params.orderNumber,
       amount: Math.round(params.amount * 100).toString(), // в копейках
-      currency: '643', // RUB (ISO 4217)
+      currency: this.currency,
       returnUrl: params.returnUrl,
       ...(params.failUrl && { failUrl: params.failUrl }),
       ...(params.description && { description: params.description.slice(0, 598) }),
-      ...(params.email && { jsonParams: JSON.stringify({ email: params.email }) }),
+      ...(params.email && { email: params.email }),
     });
 
     const url = `${this.baseUrl}/payment/rest/register.do`;

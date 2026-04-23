@@ -7,7 +7,9 @@ import {
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
-const S3_BASE_URL = 'https://storage.yandexcloud.net/saliy-shop';
+const S3_BASE_URL = (
+  `${process.env.YANDEX_ENDPOINT || 'https://storage.yandexcloud.net'}/${process.env.YANDEX_BUCKET || 'saliy-shop'}`
+).replace(/\/+$/, '');
 
 /**
  * Преобразует относительные пути в полные S3 URL
@@ -75,7 +77,11 @@ export class S3UrlInterceptor implements NestInterceptor {
       return url;
     }
 
-    // Добавляем базовый URL
-    return `${S3_BASE_URL}/${url}`;
+    // Срезаем ведущие слэши и устаревший префикс "/uploads/"
+    const key = url
+      .replace(/^\/+/, '')
+      .replace(/^uploads\//, '');
+
+    return `${S3_BASE_URL}/${key}`;
   }
 }
