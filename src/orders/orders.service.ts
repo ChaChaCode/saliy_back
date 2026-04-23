@@ -5,13 +5,14 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './orders.dto';
 import { EmailService } from '../common/email/email.service';
 import { PromoService } from '../promo/promo.service';
 import { CartService } from '../cart/cart.service';
 import { AdminSettingsService } from '../admin/settings/admin-settings.service';
+import { AlfaPayService } from '../payment/alfa-pay.service';
 
 @Injectable()
 export class OrdersService {
@@ -24,6 +25,8 @@ export class OrdersService {
     @Inject(forwardRef(() => PromoService))
     private readonly promoService: PromoService,
     private readonly settingsService: AdminSettingsService,
+    @Inject(forwardRef(() => AlfaPayService))
+    private readonly alfaPayService: AlfaPayService,
   ) {}
 
   /**
@@ -69,6 +72,10 @@ export class OrdersService {
     // 🔒 ШАГ 5: ИТОГОВАЯ СУММА
     const total = subtotal - discountAmount + deliveryPrice;
 
+    // Для онлайн-оплаты Alfa заказ создаётся в PENDING и ждёт оплаты.
+    // Остальные методы (CARD_MANUAL, CRYPTO, PAYPAL) — помечаем оплаченным сразу.
+    const isAlfaOnline = dto.paymentMethod === PaymentMethod.CARD_ONLINE;
+
     // 🔒 ШАГ 6: СОЗДАНИЕ ЗАКАЗА В ТРАНЗАКЦИИ
     const order = await this.prisma.$transaction(async (tx) => {
       // Генерируем номер заказа
@@ -84,8 +91,8 @@ export class OrdersService {
           discountAmount,
           deliveryTotal: deliveryPrice,
           total,
-          status: OrderStatus.CONFIRMED, // Сразу оплачен и подтвержден
-          isPaid: true,   // Оплачен
+          status: isAlfaOnline ? OrderStatus.PENDING : OrderStatus.CONFIRMED,
+          isPaid: !isAlfaOnline,
           currency: 'RUB',
           // Создаем элементы заказа (со снэпшотом цен)
           items: {
@@ -121,6 +128,38 @@ export class OrdersService {
     if (promoCodeId) {
       await this.promoService.usePromoCode(promoCodeId, userId, order.id);
       this.logger.log(`Промокод записан в историю использования для заказа ${order.orderNumber}`);
+    }
+
+    // 🔒 ШАГ 8.5: РЕГИСТРАЦИЯ ПЛАТЕЖА В ALFA (если оплата картой онлайн)
+    let paymentUrl: string | null = null;
+    if (isAlfaOnline) {
+      const frontendBase = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+      try {
+        const alfa = await this.alfaPayService.registerOrder({
+          orderNumber: order.orderNumber,
+          amount: total,
+          description: `Заказ ${order.orderNumber}`,
+          email: orderInfo.email,
+          returnUrl: `${frontendBase}/orders/${order.orderNumber}?payment=success`,
+          failUrl: `${frontendBase}/orders/${order.orderNumber}?payment=fail`,
+        });
+        paymentUrl = alfa.formUrl;
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { paymentId: alfa.orderId },
+        });
+      } catch (error: any) {
+        this.logger.error(
+          `Регистрация платежа Alfa не удалась для ${order.orderNumber}: ${error.message}`,
+        );
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { status: OrderStatus.PAYMENT_FAILED },
+        });
+        throw new BadRequestException(
+          'Не удалось инициализировать платёж. Попробуйте позже.',
+        );
+      }
     }
 
     // 🔒 ШАГ 9: ОТПРАВКА EMAIL УВЕДОМЛЕНИЯ
@@ -178,6 +217,7 @@ export class OrdersService {
       })),
       originalSubtotal,
       promoCode: promoCode ? { code: promoCode } : null,
+      paymentUrl,
     };
   }
 
@@ -574,23 +614,29 @@ export class OrdersService {
   }
 
   /**
-   * Обновить статус оплаты заказа
+   * Обновить статус оплаты заказа.
+   * На вход — внутренний статус платежа (из AlfaPayService.getOrderStatus):
+   * PENDING | PAID | FAILED | CANCELED | REFUNDED.
    */
-  async updatePaymentStatus(orderNumber: string, paymentStatus: string) {
-    const statusMap: Record<string, string> = {
-      PENDING: 'PENDING',
-      CAPTURED: 'PAID',
-      FAILED: 'FAILED',
-      CANCELED: 'CANCELED',
+  async updatePaymentStatus(
+    orderNumber: string,
+    paymentStatus: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELED' | 'REFUNDED',
+  ) {
+    const statusMap: Record<string, OrderStatus> = {
+      PENDING: OrderStatus.PENDING,
+      PAID: OrderStatus.CONFIRMED,
+      FAILED: OrderStatus.PAYMENT_FAILED,
+      CANCELED: OrderStatus.CANCELLED,
+      REFUNDED: OrderStatus.REFUNDED,
     };
 
-    const orderStatus = statusMap[paymentStatus] || 'PENDING';
-    const isPaid = paymentStatus === 'CAPTURED';
+    const orderStatus = statusMap[paymentStatus] ?? OrderStatus.PENDING;
+    const isPaid = paymentStatus === 'PAID';
 
     const order = await this.prisma.order.update({
       where: { orderNumber },
       data: {
-        status: orderStatus as any,
+        status: orderStatus,
         isPaid,
       },
     });

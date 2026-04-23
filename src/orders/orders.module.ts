@@ -5,9 +5,16 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { EmailModule } from '../common/email/email.module';
 import { PromoModule } from '../promo/promo.module';
 import { CartModule } from '../cart/cart.module';
+import { PaymentModule } from '../payment/payment.module';
 
 @Module({
-  imports: [PrismaModule, EmailModule, CartModule, forwardRef(() => PromoModule)],
+  imports: [
+    PrismaModule,
+    EmailModule,
+    CartModule,
+    forwardRef(() => PromoModule),
+    forwardRef(() => PaymentModule),
+  ],
   controllers: [OrdersController],
   providers: [OrdersService],
   exports: [OrdersService],

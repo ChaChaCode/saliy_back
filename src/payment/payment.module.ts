@@ -1,13 +1,12 @@
-import { Module } from '@nestjs/common';
-import { YandexPayService } from './yandex-pay.service';
+import { Module, forwardRef } from '@nestjs/common';
+import { AlfaPayService } from './alfa-pay.service';
 import { PaymentController } from './payment.controller';
 import { OrdersModule } from '../orders/orders.module';
-import { EmailModule } from '../common/email/email.module';
 
 @Module({
-  imports: [OrdersModule, EmailModule],
+  imports: [forwardRef(() => OrdersModule)],
   controllers: [PaymentController],
-  providers: [YandexPayService],
-  exports: [YandexPayService],
+  providers: [AlfaPayService],
+  exports: [AlfaPayService],
 })
 export class PaymentModule {}

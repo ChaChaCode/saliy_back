@@ -12,7 +12,7 @@
 ### Правила:
 - **Россия и Беларусь (RU, BY):** только `CDEK_PICKUP` (самовывоз из ПВЗ)
 - **Другие страны:** только `STANDARD` (почтовая доставка)
-- **Все страны:** только `CARD_ONLINE` (Яндекс Пей, фейковая оплата - сразу проходит)
+- **Все страны:** `CARD_ONLINE` — онлайн-оплата картой через **Альфа-Банк** (см. [payment.md](./payment.md))
 
 ### Примеры запросов:
 
@@ -118,8 +118,12 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
 
 **POST** `/api/orders`
 
-Создает заказ и сразу подтверждает оплату.
-Отправляется email с подтверждением заказа.
+Создаёт заказ. Логика оплаты зависит от `paymentMethod`:
+
+- **`CARD_ONLINE`** — заказ создаётся в статусе `PENDING` (`isPaid = false`), платёж регистрируется в **Альфа-Банке**, в ответе возвращается `paymentUrl` → фронт делает `window.location.href = paymentUrl`. После успешной оплаты статус станет `CONFIRMED`/`isPaid = true` (обновится через callback или `POST /api/payment/alfa/check-status`, см. [payment.md](./payment.md)).
+- **`CARD_MANUAL` / `CRYPTO` / `PAYPAL`** — заказ создаётся сразу в `CONFIRMED` (`isPaid = true`), оплата обрабатывается вручную менеджером.
+
+Email с подтверждением заказа отправляется в обоих случаях.
 
 **Формат номера заказа:** `SALIYYYMMDDXXXXX`
 - SALIY - префикс бренда
@@ -133,8 +137,7 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
 ### Важно:
 - ✅ Цены берутся из БД, не от клиента!
 - ✅ Проверяется наличие товара на складе
-- ✅ Заказы сразу оплачены (isPaid = true, status = CONFIRMED)
-- ✅ Уменьшаются остатки на складе
+- ✅ Уменьшаются остатки на складе (даже для `CARD_ONLINE` — до фактической оплаты, чтобы товар не увели)
 - ✅ Работает для гостей и авторизованных пользователей
 
 ### Request:
@@ -169,15 +172,22 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
 ⚠️ **Важно:** Используйте endpoint `/api/orders/delivery-options?country=RU` для получения доступных типов доставки в зависимости от страны.
 
 ### PaymentMethod (метод оплаты):
-- `CARD_ONLINE` - Яндекс Пей (фейковая оплата, автоматически успешная)
+На выбор пользователя — одно из значений:
 
-⚠️ **Важно:** Только Яндекс Пей доступен для всех стран. Оплата проходит автоматически.
+| Значение       | Описание                                                              | Что делает backend                     |
+|----------------|-----------------------------------------------------------------------|----------------------------------------|
+| `CARD_ONLINE`  | Онлайн-оплата картой через **Альфа-Банк** (тестовая среда — `alfa.rbsuat.com`, прод — `pay.alfabank.ru`) | Создаёт заказ `PENDING` → регистрирует платёж в Альфе → возвращает `paymentUrl` для редиректа |
+| `CARD_MANUAL`  | Оплата картой через менеджера                                         | `CONFIRMED` сразу, `isPaid=true`       |
+| `CRYPTO`       | Криптовалюта                                                          | `CONFIRMED` сразу, `isPaid=true`       |
+| `PAYPAL`       | PayPal                                                                | `CONFIRMED` сразу, `isPaid=true`       |
 
-### Response:
+📄 Подробнее про Альфа-Банк: [payment.md](./payment.md).
+
+### Response (для `CARD_ONLINE` — оплата через Альфа):
 ```json
 {
   "id": "uuid",
-  "orderNumber": "SALIY2603290001",
+  "orderNumber": "SALIY2604240001",
   "firstName": "Иван",
   "lastName": "Петров",
   "email": "test@example.com",
@@ -186,14 +196,16 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
   "comment": "Пожалуйста, упакуйте в подарочную упаковку",
   "deliveryType": "STANDARD",
   "paymentMethod": "CARD_ONLINE",
+  "paymentId": "1a2b3c4d-5e6f-7a8b-9c0d-ef1234567890",
   "originalSubtotal": 9500,
   "subtotal": 8550,
   "deliveryTotal": 800,
   "discountAmount": 855,
   "total": 8495,
-  "status": "CONFIRMED",
-  "isPaid": true,
+  "status": "PENDING",
+  "isPaid": false,
   "currency": "RUB",
+  "paymentUrl": "https://alfa.rbsuat.com/payment/merchants/.../payment_ru.html?mdOrder=1a2b3c4d-...",
   "promoCode": { "code": "SALE10" },
   "items": [
     {
@@ -215,6 +227,11 @@ curl "https://saliy-shop.ru/api/orders/delivery-options?country=PL"
   ]
 }
 ```
+
+👉 Для `CARD_ONLINE` клиент должен немедленно сделать `window.location.href = paymentUrl`, чтобы попасть на платёжную форму Альфы.
+
+### Response (для `CARD_MANUAL` / `CRYPTO` / `PAYPAL`):
+Тот же формат, но `"status": "CONFIRMED"`, `"isPaid": true`, `"paymentUrl": null`, `"paymentId": null`.
 
 > **Примечание:** `promoCode` при создании возвращает только `{ code }`. Для полных данных промокода (type, value) используйте `GET /api/orders/:orderNumber`.
 
@@ -389,7 +406,8 @@ curl https://saliy-shop.ru/api/orders \
    - ФИО, email, телефон
    - Контакт в соц. сети (опционально): Telegram/Instagram
    - Адрес доставки
-   - Тип доставки и оплаты
+   - Тип доставки
+   - **Метод оплаты** (на выбор): `CARD_ONLINE` через Альфа / `CARD_MANUAL` / `CRYPTO` / `PAYPAL`
 
 2. **Вызывается POST /api/orders/calculate**
    - Показывается итоговая сумма
@@ -399,9 +417,23 @@ curl https://saliy-shop.ru/api/orders \
 3. **Пользователь нажимает "Оплатить"**
 
 4. **Вызывается POST /api/orders**
-   - Создается заказ
+   - Создаётся заказ
    - Уменьшаются остатки
-   - Отправляется email уведомление
+   - Отправляется email с подтверждением заказа
+   - Для `CARD_ONLINE` → платёж регистрируется в Альфа-Банке, возвращается `paymentUrl`
+
+5. **Редирект на оплату (только `CARD_ONLINE`):**
+   - Фронт: `window.location.href = response.paymentUrl`
+   - Пользователь вводит карту на форме Альфы, проходит 3DS
+   - Альфа редиректит обратно на `{FRONTEND_URL}/orders/{orderNumber}?payment=success|fail`
+   - Альфа параллельно дёргает `GET /api/payment/alfa/callback` → backend обновляет статус заказа
+
+6. **Страница `/orders/:orderNumber` на фронте:**
+   - Читает `?payment=success|fail`
+   - На всякий случай вызывает `POST /api/payment/alfa/check-status` (если callback не дошёл)
+   - Показывает актуальный статус заказа
+
+📄 Детали интеграции Альфы: [payment.md](./payment.md).
 
 ---
 

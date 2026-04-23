@@ -1,54 +1,90 @@
-# 🛒 Оформление заказов с email уведомлениями
+# 🛒 Оформление заказов + оплата через Альфа-Банк
 
-## ✅ Что реализовано
+## Что реализовано
 
-### 1. Email уведомления
-- ✅ Подтверждение заказа (сразу после создания)
-- ✅ Подтверждение оплаты (автоматически)
-- ✅ Красивый HTML дизайн с таблицей товаров
+### 1. Выбор метода оплаты
+
+Пользователь выбирает из четырёх методов (`PaymentMethod`):
+
+| Метод         | Что происходит                                                                                 |
+|---------------|------------------------------------------------------------------------------------------------|
+| `CARD_ONLINE` | Онлайн-оплата картой через **Альфа-Банк** (тест: `alfa.rbsuat.com`, прод: `pay.alfabank.ru`). Заказ создаётся в `PENDING`, в ответе `paymentUrl`, клиент редиректится на форму банка. |
+| `CARD_MANUAL` | Оплата картой через менеджера. Заказ сразу `CONFIRMED` / `isPaid=true`.                        |
+| `CRYPTO`      | Криптовалюта. Заказ сразу `CONFIRMED` / `isPaid=true`.                                         |
+| `PAYPAL`      | PayPal. Заказ сразу `CONFIRMED` / `isPaid=true`.                                               |
+
+### 2. Интеграция с Альфа-Банком (Alfa RBS)
+
+- Подключён тестовый шлюз `https://alfa.rbsuat.com`.
+- Реализовано:
+  - Регистрация платежа: `POST /payment/rest/register.do` → получение `mdOrder` + `formUrl`.
+  - Проверка статуса: `POST /payment/rest/getOrderStatusExtended.do`.
+  - Callback от банка: `GET /api/payment/alfa/callback`.
+  - Ручная синхронизация статуса: `POST /api/payment/alfa/check-status`.
+
+### 3. Email уведомления
+
+- ✅ Подтверждение заказа (сразу после создания, для всех методов оплаты)
 - ✅ Отправка через Gmail SMTP
+- ✅ Красивый HTML-шаблон с таблицей товаров
 
-### 2. Упрощенная оплата
-- ✅ Все заказы сразу оплачены (isPaid = true, status = PAID)
-- ✅ Не требуется интеграция с платежными системами
-- ⏳ Yandex Pay отложен на будущее
+### 4. Orders API
 
-### 3. Orders API
 - ✅ Валидация товаров и остатков на складе
-- ✅ Отправка 2 email уведомлений
-- ✅ Транзакция БД для атомарности
-- ✅ Race condition защита
 - ✅ Цены всегда из БД (не от клиента!)
+- ✅ Транзакция БД для атомарности
+- ✅ Race-condition защита
+- ✅ Автоматическое уменьшение остатков
 
 ---
 
-## 🔧 Настройка
+## Настройка
 
 ### Email (уже настроено)
+
 ```env
 EMAIL_USER=mezovt123@gmail.com
 EMAIL_PASS=lxxpzcdmftsswkqj
 EMAIL_HOST=smtp.gmail.com
 EMAIL_FROM=mezovt123@gmail.com
 ```
-✅ **Работает!** Письма отправляются через Gmail SMTP.
 
-### Оплата (упрощено)
-Все заказы создаются сразу оплаченными:
-- `isPaid = true`
-- `status = PAID`
-- Отправляются оба email сразу
+### Альфа-Банк
 
-⏳ **Yandex Pay** - отложен на будущее
+`.env`:
+
+```env
+# Тестовая платёжка (UAT)
+ALFA_BASE_URL=https://alfa.rbsuat.com
+ALFA_API_USERNAME=r-saliyclothes_vercel-api
+ALFA_API_PASSWORD=saliyclothes_vercel*?1
+
+# Для возвратного URL после оплаты
+FRONTEND_URL=https://saliyclothes.vercel.app/
+```
+
+### Переход на прод
+
+```env
+ALFA_BASE_URL=https://pay.alfabank.ru
+ALFA_API_USERNAME=<боевой логин>
+ALFA_API_PASSWORD=<боевой пароль>
+```
+
+И **обязательно** прописать в личном кабинете Альфы адрес callback'а:
+
+```
+https://saliy-shop.ru/api/payment/alfa/callback
+```
 
 ---
 
-## 🧪 Тестирование
+## Тестирование
 
-### Проверить создание заказа и email
+### 1. Создать заказ с онлайн-оплатой
 
 ```bash
-curl -X POST "https://saliy-shop.ru/api/orders" \
+curl -X POST http://localhost:3000/api/orders \
   -H "Content-Type: application/json" \
   -d '{
     "items": [{"productId": 20, "size": "M", "quantity": 1}],
@@ -56,133 +92,143 @@ curl -X POST "https://saliy-shop.ru/api/orders" \
     "lastName": "Тестов",
     "email": "mezovt123@gmail.com",
     "phone": "+375291234567",
-    "deliveryType": "POST",
-    "paymentMethod": "CARD"
+    "deliveryType": "CDEK_PICKUP",
+    "paymentMethod": "CARD_ONLINE"
   }'
 ```
 
-**Ожидаемый результат:**
-1. ✅ Заказ создан (status = PAID, isPaid = true)
-2. ✅ Остатки уменьшены
-3. ✅ 2 email получены:
-   - Подтверждение заказа с составом
-   - Подтверждение оплаты
+**Ожидаемый ответ** (сокращённо):
+```json
+{
+  "orderNumber": "SALIY2604240001",
+  "status": "PENDING",
+  "isPaid": false,
+  "paymentId": "1a2b3c4d-...",
+  "total": 9000,
+  "paymentUrl": "https://alfa.rbsuat.com/payment/merchants/..."
+}
+```
+
+### 2. Открыть `paymentUrl` в браузере
+
+Тестовые карты Альфы (UAT):
+
+| Номер карты           | Результат            |
+|-----------------------|----------------------|
+| `4111 1111 1111 1111` | Успешная оплата (VISA) |
+| `5555 5555 5555 4444` | Успешная оплата (MC) |
+| `4000 0000 0000 0002` | Отказ банка          |
+
+- Дата: любая будущая
+- CVV/CVC: любые 3 цифры
+- 3DS пароль: `12345678`
+
+### 3. После оплаты статус заказа обновляется
+
+- Альфа дёргает `/api/payment/alfa/callback` → backend вызывает `getOrderStatusExtended.do` → обновляет БД.
+- Альфа редиректит клиента на `{FRONTEND_URL}/orders/{orderNumber}?payment=success|fail`.
+
+### 4. Принудительно проверить статус
+
+Если callback не дошёл:
+
+```bash
+curl -X POST http://localhost:3000/api/payment/alfa/check-status \
+  -H "Content-Type: application/json" \
+  -d '{"orderNumber":"SALIY2604240001"}'
+```
+
+Ответ:
+```json
+{ "orderNumber": "SALIY2604240001", "orderStatus": 2, "status": "PAID" }
+```
+
+Одновременно в БД обновится `status=CONFIRMED`, `isPaid=true`.
+
+### 5. Создать заказ без онлайн-оплаты (проверить старый flow)
+
+```bash
+curl -X POST http://localhost:3000/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [{"productId": 20, "size": "M", "quantity": 1}],
+    "firstName": "Тест",
+    "lastName": "Тестов",
+    "email": "mezovt123@gmail.com",
+    "phone": "+375291234567",
+    "deliveryType": "CDEK_PICKUP",
+    "paymentMethod": "CARD_MANUAL"
+  }'
+```
+
+Ответ: заказ сразу `status=CONFIRMED`, `isPaid=true`, `paymentUrl=null`.
 
 ---
 
-## 📋 Flow оформления заказа
+## Flow оформления заказа (с Альфой)
 
 ```mermaid
 sequenceDiagram
     participant Client
     participant Backend
     participant DB
+    participant Alfa
     participant Email
-    participant YandexPay
 
-    Client->>Backend: POST /api/orders
+    Client->>Backend: POST /api/orders (CARD_ONLINE)
     Backend->>DB: Валидация товаров
-    Backend->>DB: Создать заказ (транзакция)
-    Backend->>DB: Уменьшить остатки
-    Backend->>Email: Отправить подтверждение
-    Backend->>YandexPay: Создать платеж (TODO)
-    Backend->>Client: Вернуть заказ + paymentUrl
+    Backend->>DB: Создать заказ PENDING + уменьшить остатки
+    Backend->>Alfa: register.do (amount, returnUrl, failUrl)
+    Alfa-->>Backend: {orderId, formUrl}
+    Backend->>DB: Сохранить paymentId
+    Backend->>Email: Подтверждение заказа
+    Backend-->>Client: {order, paymentUrl}
 
-    Client->>YandexPay: Перейти по paymentUrl
-    YandexPay->>Client: Форма оплаты
-    Client->>YandexPay: Оплатить
+    Client->>Alfa: Редирект на formUrl
+    Alfa-->>Client: Форма оплаты → 3DS → списание
+    Alfa-->>Client: Редирект на returnUrl/failUrl
 
-    YandexPay->>Backend: Webhook (status=CAPTURED)
-    Backend->>DB: Обновить статус
-    Backend->>Email: Отправить подтверждение оплаты
+    Alfa->>Backend: GET /api/payment/alfa/callback
+    Backend->>Alfa: getOrderStatusExtended.do
+    Alfa-->>Backend: {orderStatus: 2}
+    Backend->>DB: status=CONFIRMED, isPaid=true
 ```
 
 ---
 
-## 🚀 Деплой
-
-### Переменные окружения на сервере
-
-Убедитесь что на сервере есть все переменные:
-
-```bash
-# Email
-EMAIL_USER=mezovt123@gmail.com
-EMAIL_PASS=lxxpzcdmftsswkqj
-EMAIL_HOST=smtp.gmail.com
-EMAIL_FROM=mezovt123@gmail.com
-
-# Yandex Pay (заполнить после регистрации)
-YANDEX_PAY_SANDBOX=true
-YANDEX_PAY_SANDBOX_API_KEY=твой_ключ_здесь
-```
-
-### Проверка работы
-
-```bash
-# 1. Проверить health
-curl https://saliy-shop.ru/api
-
-# 2. Создать тестовый заказ
-curl -X POST https://saliy-shop.ru/api/orders \
-  -H "Content-Type: application/json" \
-  -d '{...}'
-
-# 3. Проверить email (должен прийти на указанный адрес)
-
-# 4. Проверить webhook
-curl -X POST https://saliy-shop.ru/api/payment/webhook/yandex \
-  -H "Content-Type: application/json" \
-  -d '{"event":"ORDER_STATUS_UPDATED","object":{"id":"test","status":"CAPTURED"}}'
-```
-
----
-
-## 📊 Мониторинг
+## Мониторинг
 
 ### Логи
 
-Все операции логируются:
 ```
-[OrdersService] Заказ создан: SALIY2603300001, товаров: 2, сумма: 19000 RUB
-[OrdersService] Email уведомление отправлено: ivan@example.com
-[YandexPayService] Платеж создан: orderId=SALIY2603300001
-[PaymentController] Получен webhook от Yandex Pay
-[OrdersService] Статус заказа обновлен: SALIY2603300001, status=PAID
+[OrdersService]   Заказ создан: SALIY2604240001, товаров: 2, сумма: 19000 RUB
+[AlfaPayService]  Платеж зарегистрирован в Alfa: orderNumber=SALIY2604240001, mdOrder=1a2b3c4d-...
+[OrdersService]   Email уведомление отправлено: ivan@example.com
+[PaymentController] Alfa callback: orderNumber=SALIY2604240001, mdOrder=1a2b3c4d-..., operation=deposited, status=1
+[AlfaPayService]  orderStatus=2 → PAID
+[OrdersService]   Статус заказа обновлен: SALIY2604240001, status=CONFIRMED, isPaid=true
 ```
 
 ### Ошибки
 
-Ошибки email не блокируют создание заказа:
-```
-[OrdersService] Не удалось отправить email: Connection refused
-```
-Заказ создается, но email не отправляется.
+- Ошибка email не блокирует создание заказа (логируется, но заказ остаётся).
+- Ошибка регистрации платежа в Альфе → заказ помечается `PAYMENT_FAILED`, клиенту возвращается `400 Bad Request`.
 
 ---
 
-## 🔜 TODO (что добавить дальше)
+## 🔜 TODO
 
-1. **Создание платежа в Yandex Pay:**
-   - Вызывать `yandexPayService.createPayment()` при создании заказа
-   - Сохранять paymentUrl в БД
-   - Возвращать paymentUrl клиенту
-
-2. **Проверка подписи webhook:**
-   - Реализовать `verifyWebhookSignature()` по документации
-
-3. **Промокоды:**
-   - Создать таблицу `promo_codes`
-   - Реализовать `applyPromoCode()` в OrdersService
-
-4. **Возвраты:**
-   - API для создания возврата
-   - Webhook для статусов возврата
+1. **Подтверждение оплаты по email** — отправлять отдельное письмо, когда `isPaid` становится `true`.
+2. **Проверка подписи callback** — требует отдельного secret-ключа от Альфы (параметр `checksum`).
+3. **Возвраты (refund)** — `POST /payment/rest/refund.do` + API для инициирования возврата из админки.
+4. **Reversal (отмена авторизации)** — `POST /payment/rest/reverse.do`.
+5. **Повторная попытка оплаты** — сейчас нельзя повторно зарегистрировать платёж с тем же `orderNumber`, нужно создать новый заказ.
 
 ---
 
 ## 📖 Документация
 
-- [Полная документация по оплате](./docs/shop/payment.md)
-- [Документация Yandex Pay](https://pay.yandex.ru/docs/ru)
-- [Тестирование](https://pay.yandex.ru/docs/ru/testing)
+- [Детали оплаты — docs/shop/payment.md](./docs/shop/payment.md)
+- [API заказов — docs/shop/orders.md](./docs/shop/orders.md)
+- [Документация Альфа-Банка (Ecommerce)](https://pay.alfabank.ru/ecommerce/instructions/merchantManual/pages/index/main.html)
+- [Тестовые карты](https://pay.alfabank.ru/ecommerce/instructions/merchantManual/pages/index/testCards.html)

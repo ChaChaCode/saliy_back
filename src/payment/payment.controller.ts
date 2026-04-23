@@ -1,79 +1,77 @@
 import {
   Controller,
+  Get,
   Post,
+  Query,
   Body,
-  Headers,
   Logger,
-  BadRequestException,
+  Res,
+  HttpCode,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
-import { YandexPayService } from './yandex-pay.service';
+import type { Response } from 'express';
+import { AlfaPayService } from './alfa-pay.service';
 import { OrdersService } from '../orders/orders.service';
-import { EmailService } from '../common/email/email.service';
 
 @Controller('payment')
 export class PaymentController {
   private readonly logger = new Logger(PaymentController.name);
 
   constructor(
-    private readonly yandexPayService: YandexPayService,
+    private readonly alfaPayService: AlfaPayService,
+    @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
-    private readonly emailService: EmailService,
   ) {}
 
   /**
-   * Webhook от Yandex Pay для уведомлений о статусе оплаты
-   * POST /api/payment/webhook/yandex
+   * Callback от Alfa Bank — вызывается банком GET-запросом после изменения статуса платежа.
+   * Query-параметры: mdOrder, orderNumber, operation, status, checksum
+   * Подпись не проверяем (требует отдельного ключа) — подтверждаем статус обратным запросом.
+   *
+   * GET /api/payment/alfa/callback
    */
-  @Post('webhook/yandex')
-  async handleYandexPayWebhook(
-    @Body() body: any,
-    @Headers('x-yandex-pay-signature') signature: string,
+  @Get('alfa/callback')
+  async handleAlfaCallback(
+    @Query('mdOrder') mdOrder: string,
+    @Query('orderNumber') orderNumber: string,
+    @Query('operation') operation: string,
+    @Query('status') status: string,
+    @Res() res: Response,
   ) {
-    this.logger.log('Получен webhook от Yandex Pay');
-    this.logger.log(JSON.stringify(body, null, 2));
-
-    // Проверяем подпись
-    const isValid = this.yandexPayService.verifyWebhookSignature(
-      JSON.stringify(body),
-      signature,
+    this.logger.log(
+      `Alfa callback: orderNumber=${orderNumber}, mdOrder=${mdOrder}, operation=${operation}, status=${status}`,
     );
 
-    if (!isValid) {
-      throw new BadRequestException('Invalid signature');
+    if (orderNumber || mdOrder) {
+      try {
+        const { mappedStatus } = await this.alfaPayService.getOrderStatus({
+          orderId: mdOrder,
+          orderNumber,
+        });
+        if (orderNumber) {
+          await this.ordersService.updatePaymentStatus(orderNumber, mappedStatus);
+        }
+      } catch (error: any) {
+        this.logger.error(`Ошибка обработки Alfa callback: ${error.message}`);
+      }
     }
 
-    const { event, object } = body;
-
-    // Обрабатываем событие ORDER_STATUS_UPDATED
-    if (event === 'ORDER_STATUS_UPDATED') {
-      const orderId = object.id;
-      const status = object.status;
-
-      this.logger.log(`Статус заказа ${orderId}: ${status}`);
-
-      // Обновляем статус заказа в БД
-      await this.ordersService.updatePaymentStatus(orderId, status);
-
-      // Если оплата успешна - отправляем email (ОТЛОЖЕНО)
-      // if (status === 'CAPTURED') {
-      //   const order = await this.ordersService.getOrderByNumber(orderId);
-      //   if (order) {
-      //     // TODO: Добавить отправку email при необходимости
-      //   }
-      // }
-    }
-
-    return { success: true };
+    res.status(200).send('OK');
   }
 
   /**
-   * Проверить статус платежа вручную
-   * POST /api/payment/check-status
+   * Проверить статус платежа вручную (на случай если callback потерялся)
+   * POST /api/payment/alfa/check-status
+   * body: { orderNumber: string }
    */
-  @Post('check-status')
-  async checkPaymentStatus(@Body() body: { orderId: string }) {
-    const status = await this.yandexPayService.getPaymentStatus(body.orderId);
-    await this.ordersService.updatePaymentStatus(body.orderId, status);
-    return { orderId: body.orderId, status };
+  @Post('alfa/check-status')
+  @HttpCode(200)
+  async checkAlfaPaymentStatus(@Body() body: { orderNumber: string }) {
+    const { orderStatus, mappedStatus } = await this.alfaPayService.getOrderStatus({
+      orderNumber: body.orderNumber,
+    });
+    await this.ordersService.updatePaymentStatus(body.orderNumber, mappedStatus);
+    return { orderNumber: body.orderNumber, orderStatus, status: mappedStatus };
   }
 }
