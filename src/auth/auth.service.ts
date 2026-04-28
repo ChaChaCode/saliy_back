@@ -12,6 +12,20 @@ import * as crypto from 'crypto';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
+/**
+ * Дата рождения хранится в UTC midnight. Возвращаем фронту строку DD.MM.YYYY,
+ * чтобы он не парсил ISO и не путался с часовыми поясами.
+ */
+export function formatBirthdate(date: Date | null | undefined): string | null {
+  if (!date) return null;
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return null;
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -23,6 +37,11 @@ export class AuthService {
 
   private generateCode(): string {
     return Math.floor(1000 + Math.random() * 9000).toString();
+  }
+
+  /** Подмешать birthdateFormatted к user-объекту перед отдачей. */
+  private withFormattedBirthdate<T extends { birthdate?: Date | null }>(user: T): T & { birthdateFormatted: string | null } {
+    return { ...user, birthdateFormatted: formatBirthdate(user?.birthdate) };
   }
 
   async sendVerificationCode(email: string): Promise<void> {
@@ -165,7 +184,7 @@ export class AuthService {
   }
 
   async validateUser(userId: string) {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -195,6 +214,7 @@ export class AuthService {
         updatedAt: true,
       },
     });
+    return user ? this.withFormattedBirthdate(user) : null;
   }
 
   /**
@@ -299,12 +319,22 @@ export class AuthService {
         }
       }
 
-      // Преобразуем строку даты из формата DD.MM.YYYY в Date объект
-      const [day, month, year] = data.birthdate.split('.');
-      data.birthdate = new Date(+year, +month - 1, +day);
+      // Преобразуем строку даты из формата DD.MM.YYYY в Date.
+      // Используем Date.UTC, чтобы не зависеть от TZ сервера — в БД всегда
+      // попадает чистая дата YYYY-MM-DD без сдвигов на полдня.
+      const [day, month, year] = data.birthdate.split('.').map(Number);
+      data.birthdate = new Date(Date.UTC(year, month - 1, day));
 
-      // Проверяем валидность даты
-      if (isNaN(data.birthdate.getTime())) {
+      // Проверяем валидность даты + разумный диапазон года
+      const currentYear = new Date().getUTCFullYear();
+      if (
+        isNaN(data.birthdate.getTime()) ||
+        year < 1900 ||
+        year > currentYear ||
+        data.birthdate.getUTCFullYear() !== year ||
+        data.birthdate.getUTCMonth() + 1 !== month ||
+        data.birthdate.getUTCDate() !== day
+      ) {
         throw new BadRequestException('Некорректная дата рождения');
       }
 
@@ -312,7 +342,7 @@ export class AuthService {
       data.birthdateUpdatedAt = new Date();
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data,
       select: {
@@ -339,6 +369,7 @@ export class AuthService {
         updatedAt: true,
       },
     });
+    return this.withFormattedBirthdate(updated);
   }
 
   async updateDeliveryLocation(userId: string, dto: UpdateDeliveryLocationDto) {

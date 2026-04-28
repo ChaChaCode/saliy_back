@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { formatBirthdate } from '../../auth/auth.service';
 
 type SortBy = 'createdAt' | 'ordersCount' | 'totalSpent' | 'lastOrderAt';
 
@@ -235,6 +236,7 @@ export class AdminUsersService {
       phone: user.phone,
       avatarUrl: user.avatarUrl,
       birthdate: user.birthdate,
+      birthdateFormatted: formatBirthdate(user.birthdate),
       socialContact: user.socialContact,
       address: {
         street: user.street,
