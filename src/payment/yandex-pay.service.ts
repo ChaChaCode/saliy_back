@@ -10,11 +10,12 @@ export interface YandexPayCartItem {
 
 export interface YandexPayRegisterParams {
   orderId: string; // наш orderNumber
-  amount: number; // итоговая сумма в рублях
+  amount: number; // итоговая сумма в рублях (то, что должен заплатить клиент)
   description?: string;
   redirectUrl: string; // куда редирект после успешной оплаты
   cancelUrl?: string; // если оплата отменена
-  cartItems: YandexPayCartItem[];
+  cartItems: YandexPayCartItem[]; // включая «доставку» как отдельную строку
+  discount?: { code: string; amount: number }; // промокод, если применён
 }
 
 export interface YandexPayRegisterResult {
@@ -73,19 +74,30 @@ export class YandexPayService {
     // Яндекс ждёт суммы строкой с двумя знаками после запятой ("15480.00")
     const formatAmount = (n: number) => n.toFixed(2);
 
+    const cart: any = {
+      items: params.cartItems.map((item, i) => ({
+        productId: item.productId || `${params.orderId}-${i}`,
+        title: item.title.slice(0, 256),
+        quantity: { count: item.quantity.toFixed(2) },
+        total: formatAmount(item.unitPrice * item.quantity),
+        unitPrice: formatAmount(item.unitPrice),
+      })),
+      total: { amount: formatAmount(params.amount) },
+    };
+    if (params.discount && params.discount.amount > 0) {
+      cart.coupons = [
+        {
+          value: params.discount.code,
+          description: `Промокод ${params.discount.code}`,
+          amount: formatAmount(params.discount.amount),
+        },
+      ];
+    }
+
     const body = {
       orderId: params.orderId,
       currencyCode: 'RUB', // ISO 4217 буквенный
-      cart: {
-        items: params.cartItems.map((item, i) => ({
-          productId: item.productId || `${params.orderId}-${i}`,
-          title: item.title.slice(0, 256),
-          quantity: { count: item.quantity.toFixed(2) },
-          total: formatAmount(item.unitPrice * item.quantity),
-          unitPrice: formatAmount(item.unitPrice),
-        })),
-        total: { amount: formatAmount(params.amount) },
-      },
+      cart,
       merchantId: this.merchantId,
       orderAmount: formatAmount(params.amount),
       redirectUrls: {
@@ -94,7 +106,6 @@ export class YandexPayService {
         onAbort: params.cancelUrl || params.redirectUrl,
       },
       // availablePaymentMethods не задаём — Яндекс возьмёт методы, включённые в настройках мерчанта.
-      // Допустимые значения отличаются между версиями API; передавать жёсткий список рискованно.
     };
 
     try {

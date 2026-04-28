@@ -158,18 +158,33 @@ export class OrdersService {
             data: { paymentId: alfa.orderId },
           });
         } else if (isYandexPay) {
+          // Яндекс требует cart.total = items_sum − discounts_sum.
+          // Добавляем доставку отдельной строкой, промокод — через discount.
+          const yandexItems = validatedItems.map((item) => ({
+            productId: String(item.productId),
+            title: item.productName,
+            quantity: item.quantity,
+            unitPrice: item.finalPrice,
+          }));
+          if (deliveryPrice > 0) {
+            yandexItems.push({
+              productId: `delivery-${order.orderNumber}`,
+              title: 'Доставка',
+              quantity: 1,
+              unitPrice: deliveryPrice,
+            });
+          }
+
           const yandex = await this.yandexPayService.registerOrder({
             orderId: order.orderNumber,
             amount: total,
             description: `Заказ ${order.orderNumber}`,
             redirectUrl: successUrl,
             cancelUrl: failUrl,
-            cartItems: validatedItems.map((item) => ({
-              productId: String(item.productId),
-              title: item.productName,
-              quantity: item.quantity,
-              unitPrice: item.finalPrice,
-            })),
+            cartItems: yandexItems,
+            ...(promoCode && discountAmount > 0
+              ? { discount: { code: promoCode, amount: discountAmount } }
+              : {}),
           });
           paymentUrl = yandex.paymentUrl;
           if (yandex.yandexOrderId) {
