@@ -93,7 +93,8 @@ export class YandexPayService {
         onError: params.cancelUrl || params.redirectUrl,
         onAbort: params.cancelUrl || params.redirectUrl,
       },
-      availablePaymentMethods: ['CARD', 'SPLIT', 'SBP'],
+      // availablePaymentMethods не задаём — Яндекс возьмёт методы, включённые в настройках мерчанта.
+      // Допустимые значения отличаются между версиями API; передавать жёсткий список рискованно.
     };
 
     try {
