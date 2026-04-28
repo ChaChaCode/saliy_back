@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
+import { raw } from 'express';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { S3UrlInterceptor, LoggingInterceptor } from './common/interceptors';
@@ -37,6 +38,13 @@ async function bootstrap() {
 
   // Подключаем cookie parser
   app.use(cookieParser());
+
+  // Yandex Pay webhook приходит как application/octet-stream (JWT внутри) — нужен raw-парсер.
+  // Применяем точечно к webhook-маршруту, чтобы не сломать остальные эндпоинты.
+  app.use(
+    '/api/payment/yandex/webhook',
+    raw({ type: 'application/octet-stream', limit: '1mb' }),
+  );
 
   // Раздача статических файлов (загруженные изображения)
   app.useStaticAssets(join(process.cwd(), 'uploads'), {

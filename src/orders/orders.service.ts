@@ -13,6 +13,7 @@ import { PromoService } from '../promo/promo.service';
 import { CartService } from '../cart/cart.service';
 import { AdminSettingsService } from '../admin/settings/admin-settings.service';
 import { AlfaPayService } from '../payment/alfa-pay.service';
+import { YandexPayService } from '../payment/yandex-pay.service';
 
 @Injectable()
 export class OrdersService {
@@ -27,6 +28,8 @@ export class OrdersService {
     private readonly settingsService: AdminSettingsService,
     @Inject(forwardRef(() => AlfaPayService))
     private readonly alfaPayService: AlfaPayService,
+    @Inject(forwardRef(() => YandexPayService))
+    private readonly yandexPayService: YandexPayService,
   ) {}
 
   /**
@@ -72,9 +75,11 @@ export class OrdersService {
     // 🔒 ШАГ 5: ИТОГОВАЯ СУММА
     const total = subtotal - discountAmount + deliveryPrice;
 
-    // Для онлайн-оплаты Alfa заказ создаётся в PENDING и ждёт оплаты.
+    // Для онлайн-оплат (Alfa, Yandex Pay) заказ создаётся в PENDING.
     // Остальные методы (CARD_MANUAL, CRYPTO, PAYPAL) — помечаем оплаченным сразу.
     const isAlfaOnline = dto.paymentMethod === PaymentMethod.CARD_ONLINE;
+    const isYandexPay = dto.paymentMethod === PaymentMethod.YANDEX_PAY;
+    const isOnlinePayment = isAlfaOnline || isYandexPay;
 
     // 🔒 ШАГ 6: СОЗДАНИЕ ЗАКАЗА В ТРАНЗАКЦИИ
     const order = await this.prisma.$transaction(async (tx) => {
@@ -91,8 +96,8 @@ export class OrdersService {
           discountAmount,
           deliveryTotal: deliveryPrice,
           total,
-          status: isAlfaOnline ? OrderStatus.PENDING : OrderStatus.CONFIRMED,
-          isPaid: !isAlfaOnline,
+          status: isOnlinePayment ? OrderStatus.PENDING : OrderStatus.CONFIRMED,
+          isPaid: !isOnlinePayment,
           currency: 'RUB',
           // Создаем элементы заказа (со снэпшотом цен)
           items: {
@@ -130,27 +135,53 @@ export class OrdersService {
       this.logger.log(`Промокод записан в историю использования для заказа ${order.orderNumber}`);
     }
 
-    // 🔒 ШАГ 8.5: РЕГИСТРАЦИЯ ПЛАТЕЖА В ALFA (если оплата картой онлайн)
+    // 🔒 ШАГ 8.5: РЕГИСТРАЦИЯ ПЛАТЕЖА (если оплата онлайн)
     let paymentUrl: string | null = null;
-    if (isAlfaOnline) {
+    if (isOnlinePayment) {
       const frontendBase = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+      const successUrl = `${frontendBase}/order/${order.orderNumber}?payment=success`;
+      const failUrl = `${frontendBase}/order/${order.orderNumber}?payment=fail`;
+
       try {
-        const alfa = await this.alfaPayService.registerOrder({
-          orderNumber: order.orderNumber,
-          amount: total,
-          description: `Заказ ${order.orderNumber}`,
-          email: orderInfo.email,
-          returnUrl: `${frontendBase}/order/${order.orderNumber}?payment=success`,
-          failUrl: `${frontendBase}/order/${order.orderNumber}?payment=fail`,
-        });
-        paymentUrl = alfa.formUrl;
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: { paymentId: alfa.orderId },
-        });
+        if (isAlfaOnline) {
+          const alfa = await this.alfaPayService.registerOrder({
+            orderNumber: order.orderNumber,
+            amount: total,
+            description: `Заказ ${order.orderNumber}`,
+            email: orderInfo.email,
+            returnUrl: successUrl,
+            failUrl,
+          });
+          paymentUrl = alfa.formUrl;
+          await this.prisma.order.update({
+            where: { id: order.id },
+            data: { paymentId: alfa.orderId },
+          });
+        } else if (isYandexPay) {
+          const yandex = await this.yandexPayService.registerOrder({
+            orderId: order.orderNumber,
+            amount: total,
+            description: `Заказ ${order.orderNumber}`,
+            redirectUrl: successUrl,
+            cancelUrl: failUrl,
+            cartItems: validatedItems.map((item) => ({
+              productId: String(item.productId),
+              title: item.productName,
+              quantity: item.quantity,
+              unitPrice: item.finalPrice,
+            })),
+          });
+          paymentUrl = yandex.paymentUrl;
+          if (yandex.yandexOrderId) {
+            await this.prisma.order.update({
+              where: { id: order.id },
+              data: { paymentId: yandex.yandexOrderId },
+            });
+          }
+        }
       } catch (error: any) {
         this.logger.error(
-          `Регистрация платежа Alfa не удалась для ${order.orderNumber}: ${error.message}`,
+          `Регистрация платежа (${dto.paymentMethod}) не удалась для ${order.orderNumber}: ${error.message}`,
         );
         await this.prisma.order.update({
           where: { id: order.id },

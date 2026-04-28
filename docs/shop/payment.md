@@ -2,9 +2,15 @@
 
 ## Текущее состояние
 
-- Подключена **тестовая платёжка Альфа-Банка** (Alfa RBS, `alfa.rbsuat.com`).
-- Метод оплаты `CARD_ONLINE` → платёж идёт через Альфа-Банк.
-- Остальные методы (`CARD_MANUAL`, `CRYPTO`, `PAYPAL`) — оплата вручную, заказ создаётся сразу в статусе `CONFIRMED` (`isPaid = true`).
+Две онлайн-платёжки, на выбор пользователю:
+
+| `paymentMethod` | Через что | Тестовый шлюз |
+|---|---|---|
+| `CARD_ONLINE` | **Альфа-Банк** (Alfa RBS) | `alfa.rbsuat.com` |
+| `YANDEX_PAY` | **Яндекс Пэй** | `sandbox.pay.yandex.ru` |
+| `CARD_MANUAL` / `CRYPTO` / `PAYPAL` | Ручная обработка менеджером | — |
+
+Для онлайн-платежей (Альфа и Яндекс) заказ создаётся в `PENDING`, в ответе возвращается `paymentUrl` для редиректа клиента. Для остальных — `CONFIRMED` сразу.
 
 ---
 
@@ -206,3 +212,126 @@ FRONTEND_URL=https://saliyclothes.vercel.app/
 - ⏳ Возвраты (`refund.do`) — не реализованы, добавить при необходимости.
 - ⏳ Reversal (`reverse.do`) для отмены авторизации — не реализованы.
 - ⏳ Email о подтверждении оплаты (когда `isPaid` меняется на `true`) — сейчас отправляется только email о создании заказа.
+
+---
+
+## Яндекс Пэй
+
+### Endpoint'ы
+
+- **Sandbox:** `https://sandbox.pay.yandex.ru/api/merchant`
+- **Prod:** `https://pay.yandex.ru/api/merchant`
+
+### Что отправляем при регистрации заказа
+
+`POST {base}/v1/orders` с заголовком `Authorization: Api-Key {API_KEY}`.
+
+```json
+{
+  "orderId": "SALIY2604240001",
+  "currencyCode": "RUB",
+  "merchantId": "ae13d8a3-...",
+  "orderAmount": "8495.00",
+  "cart": {
+    "items": [
+      {
+        "productId": "20",
+        "title": "Джинсовка SALIY чёрная",
+        "quantity": { "count": "1.00" },
+        "unitPrice": "8550.00",
+        "total": "8550.00"
+      }
+    ],
+    "total": { "amount": "8495.00" }
+  },
+  "redirectUrls": {
+    "onSuccess": "https://saliyclothes.vercel.app/order/SALIY2604240001?payment=success",
+    "onError":   "https://saliyclothes.vercel.app/order/SALIY2604240001?payment=fail",
+    "onAbort":   "https://saliyclothes.vercel.app/order/SALIY2604240001?payment=fail"
+  },
+  "availablePaymentMethods": ["CARD", "SPLIT", "SBP"]
+}
+```
+
+> **Особенности:** суммы — строки с двумя знаками (`"8495.00"`); валюта — буквенная (`"RUB"`); `quantity.count` — тоже строка.
+
+Ответ:
+```json
+{ "status": "success", "data": { "paymentUrl": "https://...", "orderId": "yandex-internal-id" } }
+```
+
+`paymentUrl` уходит клиенту, наш `orderNumber` сохраняем в `order.paymentId`.
+
+---
+
+### Endpoints в backend'е
+
+#### Webhook от Яндекс Пэй
+
+**POST** `/api/payment/yandex/webhook`
+
+Яндекс шлёт `application/octet-stream` с **JWT-токеном** (ES256) внутри. Backend декодирует payload (без проверки подписи!) и для надёжности pull-ом подтверждает статус через `GET /v1/orders/{orderId}`. Это аналогично подходу Альфы.
+
+События в payload:
+- `ORDER_STATUS_UPDATED` — изменился статус заказа
+- `OPERATION_STATUS_UPDATED` — изменился статус операции (списание/возврат/отмена)
+
+> **Настройка в кабинете Яндекса:** добавь Callback URL: `https://saliy-shop.ru/api/payment/yandex/webhook`. Backend всегда отвечает `200 OK { status: "success" }`, иначе Яндекс будет ретраить с экспоненциальным бэкоффом 24 часа.
+
+#### Ручная синхронизация статуса
+
+**POST** `/api/payment/yandex/check-status`
+
+```bash
+curl -X POST https://saliy-shop.ru/api/payment/yandex/check-status \
+  -H "Content-Type: application/json" \
+  -d '{"orderNumber":"SALIY2604240001"}'
+```
+
+```json
+{
+  "orderNumber": "SALIY2604240001",
+  "yandexStatus": "CAPTURED",
+  "status": "PAID"
+}
+```
+
+---
+
+### Маппинг статусов Яндекс Пэй
+
+| Яндекс `order.status`  | Наш статус               |
+|------------------------|--------------------------|
+| `NEW`                  | `PENDING`                |
+| `AUTHORIZED`           | `PENDING` (предавторизация) |
+| `CAPTURED`             | `PAID` → `CONFIRMED`     |
+| `VOIDED`               | `CANCELED` → `CANCELLED` |
+| `REFUNDED`             | `REFUNDED`               |
+| `PARTIALLY_REFUNDED`   | `REFUNDED`               |
+| `FAILED`               | `FAILED` → `PAYMENT_FAILED` |
+
+---
+
+### Настройка `.env`
+
+```env
+# Тест
+YANDEX_PAY_SANDBOX=true
+YANDEX_PAY_MERCHANT_ID=ae13d8a3-f071-4365-9b42-b30a2838c7e7
+YANDEX_PAY_API_KEY=ae13d8a3-f071-4365-9b42-b30a2838c7e7
+
+# Прод (раскомментировать)
+# YANDEX_PAY_SANDBOX=false
+# YANDEX_PAY_MERCHANT_ID=<боевой merchantId>
+# YANDEX_PAY_API_KEY=<боевой ключ из ЛК>
+```
+
+> В sandbox API_KEY === MERCHANT_ID. В проде это разные значения, ключ Merchant API получаешь в кабинете Яндекс Пэй.
+
+---
+
+### Что НЕ реализовано
+
+- ❌ **Проверка подписи JWT (ES256)** — нужен публичный ключ Яндекса. Сейчас доверяем pull-запросу к API.
+- ❌ Возвраты (`POST /v1/operations/.../refund`).
+- ❌ Двухстадийные платежи (предавторизация + capture). Все платежи one-step.

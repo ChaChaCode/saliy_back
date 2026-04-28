@@ -6,7 +6,8 @@ enum DeliveryType {
 }
 
 enum PaymentMethod {
-  CARD_ONLINE  // Онлайн оплата картой
+  CARD_ONLINE  // Онлайн оплата картой через Альфа-Банк
+  YANDEX_PAY   // Онлайн оплата через Яндекс Пэй
   CARD_MANUAL  // Оплата картой через менеджера
   CRYPTO       // Криптовалюта
   PAYPAL       // PayPal
