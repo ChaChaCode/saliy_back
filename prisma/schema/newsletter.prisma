@@ -1,0 +1,26 @@
+// Подписчики на маркетинговую рассылку.
+// Хранится отдельно от User — подписаться может кто угодно, в том числе незарегистрированные гости.
+
+model NewsletterSubscriber {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+
+  // Источник подписки (для аналитики): footer / popup / checkout / admin
+  source    String?
+
+  // Согласие с офертой и политикой конфиденциальности (юридическое требование)
+  acceptedTerms Boolean @default(false) @map("accepted_terms")
+
+  // Токен для one-click отписки из письма
+  unsubscribeToken String @unique @map("unsubscribe_token")
+
+  // Если совпадает email с зарегистрированным юзером — связываем
+  userId String? @map("user_id")
+
+  subscribedAt   DateTime  @default(now()) @map("subscribed_at")
+  unsubscribedAt DateTime? @map("unsubscribed_at")
+
+  @@index([isActive])
+  @@map("newsletter_subscribers")
+}

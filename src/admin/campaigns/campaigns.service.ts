@@ -7,8 +7,13 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email/email.service';
+import { NewsletterService } from '../../newsletter/newsletter.service';
 
-type CampaignTarget = 'ALL' | 'WITH_ORDERS' | 'WITHOUT_ORDERS';
+type CampaignTarget =
+  | 'ALL'
+  | 'WITH_ORDERS'
+  | 'WITHOUT_ORDERS'
+  | 'NEWSLETTER';
 type CampaignStatus = 'DRAFT' | 'SENDING' | 'COMPLETED' | 'FAILED';
 
 interface CreateCampaignDto {
@@ -20,6 +25,11 @@ interface CreateCampaignDto {
 const BATCH_SIZE = 20;
 const BATCH_DELAY_MS = 1000;
 
+interface Recipient {
+  email: string;
+  unsubscribeToken?: string; // только для подписчиков рассылки
+}
+
 @Injectable()
 export class CampaignsService {
   private readonly logger = new Logger(CampaignsService.name);
@@ -27,6 +37,7 @@ export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly newsletterService: NewsletterService,
   ) {}
 
   async create(dto: CreateCampaignDto, createdBy?: string) {
@@ -128,11 +139,20 @@ export class CampaignsService {
   }
 
   /**
-   * Получить список email'ов по типу аудитории
+   * Получить список получателей по типу аудитории.
+   * Для NEWSLETTER возвращаются только активные подписчики с unsubscribe-токеном.
+   * Для ALL/WITH_ORDERS/WITHOUT_ORDERS — зарегистрированные пользователи.
    */
-  private async getRecipients(target: CampaignTarget): Promise<string[]> {
-    let where: Prisma.UserWhereInput = {};
+  private async getRecipients(target: CampaignTarget): Promise<Recipient[]> {
+    if (target === 'NEWSLETTER') {
+      const subs = await this.newsletterService.getActiveSubscriberEmails();
+      return subs.map((s) => ({
+        email: s.email,
+        unsubscribeToken: s.unsubscribeToken,
+      }));
+    }
 
+    let where: Prisma.UserWhereInput = {};
     if (target === 'WITH_ORDERS') {
       where = { orders: { some: {} } };
     } else if (target === 'WITHOUT_ORDERS') {
@@ -144,8 +164,35 @@ export class CampaignsService {
       select: { email: true },
     });
 
-    // Дедупликация
-    return [...new Set(users.map((u) => u.email).filter(Boolean))];
+    // Дедупликация по email
+    const seen = new Set<string>();
+    const recipients: Recipient[] = [];
+    for (const u of users) {
+      if (!u.email || seen.has(u.email)) continue;
+      seen.add(u.email);
+      recipients.push({ email: u.email });
+    }
+    return recipients;
+  }
+
+  /**
+   * Добавить unsubscribe-футер к HTML-шаблону, если у получателя есть токен.
+   */
+  private buildHtmlForRecipient(html: string, recipient: Recipient): string {
+    if (!recipient.unsubscribeToken) {
+      return html;
+    }
+    const baseUrl = (process.env.BACKEND_URL || '').replace(/\/+$/, '');
+    const unsubscribeUrl = `${baseUrl}/newsletter/unsubscribe/${recipient.unsubscribeToken}`;
+    const footer = `
+      <hr style="margin-top: 32px; border: none; border-top: 1px solid #eee;" />
+      <p style="font-size: 12px; color: #888; text-align: center; margin-top: 16px;">
+        Вы получили это письмо, потому что подписаны на рассылку SALIY.
+        <br/>
+        <a href="${unsubscribeUrl}" style="color: #888; text-decoration: underline;">Отписаться</a>
+      </p>
+    `;
+    return `${html}${footer}`;
   }
 
   /**
@@ -155,7 +202,7 @@ export class CampaignsService {
     id: string,
     subject: string,
     html: string,
-    recipients: string[],
+    recipients: Recipient[],
   ) {
     let sent = 0;
     let failed = 0;
@@ -164,7 +211,13 @@ export class CampaignsService {
       const batch = recipients.slice(i, i + BATCH_SIZE);
 
       const results = await Promise.allSettled(
-        batch.map((email) => this.emailService.sendRaw(email, subject, html)),
+        batch.map((r) =>
+          this.emailService.sendRaw(
+            r.email,
+            subject,
+            this.buildHtmlForRecipient(html, r),
+          ),
+        ),
       );
 
       for (const result of results) {

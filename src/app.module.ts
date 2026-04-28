@@ -20,6 +20,7 @@ import { OrdersModule } from './orders/orders.module';
 import { PromoCodesModule } from './admin/promo-codes/promo-codes.module';
 import { PromoModule } from './promo/promo.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { NewsletterModule } from './newsletter/newsletter.module';
 import { CacheModule } from './common/cache/cache.module';
 import { StorageModule } from './common/storage/storage.module';
 import { GqlThrottlerGuard } from './common/guards/graphql-throttler.guard';
@@ -59,6 +60,7 @@ import { PaymentModule } from './payment/payment.module';
     PromoCodesModule,
     PromoModule,
     ReviewsModule,
+    NewsletterModule,
     PaymentModule,
   ],
   controllers: [AppController],

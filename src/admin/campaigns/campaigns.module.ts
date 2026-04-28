@@ -3,9 +3,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { CampaignsController } from './campaigns.controller';
 import { CampaignsService } from './campaigns.service';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { NewsletterModule } from '../../newsletter/newsletter.module';
 
 @Module({
-  imports: [PrismaModule, JwtModule.register({})],
+  imports: [PrismaModule, JwtModule.register({}), NewsletterModule],
   controllers: [CampaignsController],
   providers: [CampaignsService],
   exports: [CampaignsService],
