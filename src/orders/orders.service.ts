@@ -236,8 +236,11 @@ export class OrdersService {
       // Не падаем, заказ уже создан
     }
 
-    // 🔒 ШАГ 10: ОЧИСТКА КОРЗИНЫ (если пользователь авторизован)
-    if (userId) {
+    // 🔒 ШАГ 10: ОЧИСТКА КОРЗИНЫ
+    // Для онлайн-оплат (Альфа, Яндекс) очистка переехала в updatePaymentStatus —
+    // корзина чистится ТОЛЬКО когда платёж подтверждён. Если клиент ушёл с формы
+    // оплаты или платёж упал — корзина остаётся, чтобы можно было повторить заказ.
+    if (userId && !isOnlinePayment) {
       try {
         await this.cartService.clearCart(userId);
         this.logger.log(`Корзина очищена для пользователя ${userId}`);
@@ -679,6 +682,12 @@ export class OrdersService {
     const orderStatus = statusMap[paymentStatus] ?? OrderStatus.PENDING;
     const isPaid = paymentStatus === 'PAID';
 
+    // Запоминаем предыдущее состояние, чтобы понять — это ПЕРЕХОД в paid или повторный вебхук.
+    const previous = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      select: { isPaid: true, userId: true },
+    });
+
     const order = await this.prisma.order.update({
       where: { orderNumber },
       data: {
@@ -690,6 +699,19 @@ export class OrdersService {
     this.logger.log(
       `Статус заказа обновлен: ${orderNumber}, status=${orderStatus}, isPaid=${isPaid}`,
     );
+
+    // При первом успешном переходе в оплаченное состояние — чистим корзину пользователя.
+    // Идемпотентно: повторные вебхуки не сработают (previous.isPaid уже true).
+    if (isPaid && previous && !previous.isPaid && previous.userId) {
+      try {
+        await this.cartService.clearCart(previous.userId);
+        this.logger.log(
+          `Корзина очищена после успешной оплаты заказа ${orderNumber}`,
+        );
+      } catch (error: any) {
+        this.logger.error(`Не удалось очистить корзину: ${error.message}`);
+      }
+    }
 
     return order;
   }
