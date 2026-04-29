@@ -227,7 +227,10 @@ export class AdminOrdersService {
   }
 
   /**
-   * Обновить произвольные поля заказа
+   * Обновить произвольные поля заказа.
+   * Если у заказа уже есть cdekUuid — параллельно пушим изменившиеся поля в CDEK.
+   * При ошибке CDEK API (например, посылка уже в пути) — DB-обновление не откатываем,
+   * только логируем. В ответе вернём флаг cdekSyncError если CDEK не принял.
    */
   async updateOrder(orderNumber: string, data: Prisma.OrderUpdateInput) {
     const order = await this.prisma.order.findUnique({
@@ -243,7 +246,72 @@ export class AdminOrdersService {
     });
 
     this.logger.log(`Заказ ${orderNumber} обновлён (общие поля)`);
-    return updated;
+
+    // Пуш изменений в CDEK
+    let cdekSyncError: string | null = null;
+    if (order.cdekUuid) {
+      const patch = this.buildCdekPatch(order, updated, data);
+      if (patch) {
+        try {
+          await this.deliveryService.updateCdekOrder(order.cdekUuid, patch);
+        } catch (error: any) {
+          cdekSyncError = error?.message || 'CDEK update failed';
+          this.logger.warn(
+            `Заказ ${orderNumber}: данные в БД обновлены, но CDEK отклонил изменение: ${cdekSyncError}`,
+          );
+        }
+      }
+    }
+
+    return cdekSyncError ? { ...updated, cdekSyncError } : updated;
+  }
+
+  /**
+   * Сравнить старый/новый заказ и собрать diff для CDEK PATCH.
+   * Возвращаем null если ни одного поля, релевантного для CDEK, не поменялось.
+   */
+  private buildCdekPatch(
+    before: { firstName: string; lastName: string; phone: string; email: string; cdekCityCode: number | null; street: string | null; apartment: string | null; pickupPoint: string | null; comment: string | null; deliveryType: string },
+    after: { firstName: string; lastName: string; phone: string; email: string; cdekCityCode: number | null; street: string | null; apartment: string | null; pickupPoint: string | null; comment: string | null; deliveryType: string },
+    incoming: Prisma.OrderUpdateInput,
+  ) {
+    const patch: Parameters<DeliveryService['updateCdekOrder']>[1] = {};
+    const touched = (key: keyof Prisma.OrderUpdateInput) => incoming[key] !== undefined;
+
+    if (touched('firstName') || touched('lastName')) {
+      patch.recipientName = `${after.firstName} ${after.lastName}`.trim();
+    }
+    if (touched('phone')) {
+      patch.recipientPhone = after.phone;
+    }
+    if (touched('email')) {
+      patch.recipientEmail = after.email;
+    }
+    if (touched('comment')) {
+      patch.comment = after.comment ?? '';
+    }
+
+    if (after.deliveryType === 'CDEK_PICKUP' && touched('pickupPoint')) {
+      if (after.pickupPoint) {
+        patch.pickupPointCode = after.pickupPoint;
+      }
+    } else if (after.deliveryType === 'CDEK_COURIER') {
+      const cityChanged = touched('cdekCityCode');
+      const addressChanged = touched('street') || touched('apartment');
+      if (cityChanged || addressChanged) {
+        patch.toLocation = {};
+        if (cityChanged && after.cdekCityCode) {
+          patch.toLocation.cityCode = after.cdekCityCode;
+        }
+        if (addressChanged) {
+          const parts = [after.street, after.apartment ? `кв. ${after.apartment}` : null]
+            .filter(Boolean);
+          if (parts.length) patch.toLocation.address = parts.join(', ');
+        }
+      }
+    }
+
+    return Object.keys(patch).length > 0 ? patch : null;
   }
 
   /**

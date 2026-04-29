@@ -102,7 +102,7 @@ export class DeliveryService {
    * Выполнить запрос к CDEK API с авторизацией
    */
   private async cdekRequest<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
     endpoint: string,
     data?: any,
   ): Promise<T> {
@@ -513,6 +513,79 @@ export class DeliveryService {
         );
       }
       throw new Error('Не удалось создать заказ в CDEK');
+    }
+  }
+
+  /**
+   * Обновить заказ в CDEK (PATCH /v2/orders/{uuid}).
+   * CDEK разрешает менять данные только пока посылка не уехала со склада отправителя.
+   * Если CDEK откажет (посылка уже в пути) — кидаем исключение, вызывающий сам решит что делать.
+   */
+  async updateCdekOrder(
+    uuid: string,
+    patch: {
+      recipientName?: string;
+      recipientPhone?: string;
+      recipientEmail?: string;
+      // курьерская доставка — адрес
+      toLocation?: {
+        cityCode?: number;
+        address?: string;
+      };
+      // самовывоз — код ПВЗ
+      pickupPointCode?: string;
+      comment?: string;
+    },
+  ): Promise<void> {
+    const body: any = { uuid };
+
+    if (
+      patch.recipientName ||
+      patch.recipientPhone ||
+      patch.recipientEmail
+    ) {
+      body.recipient = {};
+      if (patch.recipientName) body.recipient.name = patch.recipientName;
+      if (patch.recipientPhone) {
+        body.recipient.phones = [{ number: patch.recipientPhone }];
+      }
+      if (patch.recipientEmail) body.recipient.email = patch.recipientEmail;
+    }
+
+    if (patch.toLocation && (patch.toLocation.cityCode || patch.toLocation.address)) {
+      body.to_location = {};
+      if (patch.toLocation.cityCode) body.to_location.code = patch.toLocation.cityCode;
+      if (patch.toLocation.address) body.to_location.address = patch.toLocation.address;
+    }
+
+    if (patch.pickupPointCode) {
+      body.delivery_point = patch.pickupPointCode;
+    }
+
+    if (patch.comment !== undefined) {
+      body.comment = patch.comment;
+    }
+
+    // Если кроме uuid ничего не передали — нечего обновлять
+    if (Object.keys(body).length === 1) {
+      this.logger.log(`CDEK update skipped (no editable fields): uuid=${uuid}`);
+      return;
+    }
+
+    try {
+      this.logger.log(`Updating CDEK order ${uuid}: ${JSON.stringify(body)}`);
+      await this.cdekRequest<any>('PATCH', '/orders', body);
+      this.logger.log(`CDEK order updated: ${uuid}`);
+    } catch (error: any) {
+      const apiResponse = error.response?.data;
+      this.logger.error(
+        `Не удалось обновить заказ CDEK ${uuid}: ${error.message}` +
+          (apiResponse ? ` | ${JSON.stringify(apiResponse)}` : ''),
+      );
+      throw new Error(
+        apiResponse?.requests?.[0]?.errors?.[0]?.message ||
+          'CDEK update failed',
+      );
     }
   }
 

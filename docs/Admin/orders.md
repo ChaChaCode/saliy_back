@@ -167,6 +167,44 @@ curl "https://saliy-shop.ru/api/admin/orders?status=CONFIRMED&page=1&limit=20" \
 
 ## 4. Обновить поля заказа
 
+### Автосинхронизация с CDEK
+
+Если у заказа уже есть `cdekUuid` (накладная создана в CDEK) и через PATCH меняются поля, релевантные для CDEK — изменения **автоматически пушатся** в CDEK через `PATCH /v2/orders/{uuid}`. Админу не нужно править данные дважды (в нашей админке + в кабинете CDEK).
+
+**Какие поля синхронизируются:**
+
+| Поле в нашем PATCH | Что меняется в CDEK |
+|---|---|
+| `firstName`, `lastName` | `recipient.name` (склеиваются) |
+| `phone` | `recipient.phones[].number` |
+| `email` | `recipient.email` |
+| `comment` | `comment` накладной |
+| `pickupPoint` (при `deliveryType=CDEK_PICKUP`) | `delivery_point` (код ПВЗ) |
+| `cdekCityCode`, `street`, `apartment` (при `deliveryType=CDEK_COURIER`) | `to_location` (город/адрес) |
+
+**Когда CDEK откажет:**
+CDEK API позволяет менять данные **только пока посылка не уехала со склада отправителя**. Если статус уже `TAKEN_BY_TRANSPORTER_FROM_SENDER_CITY` или дальше — CDEK вернёт ошибку.
+
+В этом случае:
+- Запись в нашей БД **обновится** (`200 OK`)
+- В ответе появится поле **`cdekSyncError`** с текстом ошибки от CDEK
+- В логах backend'а будет `WARN [AdminOrdersService] Заказ … : данные в БД обновлены, но CDEK отклонил изменение`
+
+**Response с CDEK-ошибкой:**
+```json
+{
+  "id": "...",
+  "orderNumber": "SALIY2604280001",
+  "firstName": "Иван (новое)",
+  "...": "...",
+  "cdekSyncError": "Заказ уже передан перевозчику, изменение запрещено"
+}
+```
+
+> Если `cdekUuid` у заказа отсутствует (накладная ещё не создана) — синхронизации нет, пуш не делается.
+
+
+
 **PATCH** `/api/admin/orders/:orderNumber`
 
 Обновление произвольных полей заказа (контакты клиента, адрес, доставка, комментарий). Все поля опциональны — передавайте только те, что нужно изменить.
