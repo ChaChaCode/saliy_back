@@ -331,46 +331,32 @@ export class DeliveryService {
       // Фильтруем тарифы по типу доставки
       const tariffs = tariffList.tariff_codes || [];
 
-      // Известные коды тарифов CDEK
-      // Самовывоз (склад-склад): 136, 234, 368, 378, 480, 482, 481, 483
-      const pickupTariffCodes = [136, 234, 368, 378, 480, 482, 481, 483];
-      // Курьер (склад-дверь): 137, 233, 139, 366, 234... — большинство дублируется
-      const courierTariffCodes = [137, 233, 139, 366, 366, 138];
-
-      // Хелпер: тариф «склад-склад» определяется и по коду, и по названию (на случай новых кодов)
-      const isPickupByName = (t: any) =>
+      // Тип тарифа определяем строго по названию — коды между типами пересекаются.
+      const isPickup = (t: any) =>
         typeof t.tariff_name === 'string' &&
         /склад-склад|warehouse-warehouse/i.test(t.tariff_name);
 
-      const isCourierByName = (t: any) =>
+      const isCourier = (t: any) =>
         typeof t.tariff_name === 'string' &&
-        /склад-двер|warehouse-door/i.test(t.tariff_name);
+        /склад-двер|дверь-дверь|warehouse-door|door-door/i.test(
+          t.tariff_name,
+        );
 
-      // Находим pickup-тариф: сначала по жёсткому списку кодов, потом по названию,
-      // если ничего не нашлось — берём самый дешёвый из всех тарифов «склад-склад».
-      let pickupTariff =
-        tariffs.find((t: any) => pickupTariffCodes.includes(t.tariff_code)) ||
-        tariffs.find(isPickupByName);
-      if (!pickupTariff) {
-        const candidates = tariffs.filter(isPickupByName);
-        if (candidates.length > 0) {
-          pickupTariff = candidates.reduce((cheapest: any, current: any) =>
+      // Среди всех тарифов «склад-склад» берём самый дешёвый (это и есть оптимальный самовывоз)
+      const pickupCandidates = tariffs.filter(isPickup);
+      const pickupTariff = pickupCandidates.length
+        ? pickupCandidates.reduce((cheapest: any, current: any) =>
             current.delivery_sum < cheapest.delivery_sum ? current : cheapest,
-          );
-        }
-      }
+          )
+        : undefined;
 
-      let courierTariff =
-        tariffs.find((t: any) => courierTariffCodes.includes(t.tariff_code)) ||
-        tariffs.find(isCourierByName);
-      if (!courierTariff) {
-        const candidates = tariffs.filter(isCourierByName);
-        if (candidates.length > 0) {
-          courierTariff = candidates.reduce((cheapest: any, current: any) =>
+      // Среди всех «склад-дверь» / «дверь-дверь» — самый дешёвый
+      const courierCandidates = tariffs.filter(isCourier);
+      const courierTariff = courierCandidates.length
+        ? courierCandidates.reduce((cheapest: any, current: any) =>
             current.delivery_sum < cheapest.delivery_sum ? current : cheapest,
-          );
-        }
-      }
+          )
+        : undefined;
 
       if (!pickupTariff && tariffs.length > 0) {
         this.logger.warn(
