@@ -296,9 +296,19 @@ export class DeliveryService {
       const warehouseCityCode = parseInt(
         this.configService.get<string>('CDEK_WAREHOUSE_CITY_CODE') || '9220',
       );
+      // Опциональный код конкретного ПВЗ-отправителя (например "MSK123")
+      // Нужен для тарифа «склад-склад» — без него CDEK вернёт err_pvz_with_tariff_mistake.
+      const senderPickupPointCode = this.configService.get<string>(
+        'CDEK_SENDER_PICKUP_POINT',
+      );
+
+      const fromLocation: any = { code: warehouseCityCode };
+      if (senderPickupPointCode) {
+        fromLocation.address = senderPickupPointCode;
+      }
 
       const baseRequest = {
-        from_location: { code: warehouseCityCode },
+        from_location: fromLocation,
         to_location: { code: cityCode },
         packages: [{ weight, length: 30, width: 20, height: 10 }],
       };
