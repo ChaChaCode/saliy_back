@@ -331,20 +331,54 @@ export class DeliveryService {
       // Фильтруем тарифы по типу доставки
       const tariffs = tariffList.tariff_codes || [];
 
-      // Коды тарифов для самовывоза (склад-склад)
-      const pickupTariffCodes = [136, 234, 368, 378]; // Посылка/Экспресс склад-склад
+      // Известные коды тарифов CDEK
+      // Самовывоз (склад-склад): 136, 234, 368, 378, 480, 482, 481, 483
+      const pickupTariffCodes = [136, 234, 368, 378, 480, 482, 481, 483];
+      // Курьер (склад-дверь): 137, 233, 139, 366, 234... — большинство дублируется
+      const courierTariffCodes = [137, 233, 139, 366, 366, 138];
 
-      // Коды тарифов для курьера (склад-дверь)
-      const courierTariffCodes = [137, 233, 139, 366]; // Посылка/Экспресс склад-дверь
+      // Хелпер: тариф «склад-склад» определяется и по коду, и по названию (на случай новых кодов)
+      const isPickupByName = (t: any) =>
+        typeof t.tariff_name === 'string' &&
+        /склад-склад|warehouse-warehouse/i.test(t.tariff_name);
 
-      // Находим подходящие тарифы
-      const pickupTariff = tariffs.find((t: any) =>
-        pickupTariffCodes.includes(t.tariff_code),
-      );
+      const isCourierByName = (t: any) =>
+        typeof t.tariff_name === 'string' &&
+        /склад-двер|warehouse-door/i.test(t.tariff_name);
 
-      const courierTariff = tariffs.find((t: any) =>
-        courierTariffCodes.includes(t.tariff_code),
-      );
+      // Находим pickup-тариф: сначала по жёсткому списку кодов, потом по названию,
+      // если ничего не нашлось — берём самый дешёвый из всех тарифов «склад-склад».
+      let pickupTariff =
+        tariffs.find((t: any) => pickupTariffCodes.includes(t.tariff_code)) ||
+        tariffs.find(isPickupByName);
+      if (!pickupTariff) {
+        const candidates = tariffs.filter(isPickupByName);
+        if (candidates.length > 0) {
+          pickupTariff = candidates.reduce((cheapest: any, current: any) =>
+            current.delivery_sum < cheapest.delivery_sum ? current : cheapest,
+          );
+        }
+      }
+
+      let courierTariff =
+        tariffs.find((t: any) => courierTariffCodes.includes(t.tariff_code)) ||
+        tariffs.find(isCourierByName);
+      if (!courierTariff) {
+        const candidates = tariffs.filter(isCourierByName);
+        if (candidates.length > 0) {
+          courierTariff = candidates.reduce((cheapest: any, current: any) =>
+            current.delivery_sum < cheapest.delivery_sum ? current : cheapest,
+          );
+        }
+      }
+
+      if (!pickupTariff && tariffs.length > 0) {
+        this.logger.warn(
+          `CDEK pickup-тариф не найден среди ${tariffs.length} тарифов. Коды: ${tariffs
+            .map((t: any) => `${t.tariff_code}=${t.tariff_name}`)
+            .join(', ')}`,
+        );
+      }
 
       return {
         pickup: pickupTariff
