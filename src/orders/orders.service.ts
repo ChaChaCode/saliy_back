@@ -512,10 +512,12 @@ export class OrdersService {
           weight,
           'RUB',
         );
-        const cdekPrice = result?.pickup?.deliverySum;
+        const pickup = result?.pickup;
+        const cdekPrice = pickup?.deliverySum;
         if (typeof cdekPrice === 'number' && cdekPrice >= 0) {
           this.logger.log(
-            `CDEK price: city=${cdekCityCode}, weight=${weight}г → ${cdekPrice} ₽`,
+            `CDEK price: city=${cdekCityCode}, weight=${weight}г → ${cdekPrice} ₽` +
+              ` [тариф ${pickup!.tariffCode}: ${pickup!.tariffName}]`,
           );
           return cdekPrice;
         }
