@@ -278,7 +278,9 @@ export class DeliveryService {
   }
 
   /**
-   * Рассчитать стоимость доставки CDEK
+   * Рассчитать стоимость доставки CDEK.
+   * Сначала пробуем точечно тариф «Посылка склад-склад» (по умолчанию код 136 — переопределяется через env CDEK_PICKUP_TARIFF_CODE).
+   * Если тариф недоступен для маршрута — фоллбэк на список тарифов /calculator/tarifflist.
    */
   async calculateCdekDeliveryPrice(
     cityCode: number,
@@ -290,32 +292,55 @@ export class DeliveryService {
         this.configService.get<string>('CDEK_WAREHOUSE_CITY_CODE') || '9220',
       );
 
-      // Получаем список всех доступных тарифов
-      const requestData = {
-        from_location: {
-          code: warehouseCityCode,
-        },
-        to_location: {
-          code: cityCode,
-        },
-        packages: [
-          {
-            weight,
-            length: 30,
-            width: 20,
-            height: 10,
-          },
-        ],
+      const baseRequest = {
+        from_location: { code: warehouseCityCode },
+        to_location: { code: cityCode },
+        packages: [{ weight, length: 30, width: 20, height: 10 }],
       };
 
-      this.logger.log(
-        `CDEK запрос тарифов: ${JSON.stringify(requestData)}`,
+      // 1. ТОЧЕЧНЫЙ запрос тарифа 136 «Посылка склад-склад»
+      const pickupTariffCode = parseInt(
+        this.configService.get<string>('CDEK_PICKUP_TARIFF_CODE') || '136',
       );
+      try {
+        const direct = await this.cdekRequest<any>(
+          'POST',
+          '/calculator/tariff',
+          { ...baseRequest, tariff_code: pickupTariffCode },
+        );
+        if (typeof direct?.delivery_sum === 'number' && direct.delivery_sum >= 0) {
+          this.logger.log(
+            `CDEK direct tariff ${pickupTariffCode}: ${direct.delivery_sum} ₽` +
+              (direct.period_min ? ` (${direct.period_min}-${direct.period_max} дн.)` : ''),
+          );
+          return {
+            pickup: {
+              tariffCode: pickupTariffCode,
+              tariffName: 'Посылка склад-склад',
+              tariffDescription: direct.tariff_description || '',
+              deliverySum: direct.delivery_sum,
+              periodMin: direct.period_min,
+              periodMax: direct.period_max,
+              calendarMin: direct.calendar_min,
+              calendarMax: direct.calendar_max,
+              currency,
+            },
+            courier: null,
+          };
+        }
+      } catch (error: any) {
+        this.logger.log(
+          `CDEK direct tariff ${pickupTariffCode} недоступен (${error.message}) — fallback на tarifflist`,
+        );
+      }
+
+      // 2. ФОЛБЭК: список всех доступных тарифов
+      this.logger.log(`CDEK запрос тарифов: ${JSON.stringify(baseRequest)}`);
 
       const tariffList = await this.cdekRequest<any>(
         'POST',
         '/calculator/tarifflist',
-        requestData,
+        baseRequest,
       );
 
       this.logger.log(
