@@ -6,6 +6,7 @@ import { EmailModule } from '../common/email/email.module';
 import { PromoModule } from '../promo/promo.module';
 import { CartModule } from '../cart/cart.module';
 import { PaymentModule } from '../payment/payment.module';
+import { DeliveryModule } from '../delivery/delivery.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { PaymentModule } from '../payment/payment.module';
     CartModule,
     forwardRef(() => PromoModule),
     forwardRef(() => PaymentModule),
+    DeliveryModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

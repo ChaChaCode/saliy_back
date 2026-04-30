@@ -14,6 +14,7 @@ import { CartService } from '../cart/cart.service';
 import { AdminSettingsService } from '../admin/settings/admin-settings.service';
 import { AlfaPayService } from '../payment/alfa-pay.service';
 import { YandexPayService } from '../payment/yandex-pay.service';
+import { DeliveryService } from '../delivery/delivery.service';
 
 @Injectable()
 export class OrdersService {
@@ -30,6 +31,7 @@ export class OrdersService {
     private readonly alfaPayService: AlfaPayService,
     @Inject(forwardRef(() => YandexPayService))
     private readonly yandexPayService: YandexPayService,
+    private readonly deliveryService: DeliveryService,
   ) {}
 
   /**
@@ -70,6 +72,7 @@ export class OrdersService {
     const deliveryPrice = await this.calculateDeliveryPrice(
       dto.deliveryType,
       dto.cdekCityCode,
+      validatedItems,
     );
 
     // 🔒 ШАГ 5: ИТОГОВАЯ СУММА
@@ -307,6 +310,7 @@ export class OrdersService {
     const deliveryPrice = await this.calculateDeliveryPrice(
       deliveryType,
       cdekCityCode,
+      validatedItems,
     );
 
     // 🔒 ШАГ 5: ИТОГОВАЯ СУММА
@@ -394,6 +398,7 @@ export class OrdersService {
         finalPrice,
         totalPrice,
         imageUrl,
+        weight: product.weight ?? 0, // в граммах
       });
     }
 
@@ -477,15 +482,57 @@ export class OrdersService {
   }
 
   /**
-   * Рассчитать стоимость доставки
+   * Рассчитать стоимость доставки.
+   * Для CDEK_PICKUP — реальный расчёт через CDEK API (city + weight).
+   * При сбое API или отсутствии cdekCityCode — fallback на админскую настройку delivery_price_cdek.
+   * STANDARD — фикс из настроек (CDEK не покрывает все международные страны).
    */
   private async calculateDeliveryPrice(
     deliveryType: string,
-    cdekCityCode?: number,
+    cdekCityCode: number | undefined,
+    validatedItems: Array<{ quantity: number; weight: number }>,
   ): Promise<number> {
-    // Цены берутся из настроек (Settings), а не из хардкода
     if (deliveryType === 'CDEK_PICKUP') {
-      return this.settingsService.getValue<number>('delivery_price_cdek', 500);
+      const fallback = this.settingsService.getValue<number>(
+        'delivery_price_cdek',
+        500,
+      );
+
+      if (!cdekCityCode) {
+        // На стадии "calculate" клиент мог ещё не выбрать ПВЗ → нет cityCode
+        return fallback;
+      }
+
+      // Считаем вес: сумма (вес × количество). Минимум 500г как требует CDEK
+      const totalWeight = validatedItems.reduce(
+        (sum, item) => sum + (item.weight || 0) * item.quantity,
+        0,
+      );
+      const weight = Math.max(totalWeight, 500);
+
+      try {
+        const result = await this.deliveryService.calculateCdekDeliveryPrice(
+          cdekCityCode,
+          weight,
+          'RUB',
+        );
+        const cdekPrice = result?.pickup?.deliverySum;
+        if (typeof cdekPrice === 'number' && cdekPrice >= 0) {
+          this.logger.log(
+            `CDEK price: city=${cdekCityCode}, weight=${weight}г → ${cdekPrice} ₽`,
+          );
+          return cdekPrice;
+        }
+        this.logger.warn(
+          `CDEK не вернул цену для city=${cdekCityCode}, использую fallback ${fallback} ₽`,
+        );
+        return fallback;
+      } catch (error: any) {
+        this.logger.warn(
+          `Ошибка CDEK калькулятора (city=${cdekCityCode}): ${error.message}. Fallback ${fallback} ₽`,
+        );
+        return fallback;
+      }
     }
 
     if (deliveryType === 'STANDARD') {
