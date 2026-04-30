@@ -123,8 +123,13 @@ export class DeliveryService {
       );
 
       return response.data;
-    } catch (error) {
-      this.logger.error(`Ошибка запроса к CDEK API (${endpoint}):`, error.message);
+    } catch (error: any) {
+      const status = error.response?.status;
+      const body = error.response?.data;
+      this.logger.error(
+        `Ошибка запроса к CDEK API (${method} ${endpoint}): ${status} ${error.message}` +
+          (body ? ` | body: ${JSON.stringify(body)}` : ''),
+      );
       throw error;
     }
   }
@@ -299,6 +304,8 @@ export class DeliveryService {
       };
 
       // 1. ТОЧЕЧНЫЙ запрос тарифа 136 «Посылка склад-склад»
+      // По доке CDEK эндпоинт /calculator/tariff требует "type" (1=ИМ, 2=Доставка) и tariff_code.
+      // Иначе возвращает 400.
       const pickupTariffCode = parseInt(
         this.configService.get<string>('CDEK_PICKUP_TARIFF_CODE') || '136',
       );
@@ -306,7 +313,13 @@ export class DeliveryService {
         const direct = await this.cdekRequest<any>(
           'POST',
           '/calculator/tariff',
-          { ...baseRequest, tariff_code: pickupTariffCode },
+          {
+            type: 1, // 1 — заказы интернет-магазина
+            currency: 1, // 1 = RUB
+            lang: 'rus',
+            tariff_code: pickupTariffCode,
+            ...baseRequest,
+          },
         );
         if (typeof direct?.delivery_sum === 'number' && direct.delivery_sum >= 0) {
           this.logger.log(
@@ -330,7 +343,7 @@ export class DeliveryService {
         }
       } catch (error: any) {
         this.logger.log(
-          `CDEK direct tariff ${pickupTariffCode} недоступен (${error.message}) — fallback на tarifflist`,
+          `CDEK direct tariff ${pickupTariffCode} недоступен — fallback на tarifflist`,
         );
       }
 
