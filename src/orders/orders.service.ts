@@ -503,12 +503,8 @@ export class OrdersService {
         return fallback;
       }
 
-      // Считаем вес: сумма (вес × количество). Минимум 500г как требует CDEK
-      const totalWeight = validatedItems.reduce(
-        (sum, item) => sum + (item.weight || 0) * item.quantity,
-        0,
-      );
-      const weight = Math.max(totalWeight, 500);
+      // Фиксированный вес посылки 500г для всех заказов (по требованию бизнеса)
+      const weight = 500;
 
       try {
         const result = await this.deliveryService.calculateCdekDeliveryPrice(

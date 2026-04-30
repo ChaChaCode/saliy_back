@@ -458,16 +458,11 @@ export class DeliveryService {
         this.configService.get<string>('CDEK_WAREHOUSE_CITY_CODE') || '9220',
       );
 
-      // Формируем packages
-      const totalWeight = orderData.items.reduce(
-        (sum, item) => sum + item.weight * item.quantity,
-        0,
-      );
-
+      // Фиксированный вес посылки 500г (синхронно с расчётом цены в OrdersService)
       const packages = [
         {
           number: '1',
-          weight: totalWeight || 500, // Минимальный вес 500г
+          weight: 500,
           length: 30,
           width: 20,
           height: 10,
