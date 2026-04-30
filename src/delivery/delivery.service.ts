@@ -336,12 +336,14 @@ export class DeliveryService {
         typeof t.tariff_name === 'string' ? t.tariff_name : '';
 
       // Идеальный pickup — «склад-склад». Запасной — любой «*-склад» (последняя нога до ПВЗ).
+      // \b в JS-regex не работает с кириллицей без флага u, поэтому используем endsWith / прямые проверки.
       const isStrictPickup = (t: any) => /склад-склад/i.test(nameOf(t));
-      const isToWarehouse = (t: any) => /-склад\b/i.test(nameOf(t));
+      const isToWarehouse = (t: any) =>
+        /-склад$|-склад[\s.,;]/i.test(nameOf(t).trim());
 
-      // Курьер — «*-дверь». Postamat тоже считаем курьерским (отдельная категория).
+      // Курьер — «*-дверь» / «*-постамат».
       const isCourier = (t: any) =>
-        /-двер[ьи]|-постамат/i.test(nameOf(t));
+        /-двер[ьи]$|-двер[ьи][\s.,;]|-постамат/i.test(nameOf(t).trim());
 
       const cheapest = (list: any[]) =>
         list.length
