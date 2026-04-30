@@ -331,36 +331,37 @@ export class DeliveryService {
       // Фильтруем тарифы по типу доставки
       const tariffs = tariffList.tariff_codes || [];
 
-      // Тип тарифа определяем строго по названию — коды между типами пересекаются.
-      const isPickup = (t: any) =>
-        typeof t.tariff_name === 'string' &&
-        /склад-склад|warehouse-warehouse/i.test(t.tariff_name);
+      // Определяем тип тарифа по названию — коды между типами пересекаются.
+      const nameOf = (t: any) =>
+        typeof t.tariff_name === 'string' ? t.tariff_name : '';
 
+      // Идеальный pickup — «склад-склад». Запасной — любой «*-склад» (последняя нога до ПВЗ).
+      const isStrictPickup = (t: any) => /склад-склад/i.test(nameOf(t));
+      const isToWarehouse = (t: any) => /-склад\b/i.test(nameOf(t));
+
+      // Курьер — «*-дверь». Postamat тоже считаем курьерским (отдельная категория).
       const isCourier = (t: any) =>
-        typeof t.tariff_name === 'string' &&
-        /склад-двер|дверь-дверь|warehouse-door|door-door/i.test(
-          t.tariff_name,
-        );
+        /-двер[ьи]|-постамат/i.test(nameOf(t));
 
-      // Среди всех тарифов «склад-склад» берём самый дешёвый (это и есть оптимальный самовывоз)
-      const pickupCandidates = tariffs.filter(isPickup);
-      const pickupTariff = pickupCandidates.length
-        ? pickupCandidates.reduce((cheapest: any, current: any) =>
-            current.delivery_sum < cheapest.delivery_sum ? current : cheapest,
-          )
-        : undefined;
+      const cheapest = (list: any[]) =>
+        list.length
+          ? list.reduce((min, c) =>
+              c.delivery_sum < min.delivery_sum ? c : min,
+            )
+          : undefined;
 
-      // Среди всех «склад-дверь» / «дверь-дверь» — самый дешёвый
-      const courierCandidates = tariffs.filter(isCourier);
-      const courierTariff = courierCandidates.length
-        ? courierCandidates.reduce((cheapest: any, current: any) =>
-            current.delivery_sum < cheapest.delivery_sum ? current : cheapest,
-          )
-        : undefined;
+      // pickup: сначала строго «склад-склад», иначе любой тариф ДО склада (ПВЗ)
+      let pickupTariff = cheapest(tariffs.filter(isStrictPickup));
+      if (!pickupTariff) {
+        pickupTariff = cheapest(tariffs.filter(isToWarehouse));
+      }
+
+      // courier: самый дешёвый «*-дверь»/«*-постамат»
+      const courierTariff = cheapest(tariffs.filter(isCourier));
 
       if (!pickupTariff && tariffs.length > 0) {
         this.logger.warn(
-          `CDEK pickup-тариф не найден среди ${tariffs.length} тарифов. Коды: ${tariffs
+          `CDEK: ни «склад-склад», ни «*-склад» не найдены среди ${tariffs.length} тарифов. Тарифы: ${tariffs
             .map((t: any) => `${t.tariff_code}=${t.tariff_name}`)
             .join(', ')}`,
         );
