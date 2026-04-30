@@ -12,8 +12,8 @@
 
 | Ключ | Назначение | Значение по умолчанию |
 |------|------------|-----------------------|
-| `delivery_price_cdek` | Цена самовывоза CDEK (₽) | `500` |
-| `delivery_price_standard` | Цена почтовой доставки (₽) | `800` |
+| `delivery_price_cdek` | **Fallback** для CDEK самовывоза, если CDEK API недоступен. По умолчанию доставка считается реально через CDEK API (по городу + весу). | `500` |
+| `delivery_price_standard` | Цена почтовой доставки (фикс, ₽) — для стран без CDEK | `800` |
 | `low_stock_threshold` | Порог низкого остатка | `5` |
 | `site_name` | Название сайта | `"Saliy Clothes"` |
 | `contact_email` | Контактный email | `"info@saliy-shop.ru"` |
@@ -92,6 +92,11 @@ curl -X PUT https://saliy-shop.ru/api/admin/settings/delivery_price_cdek \
 
 ## Важно: цены доставки
 
-Цены доставки раньше были захардкожены в коде [src/orders/orders.service.ts](src/orders/orders.service.ts). Теперь они берутся из `Settings`.
+Поведение поменялось — теперь не фикс-цена для всех:
 
-**При расчёте стоимости заказа** в `POST /api/orders/calculate` сервер читает настройки `delivery_price_cdek` и `delivery_price_standard` каждый раз — изменения применяются немедленно, без редеплоя.
+- **`CDEK_PICKUP`** → бэк дёргает **CDEK API** (`/v2/calculator/tarifflist`) с городом получателя и весом товаров → берёт реальный тариф «склад-склад». Если API упал / `cdekCityCode` не передан / товар без `weight` — fallback на `delivery_price_cdek`.
+- **`STANDARD`** → фикс из `delivery_price_standard` (CDEK не покрывает все страны).
+
+`delivery_price_cdek` теперь играет роль **страховки**, а не основной цены. Изменение применяется без редеплоя — бэк читает настройку при каждом расчёте.
+
+См. [docs/shop/delivery.md](../shop/delivery.md) — раздел «Расчёт стоимости» — для деталей механики.

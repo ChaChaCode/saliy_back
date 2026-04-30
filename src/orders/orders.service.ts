@@ -493,7 +493,7 @@ export class OrdersService {
     validatedItems: Array<{ quantity: number; weight: number }>,
   ): Promise<number> {
     if (deliveryType === 'CDEK_PICKUP') {
-      const fallback = this.settingsService.getValue<number>(
+      const fallback = await this.settingsService.getValue<number>(
         'delivery_price_cdek',
         500,
       );
@@ -536,7 +536,7 @@ export class OrdersService {
     }
 
     if (deliveryType === 'STANDARD') {
-      return this.settingsService.getValue<number>(
+      return await this.settingsService.getValue<number>(
         'delivery_price_standard',
         800,
       );

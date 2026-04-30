@@ -321,6 +321,12 @@ export class DeliveryService {
       this.logger.log(
         `CDEK тарифы получены: ${tariffList.tariff_codes?.length || 0} тарифов`,
       );
+      // Если 0 тарифов — логируем сырой ответ, чтобы понять что вернул CDEK (errors / nothing)
+      if (!tariffList.tariff_codes?.length) {
+        this.logger.warn(
+          `CDEK не вернул тарифов. Сырой ответ: ${JSON.stringify(tariffList)}`,
+        );
+      }
 
       // Фильтруем тарифы по типу доставки
       const tariffs = tariffList.tariff_codes || [];
