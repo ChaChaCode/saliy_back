@@ -88,6 +88,15 @@ export class AdminOrdersService {
               promoCode: { select: { code: true, type: true, value: true } },
             },
           },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         skip,
