@@ -8,9 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../common/email/email.service';
 import { DeliveryService } from '../delivery/delivery.service';
 import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
+import { S3StorageService } from '../common/storage/s3-storage.service';
 import * as crypto from 'crypto';
-import { promises as fs } from 'fs';
-import { join } from 'path';
 
 /**
  * Дата рождения хранится в UTC midnight. Возвращаем фронту строку DD.MM.YYYY,
@@ -33,6 +32,7 @@ export class AuthService {
     private jwtService: JwtService,
     private emailService: EmailService,
     private deliveryService: DeliveryService,
+    private s3: S3StorageService,
   ) {}
 
   private generateCode(): string {
@@ -218,40 +218,28 @@ export class AuthService {
   }
 
   /**
-   * Загрузить аватар пользователя
+   * Загрузить аватар пользователя в S3.
+   * Хранится по ключу avatars/{userId}-{timestamp}.{ext}
    */
   async uploadAvatar(userId: string, file: Express.Multer.File) {
-    const uploadsDir = join(process.cwd(), 'uploads', 'avatars');
-    await fs.mkdir(uploadsDir, { recursive: true });
-
-    // Удаляем старый аватар если был
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { avatarUrl: true },
     });
 
+    // Удаляем старый аватар из S3, если был
     if (user?.avatarUrl) {
-      const oldFilename = user.avatarUrl.split('/').pop();
-      if (oldFilename) {
-        try {
-          await fs.unlink(join(uploadsDir, oldFilename));
-        } catch {
-          // Файл мог не существовать — игнорируем
-        }
-      }
+      await this.s3.delete(user.avatarUrl);
     }
 
-    // Сохраняем новый файл
-    const ext = file.originalname.split('.').pop() || 'jpg';
-    const filename = `avatar-${userId}-${Date.now()}.${ext}`;
-    const filepath = join(uploadsDir, filename);
-    await fs.writeFile(filepath, file.buffer);
-
-    const avatarUrl = `/uploads/avatars/${filename}`;
+    // Загружаем новый
+    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
+    const key = `avatars/${userId}-${Date.now()}.${ext}`;
+    await this.s3.upload(key, file.buffer, file.mimetype);
 
     return this.prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl },
+      data: { avatarUrl: key },
       select: {
         id: true,
         email: true,
@@ -275,15 +263,7 @@ export class AuthService {
       throw new BadRequestException('Аватар не установлен');
     }
 
-    const filename = user.avatarUrl.split('/').pop();
-    if (filename) {
-      const uploadsDir = join(process.cwd(), 'uploads', 'avatars');
-      try {
-        await fs.unlink(join(uploadsDir, filename));
-      } catch {
-        // Файл мог не существовать — игнорируем
-      }
-    }
+    await this.s3.delete(user.avatarUrl);
 
     await this.prisma.user.update({
       where: { id: userId },

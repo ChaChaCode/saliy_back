@@ -99,7 +99,7 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
   "firstName": "Иван",
   "lastName": "Петров",
   "phone": "+79991234567",
-  "avatarUrl": "/uploads/avatars/avatar-uuid-123-1712920000000.jpg",
+  "avatarUrl": "https://storage.yandexcloud.net/saliy-shop/avatars/uuid-123-1712920000000.jpg",
   "birthdate": "1990-05-15",
   "socialContact": "Telegram: @ivan",
   "deliveryType": "CDEK",
@@ -479,7 +479,7 @@ curl -X POST https://saliy-shop.ru/api/auth/avatar \
   "email": "user@example.com",
   "firstName": "Иван",
   "lastName": "Петров",
-  "avatarUrl": "/uploads/avatars/avatar-uuid-123-1712920000000.jpg"
+  "avatarUrl": "https://storage.yandexcloud.net/saliy-shop/avatars/uuid-123-1712920000000.jpg"
 }
 ```
 

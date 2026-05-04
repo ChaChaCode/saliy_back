@@ -413,17 +413,19 @@ curl -X PUT https://saliy-shop.ru/api/auth/profile \
 
 ## Расчёт стоимости (как это работает на бэке)
 
-При вызове `POST /api/orders/calculate` или `POST /api/orders` бэк делает следующее:
+При вызове `POST /api/orders/calculate` или `POST /api/orders` бэк:
 
-1. Берёт корзину, вычисляет суммарный вес: `Σ(product.weight × quantity)`. Минимум — 500 г (требование CDEK).
+1. **Вес фиксированный — 500 г на любой заказ** (по бизнес-решению, см. [src/orders/orders.service.ts](../../src/orders/orders.service.ts) — поле `weight` у товара не используется в расчёте доставки).
 2. Если `deliveryType === 'CDEK_PICKUP'` и передан `cdekCityCode`:
-   - Дёргает CDEK calculator API (`POST /v2/calculator/tarifflist`) с весом, городом получателя, складом отправителя
-   - Берёт цену тарифа «склад-склад» (коды 136 / 234 / 368 / 378)
-   - Кладёт в поле `deliveryPrice` итогового расчёта
-3. Если CDEK API упал / не вернул цену / `cdekCityCode` не передан → использует **fallback** из админских настроек: `delivery_price_cdek` (по умолчанию 500₽).
-4. Если `deliveryType === 'STANDARD'` → берёт фикс `delivery_price_standard` (по умолчанию 800₽).
+   - **Шаг A.** Точечный запрос `POST /v2/calculator/tariff` с `tariff_code = 136` («Посылка склад-склад»). Если CDEK вернул цену — берём её.
+   - **Шаг B (fallback).** Если CDEK ответил `400` (например, тариф недоступен для маршрута) — дёргается `POST /v2/calculator/tarifflist`, и среди всех тарифов выбирается самый дешёвый «склад-склад» (по `tariff_name`), либо «X-склад» (последняя нога в ПВЗ).
+   - **Шаг C (fallback).** Если ни один тариф не подошёл — берётся фикс из админских настроек `delivery_price_cdek` (по умолчанию 500₽).
+3. Если `deliveryType === 'STANDARD'` → фикс из `delivery_price_standard` (по умолчанию 800₽).
 
-> **Что увидеть в логах backend'а:** `[OrdersService] CDEK price: city=44, weight=550г → 320 ₽` — успешный расчёт от CDEK. `Ошибка CDEK калькулятора (city=...): ... Fallback 500 ₽` — упал в fallback.
+> **Что увидеть в логах backend'а:**
+> - ✅ `[OrdersService] CDEK price: city=259, weight=500г → 338 ₽ [тариф 136: Посылка склад-склад]` — реальный расчёт через тариф 136
+> - ⚠️ `[DeliveryService] CDEK direct tariff 136 недоступен — fallback на tarifflist` — пошёл в шаг B
+> - ⚠️ `Fallback 500 ₽` — пошёл в шаг C (CDEK не дал ни одного подходящего тарифа)
 
 ### Поле response `deliveryPrice`
 
@@ -433,18 +435,32 @@ curl -X PUT https://saliy-shop.ru/api/auth/profile \
 
 ## Важные замечания
 
-### Вес товара
-- Вес хранится в граммах в поле `weight` товара (карточка товара в админке)
-- При расчёте доставки суммируется вес всех товаров в корзине
-- **Если вес у товара не заполнен** — посылка считается с минимума 500 г → цена будет занижена. Заполняй `weight` у каждого товара для точного расчёта.
+### Вес посылки
+- **Фиксирован на стороне backend'а: 500 г для всех заказов.** Поле `weight` у товара в БД сейчас на расчёт доставки не влияет.
+- Если бизнес-логика поменяется — настройка в [src/orders/orders.service.ts](../../src/orders/orders.service.ts) (`const weight = 500;`).
 
-### Склад отправки
-- Склад настраивается через переменную `CDEK_WAREHOUSE_CITY_CODE` в `.env`
-- Меняется в проде по необходимости (например, 495 = Москва, 9220 = Брест). От него зависит итоговая цена для клиента.
+### Склад отправителя
+
+Настраивается через переменные в `.env`:
+
+```env
+# Код города в системе CDEK (НЕ телефонный код!)
+# Москва=44, Санкт-Петербург=137, Брест=9220
+CDEK_WAREHOUSE_CITY_CODE=44
+
+# Код тарифа склад-склад (по умолчанию 136 «Посылка склад-склад»)
+CDEK_PICKUP_TARIFF_CODE=136
+
+# Конкретный ПВЗ-отправитель (опционально). Если CDEK ругается err_pvz_with_tariff_mistake —
+# пропиши код своего ПВЗ или адрес склада, чтобы он распознал точку отправления.
+# CDEK_SENDER_PICKUP_POINT=MSK124
+```
+
+> ⚠️ **`CDEK_WAREHOUSE_CITY_CODE` — это код города в системе CDEK, а не телефонный код.** Москва = `44`, не `495`. Узнать код своего города можно через `GET /api/delivery/cities?countryCode=RU&search=Москва`, поле `code` в ответе.
 
 ### Тестовый режим
-- Если `CDEK_TEST_MODE=true`, используется тестовый API CDEK
-- Тестовые креденшелы: `CDEK_CLIENT_ID_TEST` и `CDEK_CLIENT_SECRET_TEST`
+- `CDEK_TEST_MODE=true` → тестовый API `https://api.edu.cdek.ru/v2`, тестовые креды `CDEK_CLIENT_ID_TEST` / `CDEK_CLIENT_SECRET_TEST`.
+- В тестовой среде у CDEK ограниченное покрытие тарифов — для многих маршрутов нет тарифа «склад-склад». На прод-API (`https://api.cdek.ru/v2`) обычно всё доступно.
 
 ---
 
