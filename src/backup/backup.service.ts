@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { createReadStream } from 'fs';
+import { openAsBlob } from 'fs';
 import { stat, unlink, readdir, mkdir } from 'fs/promises';
 import { join } from 'path';
 
@@ -149,8 +149,8 @@ export class BackupService {
       const form = new FormData();
       form.append('chat_id', this.dumpChatId);
       form.append('caption', caption);
-      const buf = await this.readFile(filePath);
-      form.append('document', new Blob([buf]), filePath.split('/').pop() || 'backup.sql.gz');
+      const blob = await openAsBlob(filePath, { type: 'application/gzip' });
+      form.append('document', blob, filePath.split('/').pop() || 'backup.sql.gz');
 
       const res = await fetch(`https://api.telegram.org/bot${this.botToken}/sendDocument`, {
         method: 'POST',
@@ -161,16 +161,6 @@ export class BackupService {
       this.logger.error(`Не удалось отправить файл в Telegram: ${e instanceof Error ? e.message : String(e)}`);
       return false;
     }
-  }
-
-  private async readFile(filePath: string): Promise<Buffer> {
-    const chunks: Buffer[] = [];
-    return new Promise((resolve, reject) => {
-      createReadStream(filePath)
-        .on('data', (c) => chunks.push(Buffer.from(c)))
-        .on('end', () => resolve(Buffer.concat(chunks)))
-        .on('error', reject);
-    });
   }
 
   private timestamp(): string {
