@@ -1,6 +1,6 @@
 # API авторизации
 
-Авторизация по email с 4-значным кодом подтверждения.
+Авторизация по email с 4-значным кодом подтверждения. Базовый адрес API: `https://saliystudio.com/api`.
 
 ---
 
@@ -12,29 +12,16 @@
 
 Отправляет 4-значный код подтверждения на email.
 
-**Тело запроса:**
-```json
-{
-  "email": "user@example.com"
-}
-```
+**Поля запроса:**
 
-**Пример запроса:**
-```bash
-curl -X POST https://saliy-shop.ru/api/auth/send-code \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com"}'
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| email | строка | да | Email пользователя |
 
-**Пример ответа:**
-```json
-{
-  "message": "Код отправлен на email"
-}
-```
+**Ответ:** сообщение об успешной отправке кода.
 
 **Ошибки:**
-- `400` - Код уже был отправлен, повторная отправка через N секунд
+- `400` — код уже был отправлен, повторная отправка доступна через некоторое время.
 
 ---
 
@@ -42,36 +29,28 @@ curl -X POST https://saliy-shop.ru/api/auth/send-code \
 
 **POST** `/api/auth/verify-code`
 
-Подтверждает код и возвращает access token. Refresh token устанавливается в httpOnly cookie.
+Подтверждает код и авторизует пользователя.
 
-**Тело запроса:**
-```json
-{
-  "email": "user@example.com",
-  "code": "1234"
-}
-```
+**Поля запроса:**
 
-**Пример запроса:**
-```bash
-curl -X POST https://saliy-shop.ru/api/auth/verify-code \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "code": "1234"}'
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| email | строка | да | Email пользователя |
+| code | строка | да | 4-значный код из письма |
 
-**Пример ответа:**
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "message": "Успешная авторизация"
-}
-```
+**Что происходит при успехе:**
+- access token и refresh token устанавливаются в httpOnly cookie;
+- access token дополнительно возвращается в теле ответа (для обратной совместимости со старым фронтом).
 
-**Cookie:**
-- `refreshToken` - httpOnly, secure, 7 дней
+**Устанавливаемые cookie:**
+
+| Cookie | Срок жизни | Параметры |
+|--------|-----------|-----------|
+| accessToken | 15 минут | httpOnly, secure |
+| refreshToken | 7 дней | httpOnly, secure |
 
 **Ошибки:**
-- `401` - Неверный или истекший код
+- `401` — неверный или истёкший код.
 
 ---
 
@@ -79,24 +58,14 @@ curl -X POST https://saliy-shop.ru/api/auth/verify-code \
 
 **POST** `/api/auth/refresh`
 
-Обновляет access token используя refresh token из cookie.
+Обновляет access token, используя refresh token из cookie. Запрос должен отправляться с передачей cookie (для cross-origin фронта — режим включения учётных данных).
 
-**Пример запроса:**
-```bash
-curl -X POST https://saliy-shop.ru/api/auth/refresh \
-  --cookie "refreshToken=..."
-```
-
-**Пример ответа:**
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "message": "Токен обновлен"
-}
-```
+**Что происходит при успехе:**
+- новые access и refresh token устанавливаются в httpOnly cookie;
+- access token также возвращается в теле ответа.
 
 **Ошибки:**
-- `401` - Refresh token не найден или недействителен
+- `401` — refresh token не найден или недействителен.
 
 ---
 
@@ -104,66 +73,35 @@ curl -X POST https://saliy-shop.ru/api/auth/refresh \
 
 **POST** `/api/auth/logout`
 
-Удаляет refresh token и очищает cookie.
+Отзывает refresh token и очищает обе cookie (accessToken и refreshToken).
 
-**Пример запроса:**
-```bash
-curl -X POST https://saliy-shop.ru/api/auth/logout \
-  --cookie "refreshToken=..."
-```
-
-**Пример ответа:**
-```json
-{
-  "message": "Выход выполнен"
-}
-```
+**Ответ:** сообщение об успешном выходе.
 
 ---
 
 ## Токены
 
-### Access Token
-- Время жизни: 15 минут
-- Передаётся в заголовке: `Authorization: Bearer TOKEN`
-- Используется для всех защищённых эндпоинтов
+### Access token
+- Время жизни: 15 минут.
+- Хранится в httpOnly cookie `accessToken`.
+- Принимается сервером из cookie `accessToken` либо из заголовка `Authorization` (формат Bearer) — заголовок поддерживается для обратной совместимости.
+- Используется для всех защищённых эндпоинтов.
 
-### Refresh Token
-- Время жизни: 7 дней
-- Хранится в httpOnly cookie
-- Используется только для обновления access token
+### Refresh token
+- Время жизни: 7 дней.
+- Хранится в httpOnly cookie `refreshToken`.
+- Используется только для обновления access token.
 
 ---
 
-## Полный сценарий авторизации
+## Сценарий авторизации
 
-```bash
-# 1. Отправить код
-curl -X POST https://saliy-shop.ru/api/auth/send-code \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com"}'
-
-# 2. Получить код из email
-
-# 3. Подтвердить код
-curl -X POST https://saliy-shop.ru/api/auth/verify-code \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "code": "1234"}'
-
-# 4. Сохранить accessToken из ответа
-
-# 5. Использовать токен для запросов
-curl -X GET https://saliy-shop.ru/api/auth/me \
-  -H "Authorization: Bearer ACCESS_TOKEN"
-
-# 6. Когда токен истечёт, обновить его
-curl -X POST https://saliy-shop.ru/api/auth/refresh \
-  --cookie "refreshToken=..."
-
-# 7. Выйти из системы
-curl -X POST https://saliy-shop.ru/api/auth/logout \
-  --cookie "refreshToken=..."
-```
+1. Запросить код подтверждения на email.
+2. Получить код из письма.
+3. Подтвердить код — сервер выставит httpOnly cookie с токенами.
+4. Обращаться к защищённым эндпоинтам — браузер автоматически отправляет cookie (фронт должен включать передачу учётных данных при cross-origin запросах).
+5. При истечении access token обновить его через refresh.
+6. Выйти из системы при завершении сессии.
 
 ---
 
