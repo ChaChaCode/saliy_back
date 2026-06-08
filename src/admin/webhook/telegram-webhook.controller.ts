@@ -26,12 +26,20 @@ interface TelegramUpdate {
     };
     data: string;
   };
+  // message — личка/группы, channel_post — посты в канале. Оба несут text.
   message?: {
     message_id: number;
     from?: {
       id: number;
       first_name: string;
     };
+    chat: {
+      id: number;
+    };
+    text?: string;
+  };
+  channel_post?: {
+    message_id: number;
     chat: {
       id: number;
     };
@@ -77,9 +85,11 @@ export class TelegramWebhookController {
 
     this.logger.log(`Received Telegram update: ${JSON.stringify(update)}`);
 
-    // Обработка текстовых команд боту (например /dump)
-    if (update.message?.text) {
-      await this.handleCommand(update.message);
+    // Обработка текстовых команд боту (например /dump).
+    // Сообщения из канала приходят как channel_post, из лички/групп — как message.
+    const textMessage = update.message ?? update.channel_post;
+    if (textMessage?.text) {
+      await this.handleCommand(textMessage);
       return { ok: true };
     }
 
