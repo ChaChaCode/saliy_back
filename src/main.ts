@@ -27,8 +27,12 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin, callback) => {
       // Разрешаем запросы без origin (например, из Postman или серверные запросы)
-      const normalized = origin?.replace(/\/+$/, '');
-      if (!origin || allowedOrigins.includes(normalized)) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      const normalized = origin.replace(/\/+$/, '');
+      if (allowedOrigins.includes(normalized)) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS`));
