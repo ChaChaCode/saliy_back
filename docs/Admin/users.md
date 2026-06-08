@@ -52,8 +52,8 @@
 | Секция | Описание |
 |--------|----------|
 | Базовые поля | `id`, `email`, `name`, `firstName`, `lastName`, `middleName`, `phone`, `avatarUrl`, `birthdate`, `socialContact` |
-| `address` | Домашний адрес: `street`, `apartment`, `postalCode`, `countryName`, `cityName` |
-| `delivery` | Настройки доставки: `deliveryType`, `cdekCityCode`, `cdekCountryCode`, `cdekRegionCode`, `cdekPickupPointCode` |
+| `address` | Адрес: `street`, `apartment`, `postalCode`, `countryName`, `regionName`, `cityName`, `fullAddress` (полный адрес одной строкой для почтовой доставки) |
+| `delivery` | Настройки доставки: `deliveryType`, `deliveryCountryCode`, `cdekCityCode`, `cdekCountryCode`, `cdekRegionCode`, `cdekPickupPointCode` |
 | `stats` | Агрегаты: `ordersCount`, `cartItemsCount`, `totalSpent`, `lastOrderAt` |
 | `orders` | Все заказы с составом (`items`). Полная инфа по заказу — `GET /api/admin/orders/:orderNumber` |
 | `reviews` | Отзывы пользователя с привязкой к товару и статусом модерации (`PENDING` / `APPROVED` / `REJECTED`) |
