@@ -49,6 +49,9 @@ lerna-debug.log*
 .temp
 .tmp
 
+# DB backups (дампы с персональными данными — не коммитить!)
+/backups
+
 # Runtime data
 pids
 *.pid
