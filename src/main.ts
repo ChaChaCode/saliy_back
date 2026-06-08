@@ -10,22 +10,25 @@ import { S3UrlInterceptor, LoggingInterceptor } from './common/interceptors';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Включаем CORS
-  const allowedOrigins = [
+  // Включаем CORS.
+  // Список разрешённых origin берётся из CORS_ORIGINS (через запятую).
+  // Если переменная не задана — используется дефолтный список ниже.
+  const defaultOrigins = [
     'http://localhost:3000', // Фронтенд в разработке
     'http://localhost:3001', // Админка в разработке
     'http://localhost:5173', // Vite dev server
-    'https://saliy-shop.ru', // Production основной сайт
-    'https://www.saliy-shop.ru', // Production с www
-    'https://admin.saliy-shop.ru', // Production админка
-    'https://saliyclothes.vercel.app',
-    'https://saliyadmin.vercel.app',
   ];
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',')
+        .map((o) => o.trim().replace(/\/+$/, '')) // убираем пробелы и хвостовой слеш
+        .filter(Boolean)
+    : defaultOrigins;
 
   app.enableCors({
     origin: (origin, callback) => {
       // Разрешаем запросы без origin (например, из Postman или серверные запросы)
-      if (!origin || allowedOrigins.includes(origin)) {
+      const normalized = origin?.replace(/\/+$/, '');
+      if (!origin || allowedOrigins.includes(normalized)) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS`));
