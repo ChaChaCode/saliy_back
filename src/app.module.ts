@@ -22,6 +22,7 @@ import { CacheModule } from './common/cache/cache.module';
 import { StorageModule } from './common/storage/storage.module';
 import { PaymentModule } from './payment/payment.module';
 import { BackupModule } from './backup/backup.module';
+import { HeaderBannerModule } from './header-banner/header-banner.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { BackupModule } from './backup/backup.module';
     NewsletterModule,
     PaymentModule,
     BackupModule,
+    HeaderBannerModule,
   ],
   controllers: [AppController],
   providers: [
