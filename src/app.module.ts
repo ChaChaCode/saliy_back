@@ -1,14 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { GraphQLModule } from '@nestjs/graphql';
-import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
-import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AppResolver } from './app.resolver';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './common/email/email.module';
@@ -24,7 +20,6 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { CacheModule } from './common/cache/cache.module';
 import { StorageModule } from './common/storage/storage.module';
-import { GqlThrottlerGuard } from './common/guards/graphql-throttler.guard';
 import { PaymentModule } from './payment/payment.module';
 import { BackupModule } from './backup/backup.module';
 
@@ -43,14 +38,6 @@ import { BackupModule } from './backup/backup.module';
         limit: 100, // 100 запросов
       },
     ]),
-    GraphQLModule.forRoot<ApolloDriverConfig>({
-      driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
-      sortSchema: true,
-      playground: true,
-      path: '/api/graphql',
-      context: ({ req, res }) => ({ req, res }),
-    }),
     PrismaModule,
     EmailModule,
     AuthModule,
@@ -70,11 +57,10 @@ import { BackupModule } from './backup/backup.module';
   controllers: [AppController],
   providers: [
     AppService,
-    AppResolver,
-    // Глобальный rate limiting guard с поддержкой GraphQL
+    // Глобальный rate limiting guard для REST
     {
       provide: APP_GUARD,
-      useClass: GqlThrottlerGuard,
+      useClass: ThrottlerGuard,
     },
   ],
 })

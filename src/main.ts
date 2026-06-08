@@ -72,7 +72,7 @@ async function bootstrap() {
 
   // Глобальные interceptors
   app.useGlobalInterceptors(
-    new LoggingInterceptor(), // Логирование HTTP/GraphQL запросов
+    new LoggingInterceptor(), // Логирование HTTP запросов
     new S3UrlInterceptor(), // Преобразование относительных путей в S3 URL
   );
 

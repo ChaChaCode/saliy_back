@@ -186,25 +186,6 @@
 
 ---
 
-## GraphQL API
-
-Помимо REST, доступен GraphQL API с аналогичной функциональностью.
-
-### Queries
-
-- `cart` — получить корзину (поля: id, productId, size, quantity, product { name, price, discount }).
-- `validateCart(input: ValidateCartInput!)` — валидировать корзину; возвращает items (productId, productName, size, quantity, price, finalPrice, totalPrice, inStock, availableQuantity), subtotal, total, itemsCount.
-
-### Mutations
-
-- `addToCart(productId, size, quantity)` — добавить в корзину; возвращает id, quantity.
-- `updateCartItem(itemId, quantity)` — обновить количество; возвращает id, quantity.
-- `removeFromCart(itemId)` — удалить из корзины.
-- `clearCart` — очистить корзину.
-- `mergeCart(items: [CartItemInput!]!)` — объединить корзину.
-
----
-
 ## Сценарии использования
 
 ### Сценарий 1: Гость добавляет товар
