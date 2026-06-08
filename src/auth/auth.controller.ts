@@ -49,15 +49,7 @@ export class AuthController {
       verifyCodeDto.code,
     );
 
-    // Устанавливаем refresh token в httpOnly cookie
-    const isProduction = process.env.NODE_ENV === 'production';
-    response.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: true, // Всегда true (для sameSite: 'none' обязательно)
-      sameSite: isProduction ? 'lax' : 'none', // 'none' в dev для cross-origin
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
-      path: '/',
-    });
+    this.setAuthCookies(response, accessToken, refreshToken);
 
     return {
       accessToken,
@@ -80,15 +72,7 @@ export class AuthController {
     const { accessToken, refreshToken: newRefreshToken } =
       await this.authService.refreshTokens(refreshToken);
 
-    // Обновляем refresh token в cookie
-    const isProduction = process.env.NODE_ENV === 'production';
-    response.cookie('refreshToken', newRefreshToken, {
-      httpOnly: true,
-      secure: true, // Всегда true (для sameSite: 'none' обязательно)
-      sameSite: isProduction ? 'lax' : 'none', // 'none' в dev для cross-origin
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
+    this.setAuthCookies(response, accessToken, newRefreshToken);
 
     return {
       accessToken,
@@ -108,18 +92,49 @@ export class AuthController {
       await this.authService.logout(refreshToken);
     }
 
-    // Удаляем cookie (настройки должны совпадать с установкой)
-    const isProduction = process.env.NODE_ENV === 'production';
-    response.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: true,
-      sameSite: isProduction ? 'lax' : 'none',
-      path: '/',
-    });
+    // Удаляем обе куки (настройки должны совпадать с установкой)
+    const opts = this.cookieOptions();
+    response.clearCookie('accessToken', opts);
+    response.clearCookie('refreshToken', opts);
 
     return {
       message: 'Выход выполнен',
     };
+  }
+
+  /**
+   * Общие опции для auth-кук.
+   * secure: true всегда (требуется для sameSite: 'none' в dev cross-origin).
+   */
+  private cookieOptions() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    return {
+      httpOnly: true,
+      secure: true,
+      sameSite: (isProduction ? 'lax' : 'none') as 'lax' | 'none',
+      path: '/',
+    };
+  }
+
+  /**
+   * Ставит access (15 мин — короткоживущий) и refresh (7 дней) в httpOnly куки.
+   * Access также возвращается в теле ответа для обратной совместимости со
+   * старым фронтом, читающим его из JSON; новый фронт может полагаться на куку.
+   */
+  private setAuthCookies(
+    response: Response,
+    accessToken: string,
+    refreshToken: string,
+  ) {
+    const opts = this.cookieOptions();
+    response.cookie('accessToken', accessToken, {
+      ...opts,
+      maxAge: 15 * 60 * 1000, // 15 минут
+    });
+    response.cookie('refreshToken', refreshToken, {
+      ...opts,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
+    });
   }
 
   @Get('me')
