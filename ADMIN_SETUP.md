@@ -31,21 +31,21 @@ VALUES ('admin-1', 'Main Admin', 'SUPER_ADMIN', true, NOW(), NOW());
 
 Или вручную:
 ```bash
-curl -X POST "https://api.telegram.org/bot8488379985:AAGobKg7euDd21V22-k_r0F31eCHGjv2lrY/setWebhook" \
+curl -X POST "https://api.telegram.org/bot<BOT_TOKEN>/setWebhook" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://saliy-shop.ru/api/admin/telegram/webhook"}'
+  -d '{"url": "https://saliystudio.com/api/admin/telegram/webhook"}'
 ```
 
 Проверить статус:
 ```bash
-curl "https://api.telegram.org/bot8488379985:AAGobKg7euDd21V22-k_r0F31eCHGjv2lrY/getWebhookInfo"
+curl "https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo"
 ```
 
 ## 3. Тестирование авторизации
 
 ### Шаг 1: Запросить вход
 ```bash
-curl -X POST https://saliy-shop.ru/api/admin/auth/request-login
+curl -X POST https://saliystudio.com/api/admin/auth/request-login
 ```
 
 Ответ:
@@ -73,7 +73,7 @@ curl -X POST https://saliy-shop.ru/api/admin/auth/request-login
 
 ### Шаг 3: Polling статуса (фронтенд делает каждые 2 сек)
 ```bash
-curl https://saliy-shop.ru/api/admin/auth/check-status/LOGIN_ID
+curl https://saliystudio.com/api/admin/auth/check-status/LOGIN_ID
 ```
 
 До подтверждения:
@@ -94,7 +94,7 @@ curl https://saliy-shop.ru/api/admin/auth/check-status/LOGIN_ID
 ### Шаг 4: Использовать токен
 ```bash
 curl -H "Authorization: Bearer TOKEN" \
-  -X POST https://saliy-shop.ru/api/products \
+  -X POST https://saliystudio.com/api/products \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Тестовый товар",
@@ -108,7 +108,7 @@ curl -H "Authorization: Bearer TOKEN" \
 
 Токен живёт 24 часа. Для обновления:
 ```bash
-curl -X POST https://saliy-shop.ru/api/admin/auth/refresh \
+curl -X POST https://saliystudio.com/api/admin/auth/refresh \
   -H "Authorization: Bearer OLD_TOKEN"
 ```
 
@@ -154,7 +154,7 @@ curl -X POST https://saliy-shop.ru/api/admin/auth/refresh \
 
 Смотреть логи:
 ```bash
-pm2 logs saliy-api
+pm2 logs saliy_back
 # или
 tail -f logs/app.log
 ```
@@ -178,10 +178,10 @@ tail -f logs/app.log
 ### Webhook не работает
 ```bash
 # Проверить статус
-curl "https://api.telegram.org/bot8488379985:AAGobKg7euDd21V22-k_r0F31eCHGjv2lrY/getWebhookInfo"
+curl "https://api.telegram.org/bot<BOT_TOKEN>/getWebhookInfo"
 
 # Удалить webhook
-curl "https://api.telegram.org/bot8488379985:AAGobKg7euDd21V22-k_r0F31eCHGjv2lrY/deleteWebhook"
+curl "https://api.telegram.org/bot<BOT_TOKEN>/deleteWebhook"
 
 # Установить заново
 ./setup_telegram_webhook.sh
@@ -198,5 +198,5 @@ curl "https://api.telegram.org/bot8488379985:AAGobKg7euDd21V22-k_r0F31eCHGjv2lrY
 В Telegram нажать кнопку "🔓 Разблокировать" или очистить кеш:
 ```bash
 # Если есть доступ к серверу
-pm2 restart saliy-api
+pm2 restart saliy_back
 ```
