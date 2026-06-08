@@ -48,18 +48,21 @@ async function seed() {
         images: [
           {
             url: 'products/dzhinsovka-black/Глеб фото 2.jpg',
+            order: 0,
             isPreview: true,
             previewOrder: 1,
           },
           {
             url: 'products/dzhinsovka-black/Глеб фото 3.jpg',
+            order: 1,
             isPreview: true,
             previewOrder: 2,
           },
           {
             url: 'products/dzhinsovka-black/Глеб фото 5.jpg',
+            order: 2,
             isPreview: false,
-            previewOrder: null,
+            previewOrder: 999,
           },
         ],
         stock: {
@@ -96,23 +99,27 @@ async function seed() {
         images: [
           {
             url: 'products/dzhinsovka-blue/Глеб фото син 1.jpg',
+            order: 0,
             isPreview: true,
             previewOrder: 1,
           },
           {
             url: 'products/dzhinsovka-blue/Глеб фото син 2.jpg',
+            order: 1,
             isPreview: true,
             previewOrder: 2,
           },
           {
             url: 'products/dzhinsovka-blue/Глеб фото син 3.jpg',
+            order: 2,
             isPreview: false,
-            previewOrder: null,
+            previewOrder: 999,
           },
           {
             url: 'products/dzhinsovka-blue/Глеб фото син 4.jpg',
+            order: 3,
             isPreview: false,
-            previewOrder: null,
+            previewOrder: 999,
           },
         ],
         stock: {

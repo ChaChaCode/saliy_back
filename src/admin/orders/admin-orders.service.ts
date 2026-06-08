@@ -8,6 +8,7 @@ import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email/email.service';
 import { DeliveryService } from '../../delivery/delivery.service';
+import { pickMainImage } from '../../common/utils/product-image.util';
 
 interface FindAllParams {
   status?: OrderStatus;
@@ -503,9 +504,7 @@ export class AdminOrdersService {
    */
   private formatOrder(order: any) {
     const formattedItems = order.items.map((item: any) => {
-      const images = item.product?.images as any;
-      const imageUrl =
-        Array.isArray(images) && images.length > 0 ? images[0] : null;
+      const imageUrl = pickMainImage(item.product?.images);
       const finalPrice = Math.floor(
         item.price - (item.price * item.discount) / 100,
       );

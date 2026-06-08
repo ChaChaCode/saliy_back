@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { pickMainImage } from '../../common/utils/product-image.util';
 
 type Period = 'day' | 'week' | 'month' | 'year';
 
@@ -253,8 +254,7 @@ export class AdminDashboardService {
 
     return topItems.map((item) => {
       const product = products.find((p) => p.id === item.productId);
-      const images = (product?.images as any) || [];
-      const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+      const imageUrl = pickMainImage(product?.images);
 
       return {
         productId: item.productId,

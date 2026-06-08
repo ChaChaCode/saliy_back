@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddToCartDto, UpdateCartItemDto, CartItemDto } from './cart.dto';
+import { pickMainImage } from '../common/utils/product-image.util';
 
 @Injectable()
 export class CartService {
@@ -261,10 +262,8 @@ export class CartService {
 
       subtotal += totalPrice;
 
-      // Получаем превью изображение
-      const images = product.images as any;
-      const previewImage = images.find((img: any) => img.isPreview) || images[0];
-      const imageUrl = previewImage?.url || '';
+      // Главное изображение (primary → preview → по order)
+      const imageUrl = pickMainImage(product.images)?.url || '';
 
       validatedItems.push({
         productId: product.id,

@@ -9,6 +9,7 @@ import {
   Max,
   IsObject,
   IsNotEmpty,
+  ValidateNested,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { card_status, gender_type } from '@prisma/client';
@@ -176,6 +177,11 @@ export class ProductImageDto {
   url: string;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  order?: number;
+
+  @IsOptional()
   @Transform(toBoolean)
   @IsBoolean()
   isPreview?: boolean;
@@ -184,4 +190,15 @@ export class ProductImageDto {
   @Type(() => Number)
   @IsNumber()
   previewOrder?: number;
+}
+
+/**
+ * Тело PATCH /admin/products/:id/images-order — полный массив изображений
+ * с порядком галереи и флагами превью. Приходит JSON (application/json).
+ */
+export class UpdateProductImagesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProductImageDto)
+  images: ProductImageDto[];
 }

@@ -13,6 +13,7 @@ import { PromoService } from '../promo/promo.service';
 import { CartService } from '../cart/cart.service';
 import { AdminSettingsService } from '../admin/settings/admin-settings.service';
 import { AlfaPayService } from '../payment/alfa-pay.service';
+import { pickMainImage } from '../common/utils/product-image.util';
 import { YandexPayService } from '../payment/yandex-pay.service';
 import { DeliveryService } from '../delivery/delivery.service';
 
@@ -382,9 +383,8 @@ export class OrdersService {
       const finalPrice = Math.floor(price - (price * discount) / 100);
       const totalPrice = finalPrice * item.quantity;
 
-      // Получаем первое изображение товара
-      const images = product.images as any;
-      const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+      // Главное изображение товара (primary → preview → по order)
+      const imageUrl = pickMainImage(product.images);
 
       validatedItems.push({
         productId: product.id,
@@ -603,8 +603,7 @@ export class OrdersService {
 
     // Форматируем данные
     const formattedItems = order.items.map((item) => {
-      const images = item.product?.images as any;
-      const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+      const imageUrl = pickMainImage(item.product?.images);
       const finalPrice = Math.floor(item.price - (item.price * item.discount) / 100);
 
       return {
@@ -672,8 +671,7 @@ export class OrdersService {
     // Форматируем данные для удобства
     return orders.map((order) => {
       const formattedItems = order.items.map((item) => {
-        const images = item.product?.images as any;
-        const imageUrl = Array.isArray(images) && images.length > 0 ? images[0] : null;
+        const imageUrl = pickMainImage(item.product?.images);
         const finalPrice = Math.floor(item.price - (item.price * item.discount) / 100);
 
         return {

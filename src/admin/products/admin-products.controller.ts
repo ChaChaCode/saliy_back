@@ -16,7 +16,11 @@ import {
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { AdminProductsService } from './admin-products.service';
-import { CreateProductDto, UpdateProductDto } from './dto/admin-product.dto';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  UpdateProductImagesDto,
+} from './dto/admin-product.dto';
 
 @Controller('admin/products')
 @UseGuards(AdminGuard)
@@ -256,5 +260,30 @@ export class AdminProductsController {
       primary: body.primary,
       hover: body.hover ?? null,
     });
+  }
+
+  /**
+   * Обновить весь массив изображений товара за один запрос: порядок галереи
+   * (order), флаги превью (isPreview) и previewOrder.
+   * PATCH /admin/products/:id/images-order
+   * Body (application/json):
+   *   { images: [{ url, order, isPreview, previewOrder }] }
+   *
+   * Валидация: ≤ 2 превью; у превью previewOrder ∈ {1,2} и уникальны;
+   * все url должны существовать у товара. order нормализуется 0..n по порядку.
+   */
+  @Patch(':id/images-order')
+  async updateProductImages(
+    @Param('id') id: string,
+    @Body() body: UpdateProductImagesDto,
+  ) {
+    const productId = parseInt(id, 10);
+    if (isNaN(productId)) {
+      throw new BadRequestException('Invalid product ID');
+    }
+    return this.adminProductsService.updateProductImages(
+      productId,
+      body.images as any,
+    );
   }
 }
