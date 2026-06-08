@@ -52,6 +52,28 @@ export class AdminProductsController {
   }
 
   /**
+   * Получить enums для товаров (категории, полы, статусы)
+   * GET /admin/products/enums/all
+   *
+   * ВАЖНО: статические маршруты объявлены ВЫШE @Get(':id'),
+   * иначе параметрический роут перехватит 'enums'/'low-stock'.
+   */
+  @Get('enums/all')
+  async getEnums() {
+    return this.adminProductsService.getEnums();
+  }
+
+  /**
+   * Товары с низким остатком на складе
+   * GET /admin/products/low-stock?threshold=5
+   */
+  @Get('low-stock')
+  async getLowStock(@Query('threshold') threshold?: string) {
+    const t = threshold ? parseInt(threshold, 10) : 5;
+    return this.adminProductsService.getLowStockProducts(t);
+  }
+
+  /**
    * Получить товар по ID
    * GET /admin/products/:id
    */
@@ -68,25 +90,6 @@ export class AdminProductsController {
     }
 
     return product;
-  }
-
-  /**
-   * Получить enums для товаров (категории, полы, статусы)
-   * GET /admin/products/enums/all
-   */
-  @Get('enums/all')
-  async getEnums() {
-    return this.adminProductsService.getEnums();
-  }
-
-  /**
-   * Товары с низким остатком на складе
-   * GET /admin/products/low-stock?threshold=5
-   */
-  @Get('low-stock')
-  async getLowStock(@Query('threshold') threshold?: string) {
-    const t = threshold ? parseInt(threshold, 10) : 5;
-    return this.adminProductsService.getLowStockProducts(t);
   }
 
   /**

@@ -17,8 +17,8 @@ class CreateCampaignDto {
   @IsString() @IsNotEmpty() subject: string;
   @IsString() @IsNotEmpty() html: string;
   @IsOptional()
-  @IsIn(['ALL', 'WITH_ORDERS', 'WITHOUT_ORDERS'])
-  targetType?: 'ALL' | 'WITH_ORDERS' | 'WITHOUT_ORDERS';
+  @IsIn(['ALL', 'WITH_ORDERS', 'WITHOUT_ORDERS', 'NEWSLETTER'])
+  targetType?: 'ALL' | 'WITH_ORDERS' | 'WITHOUT_ORDERS' | 'NEWSLETTER';
 }
 
 @Controller('admin/campaigns')
