@@ -24,6 +24,7 @@ import { VerifyCodeDto } from './dto/verify-code.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { authCookieOptions } from '../common/utils/cookie.util';
 
 @Controller('auth')
 export class AuthController {
@@ -103,17 +104,11 @@ export class AuthController {
   }
 
   /**
-   * Общие опции для auth-кук.
-   * secure: true всегда (требуется для sameSite: 'none' в dev cross-origin).
+   * Общие опции для auth-кук. SameSite управляется через COOKIE_SAMESITE
+   * (lax по умолчанию; none — для cross-site фронта, напр. Vercel).
    */
   private cookieOptions() {
-    const isProduction = process.env.NODE_ENV === 'production';
-    return {
-      httpOnly: true,
-      secure: true,
-      sameSite: (isProduction ? 'lax' : 'none') as 'lax' | 'none',
-      path: '/',
-    };
+    return authCookieOptions();
   }
 
   /**

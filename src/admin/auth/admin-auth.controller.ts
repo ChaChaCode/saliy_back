@@ -12,6 +12,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminGuard } from '../../common/guards/admin.guard';
+import { authCookieOptions } from '../../common/utils/cookie.util';
 
 const ADMIN_COOKIE_NAME = 'adminToken';
 const ADMIN_COOKIE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 часа
@@ -88,24 +89,18 @@ export class AdminAuthController {
     if (token) {
       await this.adminAuthService.revokeToken(token);
     }
-    res.clearCookie(ADMIN_COOKIE_NAME, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-    });
+    res.clearCookie(ADMIN_COOKIE_NAME, authCookieOptions());
     return { success: true };
   }
 
   /**
-   * Поставить админский httpOnly cookie
+   * Поставить админский httpOnly cookie.
+   * SameSite управляется через COOKIE_SAMESITE (см. cookie.util).
    */
   private setAdminCookie(res: Response, token: string) {
     res.cookie(ADMIN_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      ...authCookieOptions(),
       maxAge: ADMIN_COOKIE_MAX_AGE,
-      path: '/',
     });
   }
 
