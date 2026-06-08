@@ -1,4 +1,11 @@
-import { Controller, Post, Body, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Headers,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AdminAuthService } from '../auth/admin-auth.service';
 import { SimpleCacheService } from '../../common/cache/simple-cache.service';
 
@@ -21,6 +28,7 @@ interface TelegramUpdate {
 }
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 
 @Controller('admin/telegram')
 export class TelegramWebhookController {
@@ -36,7 +44,19 @@ export class TelegramWebhookController {
    * POST /admin/telegram/webhook
    */
   @Post('webhook')
-  async handleWebhook(@Body() update: TelegramUpdate) {
+  async handleWebhook(
+    @Body() update: TelegramUpdate,
+    @Headers('x-telegram-bot-api-secret-token') secretToken?: string,
+  ) {
+    // Проверяем, что запрос действительно от Telegram.
+    // Telegram присылает заголовок X-Telegram-Bot-Api-Secret-Token, заданный
+    // при setWebhook. Без этой проверки кто угодно мог бы подделать callback
+    // и, например, подтвердить вход и создать себе SUPER_ADMIN.
+    if (!TELEGRAM_WEBHOOK_SECRET || secretToken !== TELEGRAM_WEBHOOK_SECRET) {
+      this.logger.warn('Отклонён webhook с неверным secret token');
+      throw new UnauthorizedException('Invalid webhook secret');
+    }
+
     this.logger.log(`Received Telegram update: ${JSON.stringify(update)}`);
 
     if (!update.callback_query) {
