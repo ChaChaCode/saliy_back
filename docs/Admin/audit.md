@@ -2,31 +2,32 @@
 
 **Базовый URL:** `/api/admin/audit`
 
-**Требуется авторизация:** Admin Bearer Token
+**Авторизация:** все эндпоинты требуют авторизации администратора (`AdminGuard`). Запросы авторизуются через httpOnly cookie `adminToken`, которую браузер отправляет автоматически (заголовок `Authorization` также принимается для обратной совместимости).
 
 ---
 
 ## Как это работает
 
-Все state-changing запросы (`POST`, `PUT`, `PATCH`, `DELETE`) на маршруты `/admin/*` **автоматически** пишутся в таблицу `audit_logs`. Ничего вручную вызывать не нужно — интерцептор подключён глобально через `APP_INTERCEPTOR` в [src/admin/audit/audit.module.ts](src/admin/audit/audit.module.ts).
+Все state-changing запросы (`POST`, `PUT`, `PATCH`, `DELETE`) на маршруты `/admin/*` автоматически пишутся в таблицу `audit_logs`. Ничего вручную вызывать не нужно — интерцептор подключён глобально через `APP_INTERCEPTOR` в `src/admin/audit/audit.module.ts`.
 
-### Что логируется:
+Что логируется:
 - **Кто** — `adminId` + `adminName` (из `req.admin`)
 - **Что** — метод + путь + action (CREATE / UPDATE / DELETE)
 - **Изменения** — тело запроса (пароли/токены маскируются как `***`)
 - **Откуда** — IP + User-Agent
 - **Результат** — HTTP status code
 
-### Что НЕ логируется:
+Что НЕ логируется:
 - GET-запросы (чтобы не засорять БД)
 - `/admin/auth/*` (иначе логировались бы все попытки входа)
 - `/admin/webhook/*` (Telegram webhook'и)
 
 ---
 
-## GET /api/admin/audit
+## Получить записи аудита
 
-### Query параметры:
+**GET** `/api/admin/audit`
+
 | Параметр | Описание |
 |----------|----------|
 | `adminId` | Фильтр по админу |
@@ -35,41 +36,13 @@
 | `dateFrom`, `dateTo` | Период |
 | `page`, `limit` | Пагинация (default 1 / 50) |
 
-### Пример:
-```bash
-curl "https://saliy-shop.ru/api/admin/audit?entityType=orders&action=UPDATE&page=1" \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-### Response:
-```json
-{
-  "logs": [
-    {
-      "id": "uuid",
-      "adminId": "admin-uuid",
-      "adminName": "Иван Админов",
-      "action": "UPDATE",
-      "method": "PATCH",
-      "path": "/api/admin/orders/SALIY2603290001/status",
-      "entityType": "orders",
-      "entityId": "SALIY2603290001",
-      "changes": { "status": "SHIPPED" },
-      "ip": "192.168.1.100",
-      "userAgent": "Mozilla/5.0...",
-      "statusCode": 200,
-      "createdAt": "2026-04-11T12:00:00.000Z"
-    }
-  ],
-  "pagination": { "page": 1, "limit": 50, "total": 342, "totalPages": 7 }
-}
-```
+Ответ: объект с полями `logs` (массив) и `pagination`. Каждая запись содержит: `id`, `adminId`, `adminName`, `action`, `method`, `path`, `entityType`, `entityId`, `changes`, `ip`, `userAgent`, `statusCode`, `createdAt`.
 
 ---
 
-## Таблица `entity_type` ↔ маршрут
+## Таблица entity_type ↔ маршрут
 
-Интерцептор автоматически извлекает `entity_type` как первый сегмент после `/admin/`:
+Интерцептор извлекает `entityType` как первый сегмент после `/admin/`:
 
 | Путь | entityType |
 |------|-----------|
@@ -85,6 +58,6 @@ curl "https://saliy-shop.ru/api/admin/audit?entityType=orders&action=UPDATE&page
 
 ## Безопасность
 
-Интерцептор **не блокирует** основной запрос — даже если запись в аудит упадёт, ответ клиенту придёт нормально (ошибка уходит только в лог).
+Интерцептор не блокирует основной запрос — даже если запись в аудит упадёт, ответ клиенту придёт нормально (ошибка уходит только в лог).
 
 Чувствительные поля (`password`, `token`, `secret`, `apiKey`, `refreshToken`) автоматически маскируются в `changes`.

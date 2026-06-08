@@ -1,30 +1,33 @@
 # API категорий
 
-> **REST API** для базовых операций с категориями.
+> REST API для базовых операций с категориями.
 > Для расширенных возможностей и гибкости используйте [GraphQL API](./graphql.md).
+
+Глобальный префикс приложения — `/api`.
 
 ## Структура категории
 
-```typescript
-{
-  id: number;              // ID категории
-  name: string;            // Название (уникальное)
-  slug: string;            // URL slug (уникальный)
-  type: category_type;     // Тип категории
-  isActive: boolean;       // Активна ли категория
-  desktopBannerUrl?: string; // URL баннера для десктопа
-  mobileBannerUrl?: string;  // URL баннера для мобильной версии
-  createdAt: Date;         // Дата создания
-  updatedAt: Date;         // Дата обновления
-}
-```
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | number | ID категории |
+| name | string | Название (уникальное) |
+| slug | string | URL slug (уникальный) |
+| type | category_type | Тип категории |
+| isActive | boolean | Активна ли категория |
+| desktopBannerUrl | string? | URL баннера для десктопа |
+| mobileBannerUrl | string? | URL баннера для мобильной версии |
+| createdAt | string (date) | Дата создания |
+| updatedAt | string (date) | Дата обновления |
 
 ### Типы категорий (category_type)
-- `TOP` - Верхняя одежда (толстовки, футболки)
-- `BOTTOM` - Нижняя одежда (штаны)
-- `ACCESSORIES` - Аксессуары (кепки, сумки)
-- `SPORT` - Спортивная одежда
-- `OTHER` - Другое
+
+| Значение | Описание |
+|----------|----------|
+| TOP | Верхняя одежда (толстовки, футболки) |
+| BOTTOM | Нижняя одежда (штаны) |
+| ACCESSORIES | Аксессуары (кепки, сумки) |
+| SPORT | Спортивная одежда |
+| OTHER | Другое |
 
 ---
 
@@ -34,49 +37,7 @@
 
 **GET** `/api/categories`
 
-**Пример запроса:**
-```bash
-curl -X GET https://saliy-shop.ru/api/categories
-```
-
-**Пример ответа:**
-```json
-[
-  {
-    "id": 1,
-    "name": "Толстовки",
-    "slug": "hoodies",
-    "type": "TOP",
-    "isActive": true,
-    "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
-    "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
-    "createdAt": "2024-01-15T10:00:00.000Z",
-    "updatedAt": "2024-01-15T10:00:00.000Z"
-  },
-  {
-    "id": 2,
-    "name": "Футболки",
-    "slug": "tshirts",
-    "type": "TOP",
-    "isActive": true,
-    "desktopBannerUrl": null,
-    "mobileBannerUrl": null,
-    "createdAt": "2024-01-15T10:00:00.000Z",
-    "updatedAt": "2024-01-15T10:00:00.000Z"
-  },
-  {
-    "id": 3,
-    "name": "Штаны",
-    "slug": "pants",
-    "type": "BOTTOM",
-    "isActive": true,
-    "desktopBannerUrl": null,
-    "mobileBannerUrl": null,
-    "createdAt": "2024-01-15T10:00:00.000Z",
-    "updatedAt": "2024-01-15T10:00:00.000Z"
-  }
-]
-```
+Возвращает массив всех активных категорий. Поля каждого элемента — см. «Структура категории». Поля `desktopBannerUrl` и `mobileBannerUrl` могут быть `null`, если баннеры не загружены.
 
 ---
 
@@ -84,28 +45,13 @@ curl -X GET https://saliy-shop.ru/api/categories
 
 **GET** `/api/categories/:slug`
 
-**Пример запроса:**
-```bash
-curl -X GET https://saliy-shop.ru/api/categories/hoodies
-```
+Возвращает одну категорию по её slug (поля — см. «Структура категории»).
 
-**Пример ответа:**
-```json
-{
-  "id": 1,
-  "name": "Толстовки",
-  "slug": "hoodies",
-  "type": "TOP",
-  "isActive": true,
-  "desktopBannerUrl": "/uploads/categories/desktop-cat1-1234567890.jpg",
-  "mobileBannerUrl": "/uploads/categories/mobile-cat1-1234567890.jpg",
-  "createdAt": "2024-01-15T10:00:00.000Z",
-  "updatedAt": "2024-01-15T10:00:00.000Z"
-}
-```
+Ошибки:
 
-**Ошибки:**
-- `404` - Категория не найдена
+| Код | Описание |
+|-----|----------|
+| 404 | Категория не найдена |
 
 ---
 
@@ -113,84 +59,60 @@ curl -X GET https://saliy-shop.ru/api/categories/hoodies
 
 **GET** `/api/categories/:slug/products`
 
-**Query параметры:**
-- `limit` - Количество товаров (по умолчанию 20)
-- `offset` - Смещение для пагинации
+Query-параметры:
 
-**Пример запроса:**
-```bash
-curl -X GET "https://saliy-shop.ru/api/categories/hoodies/products?limit=10&offset=0"
-```
+| Параметр | Тип | Обязательное | Описание |
+|----------|-----|--------------|----------|
+| limit | number | нет | Количество товаров (по умолчанию 20) |
+| offset | number | нет | Смещение для пагинации (по умолчанию 0) |
 
-**Пример ответа:**
-```json
-{
-  "category": {
-    "id": 1,
-    "name": "Толстовки",
-    "slug": "hoodies",
-    "type": "TOP"
-  },
-  "products": [
-    {
-      "id": 1,
-      "name": "Чёрная толстовка оверсайз",
-      "slug": "black-oversized-hoodie",
-      "description": "Премиальная толстовка из плотного хлопка 380 г/м²",
-      "cardStatus": "NEW",
-      "gender": "unisex",
-      "color": "black",
-      "weight": 650,
-      "price": 6300,
-      "discount": 0,
-      "images": [
-        {
-          "url": "products/hoodie-black/front.jpg",
-          "isPreview": true,
-          "previewOrder": 1
-        }
-      ],
-      "stock": {
-        "XS": 5,
-        "S": 10,
-        "M": 15
-      },
-      "isActive": true,
-      "viewCount": 0,
-      "salesCount": 0,
-      "createdAt": "2024-01-15T10:00:00.000Z",
-      "updatedAt": "2024-01-15T10:00:00.000Z"
-    }
-  ],
-  "total": 1,
-  "limit": 10,
-  "offset": 0
-}
-```
+Структура ответа:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| category | object | Краткая информация о категории: `id`, `name`, `slug`, `type` |
+| products | object[] | Список товаров категории |
+| total | number | Общее количество товаров в категории |
+| limit | number | Применённый лимит |
+| offset | number | Применённое смещение |
+
+Каждый товар в `products` содержит поля: `id`, `name`, `slug`, `description`, `cardStatus`, `gender`, `color`, `weight`, `price`, `discount`, `images` (массив объектов с `url`, `isPreview`, `previewOrder`), `stock` (объект «размер → остаток»), `isActive`, `viewCount`, `salesCount`, `createdAt`, `updatedAt`.
+
+Ошибки:
+
+| Код | Описание |
+|-----|----------|
+| 404 | Категория не найдена |
+
+---
+
+### 4. Загрузить баннеры категории
+
+**PUT** `/api/categories/:id/banners`
+
+Content-Type: `multipart/form-data`. Параметр `:id` — числовой ID категории.
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| desktopBanner | file | нет* | Баннер для десктопа |
+| mobileBanner | file | нет* | Баннер для мобильной версии |
+
+\* Должен быть передан хотя бы один из файлов (desktop или mobile), иначе сервер вернёт 400.
+
+Ошибки:
+
+| Код | Описание |
+|-----|----------|
+| 400 | Не передано ни одного файла баннера |
 
 ---
 
 ## Примеры использования
 
-### Получить все активные категории
-```bash
-curl -X GET https://saliy-shop.ru/api/categories
-```
-
-### Получить категорию с баннерами
-```bash
-curl -X GET https://saliy-shop.ru/api/categories/hoodies
-```
-
-### Получить товары категории "Толстовки"
-```bash
-curl -X GET https://saliy-shop.ru/api/categories/hoodies/products
-```
-
-### Получить товары категории с пагинацией
-```bash
-curl -X GET "https://saliy-shop.ru/api/categories/tshirts/products?limit=20&offset=20"
-```
+- Получить все активные категории: **GET** `/api/categories`.
+- Получить категорию с баннерами: **GET** `/api/categories/hoodies`.
+- Получить товары категории «Толстовки»: **GET** `/api/categories/hoodies/products`.
+- Получить товары категории с пагинацией: **GET** `/api/categories/tshirts/products?limit=20&offset=20`.
 
 ---
 
@@ -199,6 +121,7 @@ curl -X GET "https://saliy-shop.ru/api/categories/tshirts/products?limit=20&offs
 | Код | Описание |
 |-----|----------|
 | 200 | Успешно |
+| 400 | Некорректные данные (для загрузки баннеров) |
 | 404 | Категория не найдена |
 | 500 | Ошибка сервера |
 
@@ -206,4 +129,4 @@ curl -X GET "https://saliy-shop.ru/api/categories/tshirts/products?limit=20&offs
 
 ## См. также
 
-- [API товаров](./products.md) - Работа с товарами
+- [API товаров](./products.md) — работа с товарами

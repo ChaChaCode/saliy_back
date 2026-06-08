@@ -6,7 +6,9 @@
 
 К отзыву можно прикрепить:
 - текст до **1000 символов** (опционально)
-- до **5 фотографий** (опционально, JPG/PNG/WEBP, до 5MB каждое)
+- до **5 фотографий** (опционально, JPG/JPEG/PNG/WEBP, до 5MB каждое)
+
+**Авторизация:** через httpOnly cookie `accessToken` — токен отправляется браузером автоматически. Заголовок `Authorization: Bearer <token>` также принимается для совместимости. Хранить токен в localStorage не нужно.
 
 ---
 
@@ -14,78 +16,49 @@
 
 **POST** `/api/reviews`
 
-**Авторизация:** обязательна (`Authorization: Bearer <access_token>`)
+**Авторизация:** обязательна (токен в httpOnly cookie, отправляется браузером автоматически).
 
 **Content-Type:** `multipart/form-data`
 
 ### Поля формы:
 
-| Поле         | Тип      | Обязательно | Описание                                        |
+| Поле | Тип | Обязательно | Описание |
 |--------------|----------|-------------|-------------------------------------------------|
-| `productId`  | number   | да          | ID товара                                       |
-| `authorName` | string   | да          | Имя автора, до 100 символов                     |
-| `rating`     | number   | да          | Оценка 1-5                                      |
-| `text`       | string   | нет         | Текст отзыва, до 1000 символов                  |
-| `images`     | file[]   | нет         | До 5 фотографий (JPG/PNG/WEBP, до 5MB каждое)   |
+| `productId` | number | да | ID товара |
+| `authorName` | string | да | Имя автора, до 100 символов |
+| `rating` | number | да | Оценка 1-5 |
+| `text` | string | нет | Текст отзыва, до 1000 символов |
+| `images` | file[] | нет | До 5 фотографий (JPG/JPEG/PNG/WEBP, до 5MB каждое) |
 
-### Пример (curl):
-```bash
-curl -X POST https://saliy-shop.ru/api/reviews \
-  -H "Authorization: Bearer <TOKEN>" \
-  -F "productId=20" \
-  -F "authorName=Иван П." \
-  -F "rating=5" \
-  -F "text=Отличное качество, размер подошёл идеально." \
-  -F "images=@photo1.jpg" \
-  -F "images=@photo2.jpg"
-```
+### Поля ответа:
 
-### Пример (JS/FormData):
-```js
-const form = new FormData();
-form.append('productId', '20');
-form.append('authorName', 'Иван П.');
-form.append('rating', '5');
-form.append('text', 'Отличное качество');
-photos.forEach((f) => form.append('images', f));
+| Поле | Тип | Описание |
+|---|---|---|
+| `id` | string (uuid) | ID отзыва |
+| `productId` | number | ID товара |
+| `userId` | string (uuid) | ID автора |
+| `authorName` | string | Имя автора |
+| `rating` | number | Оценка 1-5 |
+| `text` | string | Текст отзыва |
+| `images` | string[] | Массив полных URL фотографий (S3-хост) |
+| `status` | string | Статус модерации, для нового отзыва — `PENDING` |
+| `createdAt` | string (ISO) | Дата создания |
+| `updatedAt` | string (ISO) | Дата обновления |
 
-fetch('/api/reviews', {
-  method: 'POST',
-  headers: { Authorization: `Bearer ${token}` },
-  body: form,
-});
-```
-
-### Response:
-```json
-{
-  "id": "review-uuid",
-  "productId": 20,
-  "userId": "user-uuid",
-  "authorName": "Иван П.",
-  "rating": 5,
-  "text": "Отличное качество...",
-  "images": [
-    "https://storage.yandexcloud.net/saliy-shop/reviews/20/user-uuid-1714000000000-0.jpg",
-    "https://storage.yandexcloud.net/saliy-shop/reviews/20/user-uuid-1714000000001-1.jpg"
-  ],
-  "status": "PENDING",
-  "createdAt": "2026-04-24T02:00:00.000Z",
-  "updatedAt": "2026-04-24T02:00:00.000Z"
-}
-```
-
-> Отзыв **не виден на сайте**, пока админ его не одобрит (`status: APPROVED`).
+Отзыв **не виден на сайте**, пока админ его не одобрит (`status: APPROVED`).
 
 ### Ошибки:
-- `401` — нет токена / невалидный токен
-- `403` — у пользователя нет полученного (`DELIVERED`) заказа с этим товаром
-- `400` — рейтинг вне 1-5
-- `400` — текст длиннее 1000 символов
-- `400` — больше 5 фотографий
-- `400` — повторный отзыв от того же пользователя на тот же товар
-- `400` — неподдерживаемый формат файла (не JPG/PNG/WEBP) или размер > 5MB
-- `404` — товар не найден
+
+| Код | Причина |
+|---|---|
+| `401` | Нет токена / невалидный токен |
+| `403` | У пользователя нет полученного (`DELIVERED`) заказа с этим товаром |
+| `400` | Рейтинг вне диапазона 1-5 |
+| `400` | Текст длиннее 1000 символов |
+| `400` | Больше 5 фотографий |
+| `400` | Повторный отзыв от того же пользователя на тот же товар |
+| `400` | Неподдерживаемый формат файла (не JPG/JPEG/PNG/WEBP) или размер > 5MB |
+| `404` | Товар не найден |
 
 ---
 
@@ -93,24 +66,24 @@ fetch('/api/reviews', {
 
 **GET** `/api/reviews/can-review/:productId`
 
-**Авторизация:** обязательна
+**Авторизация:** обязательна (токен в httpOnly cookie).
 
 Используется фронтом на странице товара, чтобы показать/скрыть форму отзыва.
 
-### Response (если можно):
-```json
-{ "canReview": true }
-```
+### Поля ответа:
 
-### Response (если нельзя):
-```json
-{ "canReview": false, "reason": "NO_DELIVERED_ORDER" }
-```
+| Поле | Тип | Описание |
+|---|---|---|
+| `canReview` | boolean | Можно ли оставить отзыв |
+| `reason` | string | Причина запрета (присутствует, если `canReview = false`) |
 
-Возможные `reason`:
-- `NOT_AUTHENTICATED` — пользователь не залогинен (можно не показывать форму)
-- `NO_DELIVERED_ORDER` — нет полученного заказа с этим товаром
-- `ALREADY_REVIEWED` — уже оставлял отзыв
+Возможные значения `reason`:
+
+| Значение | Описание |
+|---|---|
+| `NOT_AUTHENTICATED` | Пользователь не залогинен (можно не показывать форму) |
+| `NO_DELIVERED_ORDER` | Нет полученного заказа с этим товаром |
+| `ALREADY_REVIEWED` | Уже оставлял отзыв |
 
 ---
 
@@ -120,28 +93,21 @@ fetch('/api/reviews', {
 
 Авторизация не требуется. Возвращает **только одобренные** отзывы + средний рейтинг.
 
-### Response:
-```json
-{
-  "reviews": [
-    {
-      "id": "review-uuid",
-      "authorName": "Иван П.",
-      "rating": 5,
-      "text": "Отличное качество...",
-      "images": [
-        "https://storage.yandexcloud.net/saliy-shop/reviews/20/user-uuid-1714000000000-0.jpg",
-        "https://storage.yandexcloud.net/saliy-shop/reviews/20/user-uuid-1714000000001-1.jpg"
-      ],
-      "createdAt": "2026-04-24T02:00:00.000Z"
-    }
-  ],
-  "averageRating": 4.7,
-  "totalReviews": 42
-}
-```
+### Поля ответа:
 
-### Поля:
-- **averageRating** — средняя оценка (округлена до 0.1)
-- **totalReviews** — количество одобренных отзывов
-- **images** — массив полных URL (уже с S3-хостом), готов к `<img src>`.
+| Поле | Тип | Описание |
+|---|---|---|
+| `reviews` | object[] | Массив одобренных отзывов |
+| `averageRating` | number | Средняя оценка (округлена до 0.1) |
+| `totalReviews` | number | Количество одобренных отзывов |
+
+Каждый элемент `reviews[]`:
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `id` | string (uuid) | ID отзыва |
+| `authorName` | string | Имя автора |
+| `rating` | number | Оценка 1-5 |
+| `text` | string | Текст отзыва |
+| `images` | string[] | Массив полных URL (уже с S3-хостом), готов к использованию в `<img>` |
+| `createdAt` | string (ISO) | Дата создания |

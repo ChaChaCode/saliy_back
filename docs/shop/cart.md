@@ -1,16 +1,22 @@
 # API корзины
 
-## 🛒 Архитектура
+Базовый URL: `https://saliystudio.com`. Все маршруты ниже указаны с глобальным префиксом `/api`.
 
-### Для гостей (неавторизованных):
-- **Хранение**: localStorage на клиенте
-- **Формат**: `[{productId: 1, size: "M", quantity: 2}, ...]`
-- **Безопасность**: Клиент хранит только ID, размер и количество. Цены берутся из БД на сервере!
+## Авторизация
 
-### Для авторизованных пользователей:
-- **Хранение**: в БД (таблица `cart_items`)
-- **API**: полный CRUD для управления корзиной
-- **При входе**: корзина из localStorage объединяется с корзиной в БД
+Для эндпоинтов, требующих авторизации, access token хранится в httpOnly cookie `accessToken` и отправляется браузером автоматически (заголовок `Authorization: Bearer` также принимается для обратной совместимости). Отдельно передавать токен вручную не нужно.
+
+## Архитектура
+
+### Для гостей (неавторизованных)
+- Хранение: на стороне клиента (например, в localStorage браузера).
+- Формат хранимых данных: список позиций вида `productId` + `size` + `quantity`.
+- Безопасность: клиент хранит только ID, размер и количество. Цены всегда берутся из БД на сервере.
+
+### Для авторизованных пользователей
+- Хранение: в БД (таблица `cart_items`).
+- API: полный CRUD для управления корзиной.
+- При входе: гостевая корзина клиента объединяется с корзиной в БД.
 
 ---
 
@@ -20,33 +26,20 @@
 
 **GET** `/api/cart`
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Требуется авторизация.
 
-**Пример ответа:**
-```json
-[
-  {
-    "id": 1,
-    "userId": "uuid-123",
-    "productId": 20,
-    "size": "M",
-    "quantity": 2,
-    "createdAt": "2026-03-30T10:00:00.000Z",
-    "updatedAt": "2026-03-30T10:00:00.000Z",
-    "product": {
-      "id": 20,
-      "name": "Джинсовка SALIY чёрная",
-      "slug": "dzhinsovka-saliy-black",
-      "price": 9500,
-      "discount": 0,
-      "images": [...]
-    }
-  }
-]
-```
+Ответ: массив элементов корзины. Каждый элемент содержит поля:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | number | ID элемента корзины |
+| userId | string | ID пользователя |
+| productId | number | ID товара |
+| size | string | Размер |
+| quantity | number | Количество |
+| createdAt | date | Дата добавления |
+| updatedAt | date | Дата обновления |
+| product | object | Данные товара (id, name, slug, price, discount, images) |
 
 ---
 
@@ -54,41 +47,24 @@ Authorization: Bearer <token>
 
 **POST** `/api/cart/items`
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Требуется авторизация.
 
-**Body:**
-```json
-{
-  "productId": 20,
-  "size": "M",
-  "quantity": 2
-}
-```
+Поля тела запроса:
 
-**Пример ответа:**
-```json
-{
-  "id": 1,
-  "userId": "uuid-123",
-  "productId": 20,
-  "size": "M",
-  "quantity": 2,
-  "createdAt": "2026-03-30T10:00:00.000Z",
-  "updatedAt": "2026-03-30T10:00:00.000Z",
-  "product": {
-    "id": 20,
-    "name": "Джинсовка SALIY чёрная",
-    "price": 9500
-  }
-}
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| productId | number | Да | ID товара |
+| size | string | Да | Размер |
+| quantity | number | Да | Количество (минимум 1) |
 
-**Ошибки:**
-- `404` - Товар не найден
-- `400` - Товар недоступен или недостаточно на складе
+Ответ: созданный/обновлённый элемент корзины с вложенным объектом `product`.
+
+Ошибки:
+
+| Код | Описание |
+|-----|----------|
+| 400 | Товар недоступен или недостаточно на складе |
+| 404 | Товар не найден |
 
 ---
 
@@ -96,29 +72,21 @@ Authorization: Bearer <token>
 
 **PATCH** `/api/cart/items/:id`
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Требуется авторизация.
 
-**Body:**
-```json
-{
-  "quantity": 3
-}
-```
+Параметр пути:
 
-**Пример ответа:**
-```json
-{
-  "id": 1,
-  "userId": "uuid-123",
-  "productId": 20,
-  "size": "M",
-  "quantity": 3,
-  "updatedAt": "2026-03-30T11:00:00.000Z"
-}
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| id | number | Да | ID элемента корзины |
+
+Поля тела запроса:
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| quantity | number | Да | Новое количество (минимум 1) |
+
+Ответ: обновлённый элемент корзины.
 
 ---
 
@@ -126,18 +94,15 @@ Authorization: Bearer <token>
 
 **DELETE** `/api/cart/items/:id`
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Требуется авторизация.
 
-**Пример ответа:**
-```json
-{
-  "success": true,
-  "message": "Товар удален из корзины"
-}
-```
+Параметр пути:
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| id | number | Да | ID элемента корзины |
+
+Ответ: объект с полями `success` (boolean) и `message` ("Товар удален из корзины").
 
 ---
 
@@ -145,19 +110,9 @@ Authorization: Bearer <token>
 
 **DELETE** `/api/cart`
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Требуется авторизация.
 
-**Пример ответа:**
-```json
-{
-  "success": true,
-  "message": "Корзина очищена",
-  "deletedCount": 3
-}
-```
+Ответ: объект с полями `success` (boolean), `message` ("Корзина очищена") и `deletedCount` (число удалённых элементов).
 
 ---
 
@@ -165,72 +120,40 @@ Authorization: Bearer <token>
 
 **POST** `/api/cart/validate`
 
-**Описание:** Возвращает актуальные цены, скидки и наличие товаров. Используется:
-- Гостями - для отображения корзины с актуальными ценами
-- Авторизованными - перед оформлением заказа
-- Фронтом - для проверки наличия товаров на лету
+Доступно гостям и авторизованным пользователям. Возвращает актуальные цены, скидки и наличие товаров. Используется:
+- Гостями — для отображения корзины с актуальными ценами;
+- Авторизованными — перед оформлением заказа;
+- Фронтом — для проверки наличия товаров на лету.
 
-**Body:**
-```json
-{
-  "items": [
-    {
-      "productId": 20,
-      "size": "M",
-      "quantity": 2
-    },
-    {
-      "productId": 21,
-      "size": "L",
-      "quantity": 1
-    }
-  ]
-}
-```
+Поля тела запроса: объект с полем `items` — массив позиций. Каждая позиция:
 
-**Пример ответа:**
-```json
-{
-  "items": [
-    {
-      "productId": 20,
-      "productName": "Джинсовка SALIY чёрная",
-      "productSlug": "dzhinsovka-saliy-black",
-      "size": "M",
-      "quantity": 2,
-      "price": 9500,
-      "discount": 0,
-      "finalPrice": 9500,
-      "totalPrice": 19000,
-      "inStock": true,
-      "availableQuantity": 5,
-      "imageUrl": "https://storage.yandexcloud.net/saliy-shop/products/dzhinsovka-black/Глеб фото 2.jpg"
-    },
-    {
-      "productId": 21,
-      "productName": "Джинсовка SALIY синяя",
-      "productSlug": "dzhinsovka-saliy-blue",
-      "size": "L",
-      "quantity": 1,
-      "price": 9500,
-      "discount": 10,
-      "finalPrice": 8550,
-      "totalPrice": 8550,
-      "inStock": true,
-      "availableQuantity": 5,
-      "imageUrl": "https://storage.yandexcloud.net/saliy-shop/products/dzhinsovka-blue/Глеб фото син 1.jpg"
-    }
-  ],
-  "subtotal": 27550,
-  "total": 27550,
-  "itemsCount": 3
-}
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| productId | number | Да | ID товара |
+| size | string | Да | Размер |
+| quantity | number | Да | Количество (минимум 1) |
 
-**Важно:**
-- Цены всегда берутся из БД, а не от клиента
-- `inStock` показывает, достаточно ли товара на складе
-- `availableQuantity` - доступное количество для заказа
+Ответ: объект с полями `items` (массив провалидированных позиций), `subtotal`, `total`, `itemsCount`. Каждая позиция в ответе содержит:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| productId | number | ID товара |
+| productName | string | Название товара |
+| productSlug | string | Slug товара |
+| size | string | Размер |
+| quantity | number | Количество |
+| price | number | Оригинальная цена за единицу |
+| discount | number | Скидка товара в процентах |
+| finalPrice | number | Цена за единицу с учётом скидки |
+| totalPrice | number | Стоимость позиции (finalPrice × quantity) |
+| inStock | boolean | Достаточно ли товара на складе |
+| availableQuantity | number | Доступное количество для заказа |
+| imageUrl | string | URL изображения товара |
+
+Важно:
+- Цены всегда берутся из БД, а не от клиента.
+- `inStock` показывает, достаточно ли товара на складе.
+- `availableQuantity` — доступное количество для заказа.
 
 ---
 
@@ -238,235 +161,73 @@ Authorization: Bearer <token>
 
 **POST** `/api/cart/merge`
 
-**Описание:** Используется при входе пользователя для объединения корзины из localStorage с корзиной в БД.
+Требуется авторизация. Используется при входе пользователя для объединения гостевой корзины с корзиной в БД.
 
-**Headers:**
-```
-Authorization: Bearer <token>
-```
+Поля тела запроса: объект с полем `items` — массив позиций (productId, size, quantity).
 
-**Body:**
-```json
-{
-  "items": [
-    {
-      "productId": 20,
-      "size": "M",
-      "quantity": 1
-    }
-  ]
-}
-```
-
-**Пример ответа:**
-```json
-{
-  "success": true,
-  "addedCount": 1,
-  "updatedCount": 0,
-  "message": "Корзина объединена"
-}
-```
+Ответ: объект с полями `success` (boolean), `addedCount` (число добавленных позиций), `updatedCount` (число обновлённых позиций), `message` ("Корзина объединена").
 
 ---
 
-## 🔒 Безопасность
+## Безопасность
 
-### ✅ Правильный подход (что мы делаем):
+### Правильный подход (что делаем)
 
-1. **Клиент отправляет только:**
-   ```json
-   {
-     "productId": 20,
-     "size": "M",
-     "quantity": 2
-   }
-   ```
+1. Клиент отправляет только `productId`, `size` и `quantity`.
+2. Сервер берёт из БД актуальную цену товара, актуальную скидку, наличие на складе и информацию о товаре.
+3. Сервер рассчитывает финальную цену со скидкой, итоговую стоимость и применяет промокод (если есть).
 
-2. **Сервер берет из БД:**
-   - Актуальную цену товара
-   - Актуальную скидку
-   - Наличие на складе
-   - Информацию о товаре
+### Что не делаем
 
-3. **Сервер рассчитывает:**
-   - Финальную цену со скидкой
-   - Итоговую стоимость
-   - Применяет промокод (если есть)
-
-### ❌ Что НЕ делаем:
-
-- ~~Не доверяем ценам от клиента~~
-- ~~Не доверяем скидкам от клиента~~
-- ~~Не доверяем финальной сумме от клиента~~
-- ~~Не позволяем клиенту менять цены через localStorage~~
+- Не доверяем ценам от клиента.
+- Не доверяем скидкам от клиента.
+- Не доверяем финальной сумме от клиента.
+- Не позволяем клиенту менять цены через клиентское хранилище.
 
 ---
 
 ## GraphQL API
 
+Помимо REST, доступен GraphQL API с аналогичной функциональностью.
+
 ### Queries
 
-**Получить корзину:**
-```graphql
-query {
-  cart {
-    id
-    productId
-    size
-    quantity
-    product {
-      name
-      price
-      discount
-    }
-  }
-}
-```
-
-**Валидировать корзину:**
-```graphql
-query ValidateCart($input: ValidateCartInput!) {
-  validateCart(input: $input) {
-    items {
-      productId
-      productName
-      size
-      quantity
-      price
-      finalPrice
-      totalPrice
-      inStock
-      availableQuantity
-    }
-    subtotal
-    total
-    itemsCount
-  }
-}
-```
+- `cart` — получить корзину (поля: id, productId, size, quantity, product { name, price, discount }).
+- `validateCart(input: ValidateCartInput!)` — валидировать корзину; возвращает items (productId, productName, size, quantity, price, finalPrice, totalPrice, inStock, availableQuantity), subtotal, total, itemsCount.
 
 ### Mutations
 
-**Добавить в корзину:**
-```graphql
-mutation {
-  addToCart(productId: 20, size: "M", quantity: 2) {
-    id
-    quantity
-  }
-}
-```
-
-**Обновить количество:**
-```graphql
-mutation {
-  updateCartItem(itemId: 1, quantity: 3) {
-    id
-    quantity
-  }
-}
-```
-
-**Удалить из корзины:**
-```graphql
-mutation {
-  removeFromCart(itemId: 1)
-}
-```
-
-**Очистить корзину:**
-```graphql
-mutation {
-  clearCart
-}
-```
-
-**Объединить корзину:**
-```graphql
-mutation MergeCart($items: [CartItemInput!]!) {
-  mergeCart(items: $items)
-}
-```
+- `addToCart(productId, size, quantity)` — добавить в корзину; возвращает id, quantity.
+- `updateCartItem(itemId, quantity)` — обновить количество; возвращает id, quantity.
+- `removeFromCart(itemId)` — удалить из корзины.
+- `clearCart` — очистить корзину.
+- `mergeCart(items: [CartItemInput!]!)` — объединить корзину.
 
 ---
 
-## Примеры использования
+## Сценарии использования
 
 ### Сценарий 1: Гость добавляет товар
 
-1. Фронт сохраняет в localStorage:
-```javascript
-const cart = [
-  { productId: 20, size: "M", quantity: 2 }
-];
-localStorage.setItem('cart', JSON.stringify(cart));
-```
-
-2. При отображении корзины, фронт валидирует:
-```bash
-curl -X POST https://saliy-shop.ru/api/cart/validate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "items": [
-      {"productId": 20, "size": "M", "quantity": 2}
-    ]
-  }'
-```
-
-3. При оформлении заказа, фронт отправляет:
-```bash
-curl -X POST https://saliy-shop.ru/api/orders \
-  -H "Content-Type: application/json" \
-  -d '{
-    "items": [
-      {"productId": 20, "size": "M", "quantity": 2}
-    ],
-    "deliveryInfo": {...}
-  }'
-```
+1. Фронт сохраняет позицию (productId, size, quantity) в клиентское хранилище.
+2. При отображении корзины фронт вызывает **POST** `/api/cart/validate`, передавая список позиций, и получает актуальные цены и наличие.
+3. При оформлении заказа фронт вызывает **POST** `/api/orders`, передавая список позиций и данные о доставке.
 
 ### Сценарий 2: Авторизованный пользователь
 
-1. Добавить товар:
-```bash
-curl -X POST https://saliy-shop.ru/api/cart/items \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"productId": 20, "size": "M", "quantity": 2}'
-```
+1. Добавить товар — **POST** `/api/cart/items` (productId, size, quantity).
+2. Получить корзину — **GET** `/api/cart`.
+3. Изменить количество — **PATCH** `/api/cart/items/:id` (quantity).
 
-2. Получить корзину:
-```bash
-curl https://saliy-shop.ru/api/cart \
-  -H "Authorization: Bearer <token>"
-```
-
-3. Изменить количество:
-```bash
-curl -X PATCH https://saliy-shop.ru/api/cart/items/1 \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"quantity": 3}'
-```
+Токен отправляется автоматически через httpOnly cookie.
 
 ### Сценарий 3: Гость входит в аккаунт
 
-1. Гость имеет корзину в localStorage
-2. Гость входит в аккаунт
-3. Фронт объединяет корзины:
-```bash
-curl -X POST https://saliy-shop.ru/api/cart/merge \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "items": [
-      {"productId": 20, "size": "M", "quantity": 2}
-    ]
-  }'
-```
-4. Корзина из localStorage добавляется к корзине в БД
-5. Фронт очищает localStorage
+1. У гостя есть корзина в клиентском хранилище.
+2. Гость входит в аккаунт.
+3. Фронт вызывает **POST** `/api/cart/merge`, передавая список позиций из клиентского хранилища.
+4. Эти позиции добавляются к корзине в БД.
+5. Фронт очищает клиентское хранилище.
 
 ---
 

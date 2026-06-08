@@ -2,11 +2,7 @@
 
 **Базовый URL:** `/api/admin/orders`
 
-**Требуется авторизация:** Admin Bearer Token (через Telegram)
-
-```
-Authorization: Bearer YOUR_ADMIN_JWT
-```
+**Авторизация:** все эндпоинты требуют авторизации администратора (`AdminGuard`). Запросы авторизуются через httpOnly cookie `adminToken`, которую браузер отправляет автоматически (заголовок `Authorization` также принимается для обратной совместимости).
 
 ---
 
@@ -16,30 +12,13 @@ Authorization: Bearer YOUR_ADMIN_JWT
 
 Общая статистика по заказам для дашборда.
 
-### Response:
-```json
-{
-  "totalOrders": 150,
-  "paidOrders": 120,
-  "todayOrders": 8,
-  "totalRevenue": 1250000,
-  "byStatus": {
-    "PENDING": 3,
-    "CONFIRMED": 45,
-    "PROCESSING": 20,
-    "SHIPPED": 30,
-    "DELIVERED": 50,
-    "CANCELLED": 2
-  }
-}
-```
-
-### Поля:
-- **totalOrders** — всего заказов
-- **paidOrders** — оплаченных заказов
-- **todayOrders** — заказов за сегодня
-- **totalRevenue** — общая выручка (оплаченные, без отменённых)
-- **byStatus** — распределение заказов по статусам
+| Поле ответа | Описание |
+|-------------|----------|
+| `totalOrders` | Всего заказов |
+| `paidOrders` | Оплаченных заказов |
+| `todayOrders` | Заказов за сегодня |
+| `totalRevenue` | Общая выручка (оплаченные, без отменённых) |
+| `byStatus` | Распределение заказов по статусам |
 
 ---
 
@@ -47,65 +26,19 @@ Authorization: Bearer YOUR_ADMIN_JWT
 
 **GET** `/api/admin/orders`
 
-Получить список всех заказов с фильтрами и пагинацией.
+Список всех заказов с фильтрами и пагинацией.
 
-### Query параметры:
 | Параметр | Тип | Описание |
 |----------|-----|----------|
-| `status` | `OrderStatus` | Фильтр по статусу (PENDING, CONFIRMED, etc.) |
-| `isPaid` | `boolean` | Только оплаченные / неоплаченные |
-| `search` | `string` | Поиск по номеру заказа, имени, email, телефону |
-| `dateFrom` | `ISO date` | Заказы от даты |
-| `dateTo` | `ISO date` | Заказы до даты |
-| `page` | `number` | Номер страницы (default: 1) |
-| `limit` | `number` | Размер страницы (default: 20) |
+| `status` | OrderStatus | Фильтр по статусу (PENDING, CONFIRMED, etc.) |
+| `isPaid` | boolean | Только оплаченные / неоплаченные |
+| `search` | string | Поиск по номеру заказа, имени, email, телефону |
+| `dateFrom` | ISO date | Заказы от даты |
+| `dateTo` | ISO date | Заказы до даты |
+| `page` | number | Номер страницы (default 1) |
+| `limit` | number | Размер страницы (default 20) |
 
-### Пример:
-```bash
-curl "https://saliy-shop.ru/api/admin/orders?status=CONFIRMED&page=1&limit=20" \
-  -H "Authorization: Bearer YOUR_TOKEN"
-```
-
-### Response:
-```json
-{
-  "orders": [
-    {
-      "id": "uuid",
-      "orderNumber": "SALIY2603290001",
-      "firstName": "Иван",
-      "lastName": "Петров",
-      "email": "test@example.com",
-      "phone": "+375291234567",
-      "socialContact": "Telegram: @ivan_petrov",
-      "comment": "Упаковать в подарочную упаковку",
-      "deliveryType": "STANDARD",
-      "paymentMethod": "CARD_ONLINE",
-      "originalSubtotal": 9500,
-      "subtotal": 8550,
-      "deliveryTotal": 800,
-      "discountAmount": 855,
-      "total": 8495,
-      "status": "CONFIRMED",
-      "isPaid": true,
-      "currency": "RUB",
-      "createdAt": "2026-03-29T12:00:00.000Z",
-      "items": [...],
-      "promoCode": {
-        "code": "SALE10",
-        "type": "PERCENTAGE",
-        "value": 10
-      }
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 150,
-    "totalPages": 8
-  }
-}
-```
+Ответ: объект с полями `orders` (массив заказов с `items` и `promoCode`) и `pagination` (`page`, `limit`, `total`, `totalPages`). CDEK-поля (см. ниже) присутствуют в каждом заказе.
 
 ---
 
@@ -113,68 +46,72 @@ curl "https://saliy-shop.ru/api/admin/orders?status=CONFIRMED&page=1&limit=20" \
 
 **GET** `/api/admin/orders/:orderNumber`
 
-Получить детальную информацию о заказе, включая данные пользователя (если был авторизован).
-
-### Response:
-```json
-{
-  "id": "uuid",
-  "orderNumber": "SALIY2603290001",
-  "user": {
-    "id": "user-uuid",
-    "email": "user@example.com",
-    "firstName": "Иван",
-    "lastName": "Петров"
-  },
-  "firstName": "Иван",
-  "lastName": "Петров",
-  "email": "test@example.com",
-  "phone": "+375291234567",
-  "comment": "Упаковать в подарочную упаковку",
-  "originalSubtotal": 9500,
-  "subtotal": 8550,
-  "deliveryTotal": 800,
-  "discountAmount": 855,
-  "total": 8495,
-  "status": "CONFIRMED",
-  "isPaid": true,
-  "cdekNumber": "1234567890",
-  "cdekUuid": "cdek-order-uuid",
-  "cdekStatus": "ACCEPTED_AT_PICK_UP_POINT",
-  "cdekStatusName": "Прибыл в пункт выдачи",
-  "cdekStatusDate": "2026-04-24T10:15:00.000Z",
-  "cdekTrackingUrl": "https://www.cdek.ru/ru/tracking?order_id=1234567890",
-  "items": [...],
-  "promoCode": {
-    "code": "SALE10",
-    "type": "PERCENTAGE",
-    "value": 10
-  }
-}
-```
+Детальная информация о заказе, включая данные пользователя (если был авторизован), состав (`items`) и промокод.
 
 ### CDEK-поля (где заказ сейчас)
-- `cdekNumber` — номер накладной CDEK (для отображения клиенту)
-- `cdekUuid` — внутренний идентификатор CDEK
-- `cdekStatus` — текущий код статуса из CDEK (см. маппинг ниже)
-- `cdekStatusName` — человекочитаемое название статуса
-- `cdekStatusDate` — когда статус получен (из webhook или ручного refresh)
-- `cdekTrackingUrl` — готовая ссылка для клиента, `null` если накладная ещё не выписана
 
-Эти же поля присутствуют в каждом элементе `GET /api/admin/orders`.
+| Поле | Описание |
+|------|----------|
+| `cdekNumber` | Номер накладной CDEK (для отображения клиенту) |
+| `cdekUuid` | Внутренний идентификатор CDEK |
+| `cdekStatus` | Текущий код статуса из CDEK (см. маппинг ниже) |
+| `cdekStatusName` | Человекочитаемое название статуса |
+| `cdekStatusDate` | Когда статус получен (из webhook или ручного refresh) |
+| `cdekTrackingUrl` | Готовая ссылка для клиента, `null` если накладная ещё не выписана |
 
 ---
 
 ## 4. Обновить поля заказа
 
+**PATCH** `/api/admin/orders/:orderNumber`
+
+Обновление произвольных полей заказа (контакты клиента, адрес, доставка, комментарий). Все поля опциональны — передавайте только те, что нужно изменить. Этот эндпоинт **не** меняет `status` и `total`.
+
+### Доступные поля
+
+Клиент:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `firstName` | string | Имя |
+| `lastName` | string | Фамилия |
+| `phone` | string | Телефон |
+| `email` | string | Email |
+| `socialContact` | string | Контакт в соцсети/мессенджере |
+| `comment` | string | Комментарий к заказу |
+
+Адрес:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `countryName` | string | Страна |
+| `regionName` | string | Регион |
+| `cityName` | string | Город |
+| `cdekCityCode` | number | Код города CDEK |
+| `street` | string | Улица |
+| `apartment` | string | Квартира |
+| `postalCode` | string | Индекс |
+| `pickupPoint` | string | Код ПВЗ |
+
+Доставка и оплата:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `deliveryType` | enum | CDEK_PICKUP / STANDARD |
+| `paymentMethod` | enum | CARD_ONLINE / YANDEX_PAY / CARD_MANUAL / CRYPTO / PAYPAL |
+| `deliveryPrice` | number | Цена доставки (>= 0) |
+| `deliveryTotal` | number | Итог по доставке (>= 0) |
+| `isPaid` | boolean | Признак оплаты |
+| `paymentId` | string | ID платежа |
+
+Ответ: обновлённый объект заказа. Ошибки: `404` — заказ не найден.
+
 ### Автосинхронизация с CDEK
 
-Если у заказа уже есть `cdekUuid` (накладная создана в CDEK) и через PATCH меняются поля, релевантные для CDEK — изменения **автоматически пушатся** в CDEK через `PATCH /v2/orders/{uuid}`. Админу не нужно править данные дважды (в нашей админке + в кабинете CDEK).
-
-**Какие поля синхронизируются:**
+Если у заказа уже есть `cdekUuid` (накладная создана в CDEK) и через PATCH меняются релевантные для CDEK поля — изменения автоматически пушатся в CDEK (`PATCH /v2/orders/{uuid}`).
 
 | Поле в нашем PATCH | Что меняется в CDEK |
-|---|---|
+|--------------------|---------------------|
 | `firstName`, `lastName` | `recipient.name` (склеиваются) |
 | `phone` | `recipient.phones[].number` |
 | `email` | `recipient.email` |
@@ -182,68 +119,7 @@ curl "https://saliy-shop.ru/api/admin/orders?status=CONFIRMED&page=1&limit=20" \
 | `pickupPoint` (при `deliveryType=CDEK_PICKUP`) | `delivery_point` (код ПВЗ) |
 | `cdekCityCode`, `street`, `apartment` (при `deliveryType=CDEK_COURIER`) | `to_location` (город/адрес) |
 
-**Когда CDEK откажет:**
-CDEK API позволяет менять данные **только пока посылка не уехала со склада отправителя**. Если статус уже `TAKEN_BY_TRANSPORTER_FROM_SENDER_CITY` или дальше — CDEK вернёт ошибку.
-
-В этом случае:
-- Запись в нашей БД **обновится** (`200 OK`)
-- В ответе появится поле **`cdekSyncError`** с текстом ошибки от CDEK
-- В логах backend'а будет `WARN [AdminOrdersService] Заказ … : данные в БД обновлены, но CDEK отклонил изменение`
-
-**Response с CDEK-ошибкой:**
-```json
-{
-  "id": "...",
-  "orderNumber": "SALIY2604280001",
-  "firstName": "Иван (новое)",
-  "...": "...",
-  "cdekSyncError": "Заказ уже передан перевозчику, изменение запрещено"
-}
-```
-
-> Если `cdekUuid` у заказа отсутствует (накладная ещё не создана) — синхронизации нет, пуш не делается.
-
-
-
-**PATCH** `/api/admin/orders/:orderNumber`
-
-Обновление произвольных полей заказа (контакты клиента, адрес, доставка, комментарий). Все поля опциональны — передавайте только те, что нужно изменить.
-
-### Доступные поля:
-
-**Клиент:**
-- `firstName`, `lastName`, `phone`, `email`, `socialContact`, `comment`
-
-**Адрес:**
-- `countryName`, `regionName`, `cityName`, `cdekCityCode`
-- `street`, `apartment`, `postalCode`, `pickupPoint`
-
-**Доставка и оплата:**
-- `deliveryType` — `CDEK_PICKUP` / `STANDARD`
-- `paymentMethod` — `CARD_ONLINE` / `CARD_MANUAL` / `CRYPTO` / `PAYPAL`
-- `deliveryPrice`, `deliveryTotal`
-- `isPaid`, `paymentId`
-
-### Пример:
-```bash
-curl -X PATCH https://saliy-shop.ru/api/admin/orders/SALIY2603290001 \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "phone": "+375291234999",
-    "street": "ул. Новая",
-    "apartment": "15",
-    "comment": "Уточнение от клиента: звонить после 18:00"
-  }'
-```
-
-### Response:
-Обновлённый объект заказа.
-
-### Ошибки:
-- `404` — заказ не найден
-
-> **Важно:** для смены статуса используйте отдельный endpoint `PATCH /:orderNumber/status`. Для отмены — `POST /:orderNumber/cancel`. Этот endpoint **не** меняет `status` и `total`.
+CDEK позволяет менять данные только пока посылка не уехала со склада отправителя. Если статус уже `TAKEN_BY_TRANSPORTER_FROM_SENDER_CITY` или дальше — CDEK откажет. В этом случае запись в нашей БД всё равно обновится (`200 OK`), а в ответе появится поле `cdekSyncError` с текстом ошибки от CDEK. Если `cdekUuid` отсутствует (накладная ещё не создана) — синхронизации нет.
 
 ---
 
@@ -253,29 +129,13 @@ curl -X PATCH https://saliy-shop.ru/api/admin/orders/SALIY2603290001 \
 
 Обновить статус заказа. Нельзя менять статус отменённых заказов.
 
-### Доступные статусы:
-- `PENDING` — ожидает оплаты
-- `PAYMENT_FAILED` — ошибка оплаты
-- `CONFIRMED` — подтверждён
-- `PROCESSING` — в обработке
-- `SHIPPED` — отправлен
-- `DELIVERED` — доставлен
-- `CANCELLED` — отменён (⚠️ для отмены используйте отдельный endpoint)
-- `REFUNDED` — возвращён
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| `status` | OrderStatus | Да | Новый статус |
 
-### Request:
-```json
-{
-  "status": "SHIPPED"
-}
-```
+Доступные статусы: `PENDING`, `PAYMENT_FAILED`, `CONFIRMED`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `CANCELLED` (для отмены используйте отдельный эндпоинт), `REFUNDED`.
 
-### Response:
-Обновлённый объект заказа.
-
-### Ошибки:
-- `404` — заказ не найден
-- `400` — попытка изменить статус отменённого заказа
+Ответ: обновлённый объект заказа. Ошибки: `404` — заказ не найден, `400` — попытка изменить статус отменённого заказа.
 
 ---
 
@@ -283,30 +143,13 @@ curl -X PATCH https://saliy-shop.ru/api/admin/orders/SALIY2603290001 \
 
 **POST** `/api/admin/orders/:orderNumber/cancel`
 
-Отменяет заказ и **возвращает остатки на склад** (товары снова доступны для покупки). Также уменьшает счётчик `salesCount` у товаров.
+Отменяет заказ и возвращает остатки на склад (товары снова доступны). Также уменьшает счётчик `salesCount` у товаров. Всё выполняется в транзакции.
 
-### Request:
-```json
-{
-  "reason": "Клиент передумал"
-}
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| `reason` | string | Нет | Причина — пишется только в логи |
 
-Поле `reason` опционально — пишется только в логи.
-
-### Response:
-Обновлённый объект заказа со `status: "CANCELLED"`.
-
-### Ошибки:
-- `404` — заказ не найден
-- `400` — заказ уже отменён
-- `400` — нельзя отменить доставленный заказ
-
-### Что происходит при отмене:
-1. ✅ Статус заказа меняется на `CANCELLED`
-2. ✅ Остатки товаров возвращаются на склад (по размерам)
-3. ✅ Счётчик `salesCount` у товаров уменьшается
-4. ✅ Всё выполняется в транзакции — либо всё, либо ничего
+Ответ: обновлённый заказ со `status: CANCELLED`. Ошибки: `404` — заказ не найден, `400` — заказ уже отменён, `400` — нельзя отменить доставленный заказ.
 
 ---
 
@@ -314,20 +157,15 @@ curl -X PATCH https://saliy-shop.ru/api/admin/orders/SALIY2603290001 \
 
 **POST** `/api/admin/orders/:orderNumber/refund`
 
-Переводит заказ в статус `REFUNDED`. Причина дописывается в поле `comment` заказа с префиксом `[ВОЗВРАТ]:`.
+Переводит заказ в статус `REFUNDED`. Причина дописывается в поле `comment` заказа с префиксом `[ВОЗВРАТ]:`. Склад не трогается.
 
-### Request:
-```json
-{
-  "reason": "Брак товара, клиент вернул обратно"
-}
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| `reason` | string | Да | Причина возврата |
 
-### Ошибки:
-- `400` — нельзя вернуть неоплаченный заказ
-- `400` — заказ уже возвращён
+Ошибки: `400` — нельзя вернуть неоплаченный заказ, `400` — заказ уже возвращён.
 
-> **Отличие от `cancel`:** `cancel` возвращает остатки на склад (для неотправленных заказов); `refund` — для уже оплаченных/доставленных заказов, склад не трогает.
+Отличие от `cancel`: `cancel` возвращает остатки на склад (для неотправленных заказов); `refund` — для уже оплаченных/доставленных заказов.
 
 ---
 
@@ -335,17 +173,14 @@ curl -X PATCH https://saliy-shop.ru/api/admin/orders/SALIY2603290001 \
 
 **PATCH** `/api/admin/orders/:orderNumber/cdek`
 
-Ручное обновление CDEK-данных заказа (например, после создания накладной в панели CDEK).
+Ручное обновление CDEK-данных заказа (например, после создания накладной в панели CDEK). Все поля опциональны.
 
-### Request (все поля опциональны):
-```json
-{
-  "cdekNumber": "1234567890",
-  "cdekUuid": "uuid-from-cdek",
-  "cdekStatus": "ACCEPTED",
-  "cdekStatusName": "Принят на склад"
-}
-```
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `cdekNumber` | string | Номер накладной |
+| `cdekUuid` | string | UUID заказа в CDEK |
+| `cdekStatus` | string | Код статуса |
+| `cdekStatusName` | string | Название статуса |
 
 При передаче `cdekStatus` автоматически обновляется `cdekStatusDate`.
 
@@ -355,30 +190,18 @@ curl -X PATCH https://saliy-shop.ru/api/admin/orders/SALIY2603290001 \
 
 **POST** `/api/admin/orders/:orderNumber/cdek/refresh`
 
-Когда нужно: webhook потерялся / не настроен / клиент звонит «а где мой заказ» — админ жмёт кнопку «обновить статус», бэк запрашивает у CDEK API статус напрямую по `cdekUuid` (или `cdekNumber`) и сохраняет в БД.
+Когда webhook потерялся / не настроен — админ запрашивает у CDEK статус напрямую по `cdekUuid` (или `cdekNumber`) и сохраняет в БД.
 
-### Что делает:
-1. Берёт `cdekUuid` (или `cdekNumber`) из заказа в БД.
-2. `GET /orders/{identifier}` в CDEK API.
-3. Берёт последний элемент массива `entity.statuses`.
-4. Обновляет `cdekStatus`, `cdekStatusName`, `cdekStatusDate`, `status` (если CDEK-статус маппится в продвижение вперёд).
-5. Не понизит статус заказа (не даст `DELIVERED → SHIPPED` из-за late webhook).
+Что делает: берёт идентификатор заказа, запрашивает `GET /orders/{identifier}` в CDEK, берёт последний статус из `entity.statuses`, обновляет `cdekStatus`, `cdekStatusName`, `cdekStatusDate` и `status` (если CDEK-статус маппится в продвижение вперёд). Не понижает статус заказа.
 
-### Response:
-```json
-{
-  "orderNumber": "SALIY2604240001",
-  "cdekStatus": "RECEIVED",
-  "cdekStatusName": "Вручён",
-  "cdekStatusDate": "2026-04-24T10:15:00.000Z",
-  "status": "DELIVERED",
-  "trackingUrl": "https://www.cdek.ru/ru/tracking?order_id=1234567890"
-}
-```
+Ответ содержит: `orderNumber`, `cdekStatus`, `cdekStatusName`, `cdekStatusDate`, `status`, `trackingUrl`.
 
-### Ошибки:
-- `404 "Заказ N не найден"` — нет такого заказа
-- `404 "У заказа N нет CDEK-идентификаторов"` — у заказа нет `cdekUuid` и `cdekNumber` (ещё не создана накладная)
+Ошибки:
+
+| Код | Описание |
+|-----|----------|
+| 404 | Заказ N не найден |
+| 404 | У заказа N нет CDEK-идентификаторов (ещё не создана накладная) |
 
 ---
 
@@ -386,34 +209,16 @@ curl -X PATCH https://saliy-shop.ru/api/admin/orders/SALIY2603290001 \
 
 **POST** `/api/delivery/webhook` — **не под AdminGuard**, принимает уведомления от CDEK напрямую.
 
-CDEK отправляет JSON вида:
-```json
-{
-  "type": "ORDER_STATUS",
-  "uuid": "cdek-order-uuid",
-  "attributes": {
-    "cdek_number": "1234567890",
-    "code": "RECEIVED",
-    "name": "Вручён получателю",
-    "date_time": "2026-04-24T10:15:00+03:00"
-  }
-}
-```
+CDEK присылает уведомление с типом `ORDER_STATUS`, идентификатором заказа (`uuid`) и атрибутами (`cdek_number`, `code`, `name`, `date_time`).
 
-Поведение бэка:
-1. Ищет заказ по `cdekUuid` ИЛИ `cdekNumber`.
-2. Обновляет `cdekStatus`/`cdekStatusName`/`cdekStatusDate`.
-3. Маппит статус CDEK на `OrderStatus` заказа и меняет, **если** это продвижение вперёд и заказ не отменён/не возвращён.
-4. Логирует `CDEK webhook: обновлён заказ SALIY26... , cdekStatus=RECEIVED, status=DELIVERED`.
+Поведение бэка: ищет заказ по `cdekUuid` или `cdekNumber`; обновляет `cdekStatus`/`cdekStatusName`/`cdekStatusDate`; маппит статус CDEK на `OrderStatus` и меняет, если это продвижение вперёд и заказ не отменён/не возвращён.
 
-### Настройка webhook в личном кабинете CDEK
-
-Указать URL: `https://saliy-shop.ru/api/delivery/webhook`. Тип события: `ORDER_STATUS`. Метод: `POST`.
+Настройка webhook в личном кабинете CDEK: URL `https://saliystudio.com/api/delivery/webhook`, тип события `ORDER_STATUS`, метод `POST`.
 
 ### Маппинг CDEK → OrderStatus
 
 | CDEK код | Описание | Наш статус |
-|---|---|---|
+|----------|----------|-----------|
 | `CREATED`, `ACCEPTED` | Заказ создан/принят | `CONFIRMED` |
 | `RECEIVED_AT_SHIPMENT_WAREHOUSE`, `READY_FOR_SHIPMENT_IN_SENDER_CITY` | На складе | `PROCESSING` |
 | `TAKEN_BY_TRANSPORTER_*`, `SENT_TO_*`, `ACCEPTED_IN_TRANSIT_CITY`, `ACCEPTED_AT_RECIPIENT_CITY_WAREHOUSE`, `ACCEPTED_AT_PICK_UP_POINT`, `READY_TO_BE_HANDED_OVER`, `TAKEN_BY_COURIER` | В пути / прибыл в ПВЗ / у курьера | `SHIPPED` |
@@ -427,22 +232,14 @@ CDEK отправляет JSON вида:
 
 **POST** `/api/admin/orders/:orderNumber/send-email`
 
-Отправляет произвольное email клиенту по данному заказу (например, "ваш заказ задерживается").
+Отправляет произвольное email клиенту по данному заказу (например, «ваш заказ задерживается»). Письмо отправляется в шаблоне с обращением к клиенту и номером заказа.
 
-### Request:
-```json
-{
-  "subject": "Задержка доставки заказа",
-  "message": "Здравствуйте! К сожалению, ваш заказ задерживается на 2 дня. Приносим извинения."
-}
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| `subject` | string | Да | Тема письма |
+| `message` | string | Да | Текст письма |
 
-### Response:
-```json
-{ "success": true, "sentTo": "client@example.com" }
-```
-
-Email отправляется в шаблоне с обращением к клиенту и номером заказа.
+Ответ: `success: true` и адрес получателя (`sentTo`).
 
 ---
 
@@ -450,29 +247,10 @@ Email отправляется в шаблоне с обращением к кл
 
 **GET** `/api/admin/orders/export.csv`
 
-Принимает те же query-фильтры, что `GET /api/admin/orders` (status, isPaid, search, dateFrom, dateTo).
-
-### Пример:
-```bash
-curl "https://saliy-shop.ru/api/admin/orders/export.csv?status=DELIVERED&dateFrom=2026-01-01" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -o orders.csv
-```
-
-Возвращает CSV-файл (UTF-8 с BOM, разделитель `;`) со столбцами:
-`Номер заказа; Дата; Клиент; Email; Телефон; Статус; Оплачен; Товаров; Сумма; Валюта; Доставка; Промокод`
-
-Максимум 10000 строк за один запрос.
+Принимает те же query-фильтры, что `GET /api/admin/orders` (status, isPaid, search, dateFrom, dateTo). Возвращает CSV-файл (UTF-8 с BOM, разделитель `;`) со столбцами: Номер заказа; Дата; Клиент; Email; Телефон; Статус; Оплачен; Товаров; Сумма; Валюта; Доставка; Промокод. Максимум 10000 строк за один запрос.
 
 ---
 
 ## OrderStatus — жизненный цикл заказа
 
-```
-PENDING ──┬──► CONFIRMED ──► PROCESSING ──► SHIPPED ──► DELIVERED
-          │                                                  │
-          │                                                  ▼
-          └──► PAYMENT_FAILED                            REFUNDED
-
-                    Любой из них ──► CANCELLED (кроме DELIVERED)
-```
+PENDING → CONFIRMED → PROCESSING → SHIPPED → DELIVERED → (REFUNDED). Из PENDING возможен переход в PAYMENT_FAILED. Любой статус (кроме DELIVERED) может перейти в CANCELLED.

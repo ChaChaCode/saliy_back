@@ -1,41 +1,29 @@
 # API товаров
 
+Базовый URL: `https://saliystudio.com`. Все маршруты ниже указаны с глобальным префиксом `/api`.
+
 ## Структура товара
 
-```typescript
-{
-  id: number;              // ID товара
-  name: string;            // Название
-  slug: string;            // URL slug (уникальный)
-  description?: string;    // Описание
-
-  // Характеристики
-  cardStatus: card_status; // Статус карточки
-  gender: gender_type;     // Пол
-  color?: string;          // Цвет (black, white, red)
-  weight?: number;         // Вес в граммах
-
-  // Цена (только RUB)
-  price: number;           // Цена в рублях
-  discount: number;        // Скидка в процентах (0-100)
-
-  // JSON поля
-  images: Array;           // Массив изображений (включая фото размерной таблицы)
-  stock: Object;           // Остатки по размерам
-
-  // Счётчики
-  isActive: boolean;       // Активен ли товар
-  viewCount: number;       // Количество просмотров
-  salesCount: number;      // Количество продаж
-
-  // Даты
-  createdAt: Date;         // Дата создания
-  updatedAt: Date;         // Дата обновления
-
-  // Связи
-  categories: Array;       // Категории товара
-}
-```
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | number | ID товара |
+| name | string | Название |
+| slug | string | URL slug (уникальный) |
+| description | string (опционально) | Описание |
+| cardStatus | card_status | Статус карточки |
+| gender | gender_type | Пол |
+| color | string (опционально) | Цвет (black, white, red) |
+| weight | number (опционально) | Вес в граммах |
+| price | number | Цена в рублях (только RUB) |
+| discount | number | Скидка в процентах (0-100) |
+| images | array (JSON) | Массив изображений (включая фото размерной таблицы) |
+| stock | object (JSON) | Остатки по размерам |
+| isActive | boolean | Активен ли товар |
+| viewCount | number | Количество просмотров |
+| salesCount | number | Количество продаж |
+| createdAt | date | Дата создания |
+| updatedAt | date | Дата обновления |
+| categories | array | Категории товара |
 
 ### Статусы карточки (card_status)
 - `NONE` - Без статуса
@@ -51,31 +39,18 @@
 - `unisex` - Унисекс
 
 ### Формат images
-```json
-[
-  {
-    "url": "products/hoodie-black/front.jpg",
-    "isPreview": true,
-    "previewOrder": 1
-  },
-  {
-    "url": "products/hoodie-black/back.jpg",
-    "isPreview": true,
-    "previewOrder": 2
-  }
-]
-```
+
+Массив объектов. Каждый объект изображения содержит поля:
+
+| Поле | Тип | Описание |
+|------|-----|----------|
+| url | string | Относительный путь к файлу изображения |
+| isPreview | boolean | Является ли изображение превью |
+| previewOrder | number | Порядок отображения среди превью |
 
 ### Формат stock
-```json
-{
-  "XS": 5,
-  "S": 10,
-  "M": 15,
-  "L": 10,
-  "XL": 5
-}
-```
+
+Объект, где ключ — размер (XS, S, M, L, XL), а значение — количество единиц данного размера на складе.
 
 ### Размерная таблица
 
@@ -89,65 +64,22 @@
 
 **GET** `/api/products`
 
-**Query параметры:**
-- `limit` - Количество товаров (по умолчанию 20)
-- `offset` - Смещение для пагинации
+Query параметры:
 
-**Пример запроса:**
-```bash
-curl -X GET "https://saliy-shop.ru/api/products"
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| categorySlug | string | Нет | Фильтр по slug категории |
+| gender | gender_type | Нет | Фильтр по полу (male/female/unisex) |
+| status | card_status | Нет | Фильтр по статусу карточки |
+| minPrice | number | Нет | Минимальная цена |
+| maxPrice | number | Нет | Максимальная цена |
+| inStock | boolean | Нет | Только товары в наличии |
+| sortBy | string | Нет | Поле сортировки (createdAt, price, salesCount, viewCount) |
+| sortOrder | string | Нет | Порядок сортировки (asc, desc) |
+| limit | number | Нет | Количество товаров (по умолчанию 20) |
+| offset | number | Нет | Смещение для пагинации |
 
-**Пример ответа:**
-```json
-{
-  "products": [
-    {
-      "id": 1,
-      "name": "Чёрная толстовка оверсайз",
-      "slug": "black-oversized-hoodie",
-      "description": "Премиальная толстовка из плотного хлопка 380 г/м²",
-      "cardStatus": "NEW",
-      "gender": "unisex",
-      "color": "black",
-      "weight": 650,
-      "price": 6300,
-      "discount": 0,
-      "images": [
-        {
-          "url": "products/hoodie-black/front.jpg",
-          "isPreview": true,
-          "previewOrder": 1
-        }
-      ],
-      "stock": {
-        "XS": 5,
-        "S": 10,
-        "M": 15,
-        "L": 10,
-        "XL": 5
-      },
-      "isActive": true,
-      "viewCount": 0,
-      "salesCount": 0,
-      "categories": [
-        {
-          "category": {
-            "id": 1,
-            "name": "Толстовки",
-            "slug": "hoodies"
-          }
-        }
-      ],
-      "createdAt": "2024-01-15T10:00:00.000Z",
-      "updatedAt": "2024-01-15T10:00:00.000Z"
-    }
-  ],
-  "total": 1,
-  "limit": 10,
-  "offset": 0
-}
-```
+Ответ: объект с полями `products` (массив товаров), `total` (общее количество), `limit`, `offset`.
 
 ---
 
@@ -155,32 +87,21 @@ curl -X GET "https://saliy-shop.ru/api/products"
 
 **GET** `/api/products/search`
 
-**Query параметры:**
-- `q` - Поисковый запрос (минимум 2 символа)
+Query параметры:
 
-**Пример запроса:**
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/search?q=толстовка"
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| q | string | Да | Поисковый запрос (минимум 2 символа) |
 
-**Пример ответа:**
-```json
-[
-  {
-    "id": 1,
-    "name": "Чёрная толстовка оверсайз",
-    "slug": "black-oversized-hoodie",
-    "description": "Премиальная толстовка из плотного хлопка 380 г/м²",
-    "price": 6300,
-    "discount": 0,
-    "images": [...],
-    "categories": [...]
-  }
-]
-```
+Ответ: массив найденных товаров (с полями id, name, slug, description, price, discount, images, categories).
 
-**Ошибки:**
-- `400` - Запрос должен содержать минимум 2 символа
+Ограничение по частоте: 20 запросов в минуту на IP.
+
+Ошибки:
+
+| Код | Описание |
+|-----|----------|
+| 400 | Запрос должен содержать минимум 2 символа |
 
 ---
 
@@ -188,28 +109,13 @@ curl -X GET "https://saliy-shop.ru/api/products/search?q=толстовка"
 
 **GET** `/api/products/popular`
 
-**Query параметры:**
-- `limit` - Количество товаров (по умолчанию 10)
+Query параметры:
 
-**Пример запроса:**
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/popular?limit=10"
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| limit | number | Нет | Количество товаров (по умолчанию 10) |
 
-**Пример ответа:**
-```json
-[
-  {
-    "id": 4,
-    "name": "Чёрная кепка с вышивкой",
-    "slug": "black-cap-embroidery",
-    "salesCount": 112,
-    "viewCount": 340,
-    "price": 1500,
-    ...
-  }
-]
-```
+Ответ: массив товаров, отсортированных по популярности (с полями salesCount, viewCount, price и др.).
 
 ---
 
@@ -217,28 +123,13 @@ curl -X GET "https://saliy-shop.ru/api/products/popular?limit=10"
 
 **GET** `/api/products/sale`
 
-**Query параметры:**
-- `limit` - Количество товаров (по умолчанию 20)
+Query параметры:
 
-**Пример запроса:**
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/sale?limit=20"
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| limit | number | Нет | Количество товаров (по умолчанию 20) |
 
-**Пример ответа:**
-```json
-[
-  {
-    "id": 2,
-    "name": "Белая футболка базовая",
-    "slug": "white-basic-tshirt",
-    "cardStatus": "SALE",
-    "price": 2500,
-    "discount": 20,
-    ...
-  }
-]
-```
+Ответ: массив товаров со статусом `SALE` и скидкой.
 
 ---
 
@@ -246,26 +137,13 @@ curl -X GET "https://saliy-shop.ru/api/products/sale?limit=20"
 
 **GET** `/api/products/new`
 
-**Query параметры:**
-- `limit` - Количество товаров (по умолчанию 20)
+Query параметры:
 
-**Пример запроса:**
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/new?limit=20"
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| limit | number | Нет | Количество товаров (по умолчанию 20) |
 
-**Пример ответа:**
-```json
-[
-  {
-    "id": 1,
-    "name": "Чёрная толстовка оверсайз",
-    "slug": "black-oversized-hoodie",
-    "cardStatus": "NEW",
-    ...
-  }
-]
-```
+Ответ: массив товаров со статусом `NEW`.
 
 ---
 
@@ -273,73 +151,21 @@ curl -X GET "https://saliy-shop.ru/api/products/new?limit=20"
 
 **GET** `/api/products/:slug`
 
-**Пример запроса:**
-```bash
-curl -X GET https://saliy-shop.ru/api/products/black-oversized-hoodie
-```
+Параметр пути:
 
-**Пример ответа:**
-```json
-{
-  "id": 1,
-  "name": "Чёрная толстовка оверсайз",
-  "slug": "black-oversized-hoodie",
-  "description": "Премиальная толстовка из плотного хлопка 380 г/м². Свободный крой, мягкий флис внутри.",
-  "cardStatus": "NEW",
-  "gender": "unisex",
-  "color": "black",
-  "weight": 650,
-  "price": 6300,
-  "discount": 0,
-  "images": [
-    {
-      "url": "products/hoodie-black/front.jpg",
-      "isPreview": true,
-      "previewOrder": 1
-    },
-    {
-      "url": "products/hoodie-black/back.jpg",
-      "isPreview": true,
-      "previewOrder": 2
-    }
-  ],
-  "stock": {
-    "XS": 5,
-    "S": 10,
-    "M": 15,
-    "L": 10,
-    "XL": 5
-  },
-  "isActive": true,
-  "viewCount": 1,
-  "salesCount": 0,
-  "categories": [
-    {
-      "category": {
-        "id": 1,
-        "name": "Толстовки",
-        "slug": "hoodies",
-        "type": "TOP"
-      }
-    },
-    {
-      "category": {
-        "id": 5,
-        "name": "Новинки",
-        "slug": "new",
-        "type": "OTHER"
-      }
-    }
-  ],
-  "createdAt": "2024-01-15T10:00:00.000Z",
-  "updatedAt": "2024-01-15T10:00:00.000Z"
-}
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| slug | string | Да | Уникальный URL slug товара |
 
-**Ошибки:**
-- `404` - Товар не найден
+Ответ: полный объект товара (см. раздел "Структура товара"), включая массив `categories` с вложенными категориями (id, name, slug, type).
 
-**Примечание:** При получении товара счётчик просмотров автоматически увеличивается на 1.
+Ошибки:
+
+| Код | Описание |
+|-----|----------|
+| 404 | Товар не найден |
+
+Примечание: при получении товара счётчик просмотров автоматически увеличивается на 1.
 
 ---
 
@@ -347,23 +173,19 @@ curl -X GET https://saliy-shop.ru/api/products/black-oversized-hoodie
 
 **GET** `/api/products/:id/stock`
 
-**Query параметры:**
-- `size` - Размер (XS/S/M/L/XL/ONE SIZE)
+Параметр пути:
 
-**Пример запроса:**
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/1/stock?size=M"
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| id | number | Да | ID товара |
 
-**Пример ответа:**
-```json
-{
-  "productId": 1,
-  "size": "M",
-  "inStock": true,
-  "quantity": 15
-}
-```
+Query параметры:
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| size | string | Да | Размер (XS/S/M/L/XL/ONE SIZE) |
+
+Ответ: объект с полями `productId`, `size`, `inStock` (boolean), `quantity` (количество на складе).
 
 ---
 
@@ -371,70 +193,19 @@ curl -X GET "https://saliy-shop.ru/api/products/1/stock?size=M"
 
 **GET** `/api/products/:id/price`
 
-**Пример запроса:**
-```bash
-curl -X GET https://saliy-shop.ru/api/products/2/price
-```
+Параметр пути:
 
-**Пример ответа:**
-```json
-{
-  "productId": 2,
-  "price": 2500,
-  "discount": 20,
-  "finalPrice": 2000,
-  "savings": 500,
-  "currency": "RUB"
-}
-```
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| id | number | Да | ID товара |
 
----
-
-## Примеры использования
-
-### Получить все товары
-```bash
-curl -X GET "https://saliy-shop.ru/api/products"
-```
-
-### Поиск по названию
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/search?q=толстовка"
-```
-
-### Получить популярные товары
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/popular"
-```
-
-### Получить товары в распродаже
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/sale"
-```
-
-### Получить новинки
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/new"
-```
-
-### Получить детальную информацию о товаре
-```bash
-curl -X GET https://saliy-shop.ru/api/products/black-oversized-hoodie
-```
-
-### Проверить наличие размера M
-```bash
-curl -X GET "https://saliy-shop.ru/api/products/13/stock?size=M"
-```
+Ответ: объект с полями `productId`, `price` (оригинальная цена), `discount` (скидка в процентах), `finalPrice` (цена со скидкой), `savings` (размер экономии в рублях), `currency` (RUB).
 
 ---
 
 ## Расчёт финальной цены
 
-Финальная цена рассчитывается по формуле:
-```
-finalPrice = price - (price * discount / 100)
-```
+Финальная цена рассчитывается по формуле: `finalPrice = price - (price * discount / 100)`.
 
 Пример:
 - Цена: 2500 руб
@@ -449,16 +220,11 @@ finalPrice = price - (price * discount / 100)
 
 Операции создания, обновления и удаления товаров защищены `AdminGuard`:
 
-- `POST /api/products` - создание товара
-- `PUT /api/products/:id` - обновление товара
-- `DELETE /api/products/:id` - удаление товара
+- **POST** `/api/products` - создание товара
+- **PUT** `/api/products/:id` - обновление товара
+- **DELETE** `/api/products/:id` - удаление товара
 
-**Требуется авторизация администратора:**
-```http
-Authorization: Bearer <admin_token>
-```
-
-Admin токен получается через Telegram (см. [Admin/auth.md](../Admin/auth.md)).
+Требуется авторизация администратора. Токен администратора хранится в httpOnly cookie и отправляется браузером автоматически (заголовок `Authorization` также принимается для обратной совместимости). Admin токен получается через Telegram (см. [Admin/auth.md](../Admin/auth.md)).
 
 ### Rate Limiting
 
@@ -475,9 +241,9 @@ API защищён от DDoS и скрейпинга:
 
 Все изменения товаров логируются для аудита:
 
-- Создание товара: `ID, slug, name, price`
+- Создание товара: ID, slug, name, price
 - Обновление: список изменённых полей (name, price, discount, isActive)
-- Удаление: `ID, slug, name`
+- Удаление: ID, slug, name
 
 Логи доступны администраторам для отслеживания подозрительной активности.
 

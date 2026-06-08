@@ -1,6 +1,6 @@
 # API документация
 
-Базовый URL: `https://saliy-shop.ru/api/`
+Базовый URL: `https://saliystudio.com/api/`
 
 ## Модули
 
@@ -54,89 +54,61 @@
 - Типы: процент, фиксированная сумма, бесплатная доставка
 - Ограничения по товарам, пользователям, количеству использований
 
+### [💳 Оплата](./payment.md) (REST)
+- Онлайн-оплата через Альфа-Банк и Яндекс Пэй
+- Callback / webhook от платёжных систем
+- Ручная синхронизация статуса
+
+### [⭐ Отзывы](./reviews.md) (REST)
+- Создание отзывов с фото (только после полученного заказа)
+- Получение одобренных отзывов товара
+
+### [✉️ Рассылка](./newsletter.md) (REST)
+- Подписка на email-рассылку
+- Отписка по ссылке из письма
+
 ---
 
 ## Быстрый старт
 
 ### 1. Авторизация
 
-```bash
-# Отправить код
-curl -X POST https://saliy-shop.ru/api/auth/send-code \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com"}'
+Двухшаговая авторизация по email-коду:
 
-# Подтвердить код
-curl -X POST https://saliy-shop.ru/api/auth/verify-code \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "code": "1234"}'
+1. **POST** `/api/auth/send-code` — отправить код на email (тело: `email`).
+2. **POST** `/api/auth/verify-code` — подтвердить код (тело: `email`, `code`).
 
-# Сохранить accessToken из ответа
-```
+После успешного `verify-code` сервер устанавливает токены в httpOnly cookie (`accessToken`, `refreshToken`). Браузер отправляет их автоматически при последующих запросах — вручную добавлять заголовок не нужно. Для совместимости заголовок `Authorization: Bearer <token>` также принимается.
 
 ### 2. Получить товары (GraphQL)
 
-```bash
-# Через GraphQL
-curl -X POST https://saliy-shop.ru/api/graphql \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "query { products(categorySlug: \"hoodies\", limit: 10) { products { id name slug price finalPrice images } total } }"
-  }'
-```
-
-Или открой GraphQL Playground: https://saliy-shop.ru/api/graphql
-
-```graphql
-query {
-  products(categorySlug: "hoodies", limit: 10) {
-    products {
-      id
-      name
-      slug
-      price
-      finalPrice
-      images
-    }
-    total
-  }
-}
-```
+Товары и категории читаются через GraphQL-эндпоинт **POST** `/api/graphql`. Подробности — в [graphql.md](./graphql.md). В режиме разработки доступна интерактивная Playground-консоль по адресу `https://saliystudio.com/api/graphql`.
 
 ### 3. Обновить профиль
 
-```bash
-curl -X PUT https://saliy-shop.ru/api/auth/profile \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "Иван",
-    "lastName": "Петров",
-    "phone": "+79991234567"
-  }'
-```
+**PUT** `/api/auth/profile` — обновление профиля (имя, фамилия, телефон и т.д.). Авторизация через httpOnly cookie (отправляется браузером автоматически).
 
 ---
 
 ## Общие правила
 
 ### Авторизация
-Для защищённых эндпоинтов используйте Bearer Token:
-```
-Authorization: Bearer YOUR_ACCESS_TOKEN
-```
+
+Токен доступа хранится в httpOnly cookie `accessToken` и отправляется браузером автоматически при каждом запросе к API. Заголовок `Authorization: Bearer <token>` также принимается для обратной совместимости. Хранить токен в localStorage не нужно и не рекомендуется.
 
 ### Пагинация
-Параметры:
-- `limit` - Количество элементов (по умолчанию 20)
-- `offset` - Смещение
 
-Пример:
-```bash
-curl "https://saliy-shop.ru/api/products?limit=20&offset=0"
-```
+Параметры запроса:
+
+| Параметр | Тип | По умолчанию | Описание |
+|---|---|---|---|
+| `limit` | number | 20 | Количество элементов |
+| `offset` | number | 0 | Смещение |
+
+Пример: **GET** `/api/products?limit=20&offset=0`
 
 ### Коды ошибок
+
 | Код | Описание |
 |-----|----------|
 | 200 | Успешно |
@@ -146,13 +118,14 @@ curl "https://saliy-shop.ru/api/products?limit=20&offset=0"
 | 500 | Ошибка сервера |
 
 ### Формат ошибок
-```json
-{
-  "statusCode": 400,
-  "message": "Описание ошибки",
-  "error": "Bad Request"
-}
-```
+
+Тело ошибки содержит поля:
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `statusCode` | number | HTTP-код ошибки |
+| `message` | string | Описание ошибки |
+| `error` | string | Класс ошибки (например, `Bad Request`) |
 
 ---
 
@@ -164,6 +137,10 @@ curl "https://saliy-shop.ru/api/products?limit=20&offset=0"
 - Поиск пунктов выдачи
 - Создание заказа на доставку
 
+### Платёжные системы
+- Альфа-Банк (Alfa RBS) — оплата картой онлайн
+- Яндекс Пэй — карта / SPLIT / SBP
+
 ### Email
 - Коды подтверждения авторизации
 - Уведомления о подтверждении заказа
@@ -173,8 +150,8 @@ curl "https://saliy-shop.ru/api/products?limit=20&offset=0"
 ## Безопасность
 
 - HTTPS обязателен
-- Access Token: 15 минут
-- Refresh Token: 7 дней, httpOnly cookie
+- Access Token: 15 минут, httpOnly cookie `accessToken`
+- Refresh Token: 7 дней, httpOnly cookie `refreshToken`
 - SQL-инъекции предотвращены через Prisma ORM
 - Rate limiting на критичных операциях
 - Валидация всех входящих данных

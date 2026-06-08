@@ -1,136 +1,128 @@
 # API баннеров
 
-API для получения баннеров магазина.
+API для получения и управления баннерами магазина.
+
+Глобальный префикс приложения — `/api`.
 
 ---
 
 ## Структура баннера
 
-```typescript
-{
-  id: string;                  // UUID
-  title: string;               // Название баннера
-  description?: string;        // Описание (опционально)
-  desktopImageUrl: string;     // URL изображения для десктопа
-  mobileImageUrl: string;      // URL изображения для мобильной версии
-  link?: string;               // Ссылка при клике (опционально)
-  order: number;               // Порядок отображения (0 = первый)
-  isActive: boolean;           // Активен ли баннер
-  createdAt: Date;
-  updatedAt: Date;
-}
-```
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | string (UUID) | Идентификатор баннера |
+| title | string | Название баннера |
+| description | string? | Описание (опционально) |
+| desktopImageUrl | string | URL изображения для десктопа |
+| mobileImageUrl | string | URL изображения для мобильной версии |
+| link | string? | Ссылка при клике (опционально) |
+| order | number | Порядок отображения (0 = первый) |
+| isActive | boolean | Активен ли баннер |
+| createdAt | string (date) | Дата создания |
+| updatedAt | string (date) | Дата обновления |
 
 ---
 
 ## Эндпоинты
 
-### Получить активные баннеры главной страницы
+### 1. Получить активные баннеры главной страницы
 
 **GET** `/api/banners/active`
 
-Возвращает только активные баннеры для главной страницы, отсортированные по полю `order`.
+Возвращает массив только активных баннеров для главной страницы, отсортированных по полю `order`. Поля каждого элемента — см. «Структура баннера». Поля `description` и `link` могут быть `null`.
 
-**Пример запроса:**
-```bash
-curl https://saliy-shop.ru/api/banners/active
-```
+---
 
-**Пример ответа:**
-```json
-[
-  {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "title": "Новая зимняя коллекция",
-    "description": "Скидки до 50%",
-    "desktopImageUrl": "/uploads/banners/desktop-1234567890.jpg",
-    "mobileImageUrl": "/uploads/banners/mobile-1234567890.jpg",
-    "link": "/new-collection",
-    "order": 0,
-    "isActive": true,
-    "createdAt": "2024-01-15T10:00:00.000Z",
-    "updatedAt": "2024-01-15T10:00:00.000Z"
-  },
-  {
-    "id": "660e8400-e29b-41d4-a716-446655440001",
-    "title": "Распродажа",
-    "description": null,
-    "desktopImageUrl": "/uploads/banners/desktop-9876543210.jpg",
-    "mobileImageUrl": "/uploads/banners/mobile-9876543210.jpg",
-    "link": "/sale",
-    "order": 1,
-    "isActive": true,
-    "createdAt": "2024-01-15T11:00:00.000Z",
-    "updatedAt": "2024-01-15T11:00:00.000Z"
-  }
-]
-```
+### 2. Получить все баннеры (для админки)
+
+**GET** `/api/banners`
+
+Возвращает массив всех баннеров (включая неактивные). Поля каждого элемента — см. «Структура баннера».
+
+---
+
+### 3. Получить баннер по ID
+
+**GET** `/api/banners/:id`
+
+Возвращает один баннер по его UUID.
+
+---
+
+### 4. Создать баннер
+
+**POST** `/api/banners`
+
+Content-Type: `multipart/form-data`.
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| title | string | да | Название баннера |
+| description | string | нет | Описание |
+| link | string | нет | Ссылка при клике |
+| order | number | нет | Порядок отображения |
+| isActive | boolean | нет | Активен ли баннер |
+| desktopImage | file | да | Изображение для десктопа |
+| mobileImage | file | да | Изображение для мобильной версии |
+
+Оба файла (`desktopImage` и `mobileImage`) обязательны, иначе сервер вернёт 400.
+
+---
+
+### 5. Обновить баннер
+
+**PUT** `/api/banners/:id`
+
+Content-Type: `multipart/form-data`. Любые поля опциональны. Файлы `desktopImage` и/или `mobileImage` можно передать для замены изображений; если не переданы — текущие изображения сохраняются.
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| title | string | нет | Название баннера |
+| description | string | нет | Описание |
+| link | string | нет | Ссылка при клике |
+| order | number | нет | Порядок отображения |
+| isActive | boolean | нет | Активен ли баннер |
+| desktopImage | file | нет | Новое изображение для десктопа |
+| mobileImage | file | нет | Новое изображение для мобильной версии |
+
+---
+
+### 6. Удалить баннер
+
+**DELETE** `/api/banners/:id`
+
+Удаляет баннер по его UUID.
 
 ---
 
 ## Баннеры категорий
 
-Баннеры категорий хранятся **внутри таблицы `categories`** как поля `desktopBannerUrl` и `mobileBannerUrl`.
+Баннеры категорий хранятся внутри таблицы `categories` как поля `desktopBannerUrl` и `mobileBannerUrl`.
 
 Получить баннеры категории можно через:
-- `GET /api/categories/:slug` - получить категорию с баннерами
-- `GET /api/categories` - получить все категории с баннерами
+- **GET** `/api/categories/:slug` — получить категорию с баннерами;
+- **GET** `/api/categories` — получить все категории с баннерами.
 
-См. [API категорий](./categories.md) для подробностей.
+Загрузка баннеров категории выполняется через **PUT** `/api/categories/:id/banners`.
+
+Подробнее см. [API категорий](./categories.md).
 
 ---
 
-## Пример использования на фронтенде
+## Использование на фронтенде
 
-```javascript
-// Получить баннеры главной страницы
-fetch('https://saliy-shop.ru/api/banners/active')
-  .then(res => res.json())
-  .then(banners => {
-    banners.forEach(banner => {
-      console.log(banner.title);
-      console.log(banner.desktopImageUrl); // Для десктопа
-      console.log(banner.mobileImageUrl);  // Для мобильной версии
-      console.log(banner.link);            // Ссылка при клике
-    });
-  });
-
-// Получить баннеры категории
-fetch('https://saliy-shop.ru/api/categories/hoodies')
-  .then(res => res.json())
-  .then(category => {
-    if (category.desktopBannerUrl) {
-      console.log(category.desktopBannerUrl); // Десктопный баннер категории
-    }
-    if (category.mobileBannerUrl) {
-      console.log(category.mobileBannerUrl); // Мобильный баннер категории
-    }
-  });
-```
+- Для главной страницы запрашиваются активные баннеры через **GET** `/api/banners/active`; у каждого баннера используются поля `title`, `desktopImageUrl` (для десктопа), `mobileImageUrl` (для мобильной версии) и `link` (ссылка при клике).
+- Для баннеров категории запрашивается категория через **GET** `/api/categories/:slug`; если поля `desktopBannerUrl` / `mobileBannerUrl` заполнены, отображаются соответствующие изображения.
 
 ---
 
 ## Хранение файлов
 
-### Баннеры главной страницы:
-```
-uploads/
-  └── banners/
-      ├── desktop-1234567890.jpg
-      ├── mobile-1234567890.jpg
-      └── ...
-```
+Баннеры главной страницы хранятся в каталоге `uploads/banners/` (например, `desktop-1234567890.jpg`, `mobile-1234567890.jpg`).
 
-### Баннеры категорий:
-```
-uploads/
-  └── categories/
-      ├── desktop-cat1-1234567890.jpg
-      ├── mobile-cat1-1234567890.jpg
-      └── ...
-```
+Баннеры категорий хранятся в каталоге `uploads/categories/` (например, `desktop-cat1-1234567890.jpg`, `mobile-cat1-1234567890.jpg`).
 
-Все файлы доступны по URL: `https://saliy-shop.ru/uploads/...`
+Все файлы доступны по URL вида `https://saliystudio.com/uploads/...`.
 
 ---
 
@@ -139,11 +131,13 @@ uploads/
 | Код | Описание |
 |-----|----------|
 | 200 | Успешно |
+| 400 | Некорректные данные (например, не переданы обязательные изображения при создании) |
+| 404 | Баннер не найден |
 | 500 | Ошибка сервера |
 
 ---
 
 ## См. также
 
-- [API категорий](./categories.md) - Категории с баннерами
-- [API товаров](./products.md) - Товары
+- [API категорий](./categories.md) — категории с баннерами
+- [API товаров](./products.md) — товары

@@ -1,79 +1,77 @@
 # API профиля пользователя
 
-## Структура данных
+Глобальный префикс приложения — `/api`.
 
-```typescript
-{
-  id: string;              // UUID
-  email: string;           // Email (уникальный, НЕ редактируется)
+## Авторизация
 
-  // Персональные данные (редактируемые)
-  firstName?: string;      // Имя
-  lastName?: string;       // Фамилия
-  middleName?: string;     // Отчество
-  phone?: string;          // Телефон
-  birthdate?: Date;        // Дата рождения (можно обновлять раз в год)
-  socialContact?: string;  // Контакт в соц. сети (Telegram: @user или Instagram: @user)
+Токен доступа хранится в httpOnly cookie `accessToken` и отправляется браузером автоматически при каждом запросе. Заголовок `Authorization: Bearer <token>` также принимается для обратной совместимости, но вручную хранить токен (например, в localStorage) не нужно.
 
-  // Тип доставки (выбирается первым шагом)
-  deliveryType?: 'CDEK' | 'POST'; // CDEK - самовывоз из ПВЗ, POST - почта
+---
 
-  // CDEK доставка (если deliveryType = 'CDEK')
-  cdekCityCode?: number;           // Код города CDEK
-  cdekCountryCode?: string;        // Код страны CDEK (RU/BY)
-  cdekRegionCode?: number;         // Код региона CDEK
-  cdekPickupPointCode?: string;    // Код выбранного ПВЗ
-  cityName?: string;               // Название города
-  countryName?: string;            // Название страны
-  regionName?: string;             // Название региона
+## Структура данных профиля
 
-  // Почтовая доставка (если deliveryType = 'POST')
-  deliveryCountryCode?: string;    // Код страны (любая)
-  fullAddress?: string;            // Полный адрес одной строкой
-  postalCode?: string;             // Почтовый индекс (ТОЛЬКО для POST)
+| Поле | Тип | Описание |
+|------|-----|----------|
+| id | string (UUID) | Идентификатор пользователя |
+| email | string | Email (уникальный, НЕ редактируется) |
+| firstName | string? | Имя |
+| lastName | string? | Фамилия |
+| middleName | string? | Отчество |
+| phone | string? | Телефон |
+| birthdate | string? | Дата рождения (можно обновлять раз в год) |
+| socialContact | string? | Контакт в соц. сети (например, Telegram: @user или Instagram: @user) |
+| avatarUrl | string? | URL аватара |
+| deliveryType | 'CDEK' \| 'POST'? | Тип доставки: CDEK — самовывоз из ПВЗ, POST — почта |
+| cdekCityCode | number? | Код города CDEK |
+| cdekCountryCode | string? | Код страны CDEK (RU/BY) |
+| cdekRegionCode | number? | Код региона CDEK |
+| cdekPickupPointCode | string? | Код выбранного ПВЗ |
+| cityName | string? | Название города |
+| countryName | string? | Название страны |
+| regionName | string? | Название региона |
+| deliveryCountryCode | string? | Код страны для POST (любая) |
+| fullAddress | string? | Полный адрес одной строкой (для POST) |
+| postalCode | string? | Почтовый индекс (только для POST) |
+| createdAt | string (date) | Дата регистрации |
+| updatedAt | string (date) | Дата обновления |
 
-  createdAt: Date;         // Дата регистрации
-  updatedAt: Date;         // Дата обновления
-}
-```
+Поля доставки разделены на два набора: блок CDEK (`cdekCityCode`, `cdekCountryCode`, `cdekRegionCode`, `cdekPickupPointCode`, `cityName`, `countryName`, `regionName`) заполняется при `deliveryType = 'CDEK'`; блок POST (`deliveryCountryCode`, `countryName`, `fullAddress`, `postalCode`) заполняется при `deliveryType = 'POST'`.
 
 ---
 
 ## Логика работы профиля
 
-### Что можно редактировать:
-- ✅ **Персональные данные**: имя, фамилия, отчество, телефон, контакт в соц. сети
-- ✅ **Дата рождения**: можно обновлять **только раз в год**
-- ✅ **Адрес доставки**: через `/auth/delivery-location`
-- ❌ **Email**: НЕ редактируется (привязан к аккаунту)
+### Что можно редактировать
 
-### Порядок заполнения:
-1. Пользователь регистрируется по email
-2. Заполняет имя, фамилию, телефон в профиле
-3. **Выбирает тип доставки:**
-   - **CDEK** - самовывоз из ПВЗ (только RU/BY)
-   - **POST** - обычная почтовая доставка (любая страна)
-4. **Если CDEK:**
-   - Выбирает страну (RU или BY)
-   - **Обязательно** выбирает регион из списка
-   - Выбирает город из этого региона
-   - Выбирает пункт выдачи
-5. **Если POST:**
-   - Выбирает страну
-   - Вводит полный адрес (одна строка)
-   - Вводит почтовый индекс
+- Персональные данные: имя, фамилия, отчество, телефон, контакт в соц. сети.
+- Дата рождения: можно обновлять только раз в год.
+- Адрес доставки: через эндпоинт обновления адреса (см. ниже).
+- Email редактировать нельзя (привязан к аккаунту).
 
-### Частичное сохранение:
-✅ **Можно сохранять адрес доставки частями:**
-- Сначала только тип доставки: `{ "deliveryType": "CDEK" }`
-- Потом добавить город: `{ "cdekCityCode": 44 }`
-- Затем пункт выдачи: `{ "cdekPickupPointCode": "MSK123" }`
-- Или всё сразу в одном запросе
+### Порядок заполнения
 
-⚠️ **Важно:**
-- При смене типа доставки (CDEK ↔ POST) автоматически очищаются поля другого типа
-- Для выбора пункта выдачи CDEK сначала нужно выбрать город
-- Все поля опциональны, можно обновлять по одному
+1. Пользователь регистрируется по email.
+2. Заполняет имя, фамилию, телефон в профиле.
+3. Выбирает тип доставки:
+   - CDEK — самовывоз из ПВЗ (только RU/BY);
+   - POST — обычная почтовая доставка (любая страна).
+4. Если CDEK:
+   - выбирает страну (RU или BY);
+   - обязательно выбирает регион из списка;
+   - выбирает город из этого региона;
+   - выбирает пункт выдачи.
+5. Если POST:
+   - выбирает страну;
+   - вводит полный адрес (одна строка);
+   - вводит почтовый индекс.
+
+### Частичное сохранение адреса
+
+Адрес доставки можно сохранять частями: сначала только тип доставки, затем город, затем пункт выдачи, либо всё сразу в одном запросе. Все поля опциональны и могут обновляться по одному.
+
+Важно:
+- при смене типа доставки (CDEK ↔ POST) автоматически очищаются поля другого типа;
+- для выбора пункта выдачи CDEK сначала нужно выбрать город.
 
 ---
 
@@ -83,57 +81,9 @@
 
 **GET** `/api/auth/me`
 
-**Требуется авторизация:** Да
+Требуется авторизация: да.
 
-**Пример запроса:**
-```bash
-curl -X GET https://saliy-shop.ru/api/auth/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-**Пример ответа (CDEK):**
-```json
-{
-  "id": "uuid-123",
-  "email": "user@example.com",
-  "firstName": "Иван",
-  "lastName": "Петров",
-  "phone": "+79991234567",
-  "avatarUrl": "https://storage.yandexcloud.net/saliy-shop/avatars/uuid-123-1712920000000.jpg",
-  "birthdate": "1990-05-15",
-  "socialContact": "Telegram: @ivan",
-  "deliveryType": "CDEK",
-  "cdekCityCode": 44,
-  "cdekCountryCode": "RU",
-  "cdekRegionCode": 77,
-  "cdekPickupPointCode": "MSK123",
-  "cityName": "Москва",
-  "countryName": "Россия",
-  "regionName": "Москва",
-  "createdAt": "2024-01-15T10:30:00.000Z",
-  "updatedAt": "2024-01-20T14:25:00.000Z"
-}
-```
-
-**Пример ответа (POST):**
-```json
-{
-  "id": "uuid-123",
-  "email": "user@example.com",
-  "firstName": "Иван",
-  "lastName": "Петров",
-  "phone": "+48123456789",
-  "birthdate": "1990-05-15",
-  "socialContact": "Instagram: @ivan.p",
-  "deliveryType": "POST",
-  "deliveryCountryCode": "PL",
-  "countryName": "Польша",
-  "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
-  "postalCode": "00-001",
-  "createdAt": "2024-01-15T10:30:00.000Z",
-  "updatedAt": "2024-01-20T14:25:00.000Z"
-}
-```
+Возвращает объект профиля текущего пользователя (структура данных см. выше). Набор заполненных полей доставки зависит от выбранного `deliveryType`.
 
 ---
 
@@ -141,33 +91,22 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
 
 **PUT** `/api/auth/profile`
 
-**Требуется авторизация:** Да
+Требуется авторизация: да.
 
-**Тело запроса:**
-```json
-{
-  "firstName": "Иван",
-  "lastName": "Петров",
-  "middleName": "Сергеевич",
-  "phone": "+79991234567",
-  "birthdate": "1990-05-15",
-  "socialContact": "Telegram: @ivan_petrov"
-}
-```
+Все поля тела запроса опциональны.
 
-Все поля опциональные.
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| firstName | string | нет | Имя (1–100 символов) |
+| lastName | string | нет | Фамилия (1–100 символов) |
+| middleName | string | нет | Отчество (1–100 символов) |
+| phone | string | нет | Телефон (до 20 символов), международный формат с кодом страны |
+| birthdate | string | нет | Дата рождения в формате ДД.ММ.ГГГГ (например: 13.07.2003) |
+| socialContact | string | нет | Контакт в соц. сети (до 200 символов) |
 
-**Формат даты рождения:**
-- Формат: ISO 8601 (YYYY-MM-DD)
-- Пример: `"1990-05-15"` (15 мая 1990 года)
-- ⚠️ **Ограничение:** Дату рождения можно изменить только раз в год
-- При попытке изменить раньше чем через год: `400 Bad Request: "Дату рождения можно изменить только раз в год"`
+Ограничение по дате рождения: дату можно изменить только раз в год. При попытке изменить раньше чем через год сервер возвращает 400 Bad Request с сообщением «Дату рождения можно изменить только раз в год».
 
-**Примеры socialContact:**
-- `"Telegram: @ivan_petrov"`
-- `"Instagram: @ivan.p"`
-
-**Примечание:** Адрес доставки редактируется через отдельный эндпоинт `/auth/delivery-location`.
+Примечание: адрес доставки редактируется через отдельный эндпоинт (см. ниже).
 
 ---
 
@@ -175,209 +114,97 @@ curl -X GET https://saliy-shop.ru/api/auth/me \
 
 **PUT** `/api/auth/delivery-location`
 
-**Требуется авторизация:** Да
+Требуется авторизация: да.
 
-**Все поля опциональны** - можно обновлять частями или всё сразу.
+Все поля опциональны — можно обновлять частями или всё сразу.
 
----
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| deliveryType | 'CDEK' \| 'POST' | нет | Тип доставки |
+| cdekCityCode | number (≥1) | нет | Код города CDEK (для CDEK) |
+| cdekPickupPointCode | string (до 100) | нет | Код выбранного ПВЗ (для CDEK) |
+| deliveryCountryCode | string (до 2) | нет | Код страны (для POST), например RU, PL, US |
+| fullAddress | string (до 500) | нет | Полный адрес одной строкой (для POST) |
+| postalCode | string (до 20) | нет | Почтовый индекс (для POST) |
 
-#### Вариант CDEK: Самовывоз из ПВЗ (только RU/BY)
+#### Вариант CDEK: самовывоз из ПВЗ (только RU/BY)
 
-**Тело запроса (полное):**
-```json
-{
-  "deliveryType": "CDEK",
-  "cdekCityCode": 44,
-  "cdekPickupPointCode": "MSK123"
-}
-```
+Отправляются `deliveryType: 'CDEK'`, `cdekCityCode`, `cdekPickupPointCode`. После сохранения сервер автоматически дозаполняет в профиле производные поля: `cdekCountryCode`, `cdekRegionCode`, `cityName`, `countryName`, `regionName`, а поля POST очищаются.
 
-**Пример запроса:**
-```bash
-# 1. Получить регионы
-curl "https://saliy-shop.ru/api/delivery/regions?countryCode=RU"
-# Получить regionCode (например, 81 для Москвы)
+Порядок выбора данных для CDEK:
+1. Получить регионы: **GET** `/api/delivery/regions?countryCode=RU` — получить `regionCode`.
+2. Получить города региона: **GET** `/api/delivery/cities?countryCode=RU&regionCode=<regionCode>` — получить `cityCode`. Альтернатива — поиск города по названию: **GET** `/api/delivery/cities?countryCode=RU&search=<название>`.
+3. Получить пункты выдачи: **GET** `/api/delivery/pickup-points?cityCode=<cityCode>` — получить `pickupPointCode`.
+4. Сохранить выбор в профиле через **PUT** `/api/auth/delivery-location`.
 
-# 2. Получить города региона
-curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&regionCode=81"
-# Получить cityCode (например, 44 для Москвы)
+#### Вариант POST: почтовая доставка (любая страна)
 
-# Альтернатива: Поиск города по названию
-curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
-
-# 3. Получить пункты выдачи
-curl "https://saliy-shop.ru/api/delivery/pickup-points?cityCode=44"
-# Получить pickupPointCode
-
-# 4. Сохранить в профиле
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "deliveryType": "CDEK",
-    "cdekCityCode": 44,
-    "cdekPickupPointCode": "MSK123"
-  }'
-```
-
-**Пример ответа:**
-```json
-{
-  "id": "uuid-123",
-  "email": "user@example.com",
-  "firstName": "Иван",
-  "phone": "+79991234567",
-  "deliveryType": "CDEK",
-  "cdekCityCode": 44,
-  "cdekCountryCode": "RU",
-  "cdekRegionCode": 77,
-  "cdekPickupPointCode": "MSK123",
-  "cityName": "Москва",
-  "countryName": "Россия",
-  "regionName": "Москва",
-  "deliveryCountryCode": null,
-  "fullAddress": null,
-  "postalCode": null
-}
-```
-
----
-
-#### Вариант POST: Почтовая доставка (любая страна)
-
-**Тело запроса (полное):**
-```json
-{
-  "deliveryType": "POST",
-  "deliveryCountryCode": "PL",
-  "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
-  "postalCode": "00-001"
-}
-```
-
-**Пример запроса:**
-```bash
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "deliveryType": "POST",
-    "deliveryCountryCode": "PL",
-    "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
-    "postalCode": "00-001"
-  }'
-```
-
-**Пример ответа:**
-```json
-{
-  "id": "uuid-123",
-  "email": "user@example.com",
-  "firstName": "Иван",
-  "phone": "+48123456789",
-  "deliveryType": "POST",
-  "deliveryCountryCode": "PL",
-  "countryName": "Польша",
-  "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
-  "postalCode": "00-001",
-  "cdekCityCode": null,
-  "cdekPickupPointCode": null
-}
-```
-
----
+Отправляются `deliveryType: 'POST'`, `deliveryCountryCode`, `fullAddress`, `postalCode`. После сохранения сервер заполняет `countryName`, а поля CDEK очищаются.
 
 #### Частичное сохранение адреса
 
-**Все поля опциональны** - можно обновлять по одному или группами.
+Поля можно обновлять по одному или группами, например: сначала только `deliveryType`, затем `cdekCityCode`, затем `cdekPickupPointCode`. Для POST аналогично: сначала `deliveryType` и `deliveryCountryCode`, затем `fullAddress` и `postalCode`.
 
-**Пример 1: Сначала выбрать тип доставки**
-```bash
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "deliveryType": "CDEK"
-  }'
-```
+Важно:
+- при смене `deliveryType` (CDEK → POST или наоборот) автоматически очищаются поля другого типа;
+- для добавления `cdekPickupPointCode` сначала нужно выбрать `cdekCityCode`;
+- для CDEK (RU/BY) на фронте сначала выбирается регион через `/api/delivery/regions`, затем город через `/api/delivery/cities?regionCode=X`;
+- для поиска города можно использовать параметр `search` без выбора региона.
 
-**Пример 2: Затем добавить город (CDEK)**
-```bash
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "cdekCityCode": 44
-  }'
-```
+---
 
-**Пример 3: Добавить пункт выдачи (CDEK)**
-```bash
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "cdekPickupPointCode": "MSK123"
-  }'
-```
+### 4. Загрузить аватар
 
-**Пример 4: Частичное обновление для POST**
-```bash
-# Сначала тип и страна
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "deliveryType": "POST",
-    "deliveryCountryCode": "PL"
-  }'
+**POST** `/api/auth/avatar`
 
-# Потом адрес и индекс
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
-    "postalCode": "00-001"
-  }'
-```
+Требуется авторизация: да. Content-Type: `multipart/form-data`.
 
-**⚠️ Важно:**
-- При смене `deliveryType` (CDEK → POST или наоборот) автоматически очищаются поля другого типа
-- Для добавления `cdekPickupPointCode` сначала нужно выбрать `cdekCityCode`
-- **Для CDEK (RU/BY)**: На фронте сначала выберите регион через `/delivery/regions`, затем город через `/delivery/cities?regionCode=X`
-- **Поиск города**: Можно использовать `search` для поиска по названию без выбора региона
-- Можно обновлять одно поле или несколько сразу
+Загружает изображение профиля. Старый аватар (если был) удаляется автоматически.
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|--------------|----------|
+| avatar | file | да | Изображение jpg/jpeg/png/webp, до 5 MB |
+
+В ответе возвращается обновлённый профиль с полем `avatarUrl`.
+
+Ошибки:
+
+| Код | Описание |
+|-----|----------|
+| 400 | Файл не загружен или неверный формат (разрешены только jpg/png/webp) |
+| 401 | Не авторизован |
+| 413 | Файл больше 5 MB |
+
+---
+
+### 5. Удалить аватар
+
+**DELETE** `/api/auth/avatar`
+
+Требуется авторизация: да.
+
+Удаляет текущий аватар пользователя (файл и ссылку в БД). В ответе возвращается `{ success: true }`.
+
+Ошибки:
+
+| Код | Описание |
+|-----|----------|
+| 400 | Аватар не установлен |
+| 401 | Не авторизован |
 
 ---
 
 ## Валидация
 
-### Телефон
-- Формат: международный с кодом страны
-- Пример: `+79991234567`
-
-### Имя, Фамилия, Отчество
-- Минимум: 1 символ
-- Максимум: 100 символов
-
-### Дата рождения
-- Формат: ISO 8601 (YYYY-MM-DD)
-- Пример: `"1990-05-15"`
-- **Ограничение:** Можно изменить только раз в год
-- При первом сохранении - без ограничений
-- При повторном сохранении - только через 365 дней после последнего изменения
-
-### Контакт в соц. сети
-- Максимум: 200 символов
-- Формат свободный (Telegram: @user или Instagram: @user)
-
-### Адрес доставки
-- **deliveryType** - опционально ("CDEK" или "POST")
-- **CDEK**: cdekCityCode, cdekPickupPointCode (все опциональны, можно сохранять частями)
-- **POST**: deliveryCountryCode, fullAddress, postalCode (все опциональны, можно сохранять частями)
-- Для выбора пункта выдачи CDEK сначала нужно выбрать город
-- При смене типа доставки поля другого типа очищаются
+| Поле | Правила |
+|------|---------|
+| Телефон | Международный формат с кодом страны, до 20 символов |
+| Имя, Фамилия, Отчество | От 1 до 100 символов |
+| Дата рождения | Формат ДД.ММ.ГГГГ; изменить можно только раз в год (при первом сохранении без ограничений, при повторном — через год после последнего изменения) |
+| Контакт в соц. сети | До 200 символов, формат свободный |
+| deliveryType | 'CDEK' или 'POST' |
+| CDEK-поля | cdekCityCode (≥1), cdekPickupPointCode (до 100 символов); сначала город, потом ПВЗ |
+| POST-поля | deliveryCountryCode (до 2 символов), fullAddress (до 500), postalCode (до 20) |
 
 ---
 
@@ -386,129 +213,18 @@ curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
 | Код | Описание |
 |-----|----------|
 | 200 | Успешно |
-| 400 | Некорректные данные |
+| 400 | Некорректные данные (в т.ч. попытка изменить дату рождения раньше чем через год) |
 | 401 | Не авторизован |
 | 404 | Не найдено |
 | 500 | Ошибка сервера |
-
-### Специфичные ошибки:
-
-**400 Bad Request: "Дату рождения можно изменить только раз в год"**
-- Возникает при попытке изменить дату рождения раньше чем через год после последнего изменения
-- Решение: Дождаться окончания года с момента последнего изменения
 
 ---
 
 ## Полный сценарий заполнения профиля
 
-```bash
-# 1. Авторизоваться (получить токен)
-# См. docs/shop/auth.md
-
-# 2. Получить профиль
-curl -X GET https://saliy-shop.ru/api/auth/me \
-  -H "Authorization: Bearer ACCESS_TOKEN"
-
-# 3. Обновить персональные данные
-curl -X PUT https://saliy-shop.ru/api/auth/profile \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "Иван",
-    "lastName": "Петров",
-    "phone": "+79991234567"
-  }'
-
-# 4. Выбрать тип доставки и установить адрес
-
-# === Вариант А: CDEK ===
-# Найти город
-curl "https://saliy-shop.ru/api/delivery/cities?countryCode=RU&search=Москва"
-
-# Найти ПВЗ
-curl "https://saliy-shop.ru/api/delivery/pickup-points?cityCode=44"
-
-# Сохранить
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "deliveryType": "CDEK",
-    "cdekCityCode": 44,
-    "cdekPickupPointCode": "MSK123"
-  }'
-
-# === Вариант Б: POST ===
-curl -X PUT https://saliy-shop.ru/api/auth/delivery-location \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "deliveryType": "POST",
-    "deliveryCountryCode": "PL",
-    "fullAddress": "Варшава, ул. Новы Свят, д. 10, кв. 5",
-    "postalCode": "00-001"
-  }'
-```
-
-
----
-
-### 4. Загрузить аватар
-
-**POST** `/api/auth/avatar`
-
-**Требуется авторизация:** Да
-**Content-Type:** `multipart/form-data`
-
-Загружает изображение профиля. Старый аватар (если был) удаляется автоматически.
-
-**Параметры:**
-- `avatar` (file) — изображение (jpg/jpeg/png/webp, до 5 MB)
-
-**Пример:**
-```bash
-curl -X POST https://saliy-shop.ru/api/auth/avatar \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -F "avatar=@./photo.jpg"
-```
-
-**Ответ (200 OK):**
-```json
-{
-  "id": "uuid-123",
-  "email": "user@example.com",
-  "firstName": "Иван",
-  "lastName": "Петров",
-  "avatarUrl": "https://storage.yandexcloud.net/saliy-shop/avatars/uuid-123-1712920000000.jpg"
-}
-```
-
-**Ошибки:**
-- `400` — файл не загружен / неверный формат (не jpg/png/webp)
-- `413` — файл больше 5 MB
-- `401` — не авторизован
-
----
-
-### 5. Удалить аватар
-
-**DELETE** `/api/auth/avatar`
-
-**Требуется авторизация:** Да
-
-Удаляет текущий аватар пользователя (файл + ссылку в БД).
-
-**Пример:**
-```bash
-curl -X DELETE https://saliy-shop.ru/api/auth/avatar \
-  -H "Authorization: Bearer ACCESS_TOKEN"
-```
-
-**Ответ (200 OK):**
-```json
-{ "success": true }
-```
-
-**Ошибки:**
-- `400` — аватар не установлен
-- `401` — не авторизован
+1. Авторизоваться (см. docs/shop/auth.md). После авторизации токен лежит в httpOnly cookie и отправляется автоматически.
+2. Получить профиль: **GET** `/api/auth/me`.
+3. Обновить персональные данные: **PUT** `/api/auth/profile`.
+4. Выбрать тип доставки и установить адрес:
+   - Вариант А (CDEK): найти город (**GET** `/api/delivery/cities?countryCode=RU&search=<название>`), найти ПВЗ (**GET** `/api/delivery/pickup-points?cityCode=<cityCode>`), сохранить через **PUT** `/api/auth/delivery-location`;
+   - Вариант Б (POST): сохранить страну, адрес и индекс через **PUT** `/api/auth/delivery-location`.
