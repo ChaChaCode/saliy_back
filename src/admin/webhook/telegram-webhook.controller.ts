@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { AdminAuthService } from '../auth/admin-auth.service';
 import { SimpleCacheService } from '../../common/cache/simple-cache.service';
+import { BackupService } from '../../backup/backup.service';
 
 interface TelegramUpdate {
   update_id: number;
@@ -25,10 +26,26 @@ interface TelegramUpdate {
     };
     data: string;
   };
+  message?: {
+    message_id: number;
+    from?: {
+      id: number;
+      first_name: string;
+    };
+    chat: {
+      id: number;
+    };
+    text?: string;
+  };
 }
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
+// Чаты, которым разрешена команда /dump (секретный канал админки и канал дампов).
+const DUMP_ALLOWED_CHAT_IDS = [
+  process.env.TELEGRAM_CHANNEL_ID,
+  process.env.TELEGRAM_CHANNEL_ID_DUMP,
+].filter(Boolean);
 
 @Controller('admin/telegram')
 export class TelegramWebhookController {
@@ -37,6 +54,7 @@ export class TelegramWebhookController {
   constructor(
     private adminAuthService: AdminAuthService,
     private cacheService: SimpleCacheService,
+    private backupService: BackupService,
   ) {}
 
   /**
@@ -58,6 +76,12 @@ export class TelegramWebhookController {
     }
 
     this.logger.log(`Received Telegram update: ${JSON.stringify(update)}`);
+
+    // Обработка текстовых команд боту (например /dump)
+    if (update.message?.text) {
+      await this.handleCommand(update.message);
+      return { ok: true };
+    }
 
     if (!update.callback_query) {
       return { ok: true };
@@ -229,6 +253,63 @@ export class TelegramWebhookController {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * Обработка текстовых команд боту.
+   * Команда /dump запускает ручной бэкап БД — доступна только из разрешённых
+   * чатов (секретный канал админки / канал дампов), чтобы посторонний не мог
+   * выгрузить базу.
+   */
+  private async handleCommand(message: {
+    chat: { id: number };
+    text?: string;
+  }) {
+    const text = (message.text || '').trim();
+    const command = text.split(/\s+/)[0].split('@')[0]; // /dump@bot -> /dump
+    const chatId = String(message.chat.id);
+
+    if (command !== '/dump') {
+      return; // прочие команды игнорируем
+    }
+
+    // Авторизация: команда только из разрешённых чатов
+    if (!DUMP_ALLOWED_CHAT_IDS.includes(chatId)) {
+      this.logger.warn(`Команда /dump отклонена из чата ${chatId} (не в списке)`);
+      await this.sendMessage(message.chat.id, '⛔ Команда недоступна в этом чате.');
+      return;
+    }
+
+    await this.sendMessage(message.chat.id, '⏳ Делаю бэкап БД...');
+    try {
+      const result = await this.backupService.runBackup('manual');
+      if (!result.ok) {
+        await this.sendMessage(
+          message.chat.id,
+          `❌ Бэкап не удался: ${result.error || 'неизвестная ошибка'}`,
+        );
+      }
+      // При успехе BackupService сам отправит файл в канал дампов с подписью.
+    } catch (e) {
+      this.logger.error(`Ошибка ручного бэкапа: ${e instanceof Error ? e.message : String(e)}`);
+      await this.sendMessage(message.chat.id, '❌ Ошибка при выполнении бэкапа.');
+    }
+  }
+
+  /**
+   * Отправить простое сообщение в чат.
+   */
+  private async sendMessage(chatId: number, text: string) {
+    if (!TELEGRAM_BOT_TOKEN) return;
+    try {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text }),
+      });
+    } catch (e) {
+      this.logger.error(`Не удалось отправить сообщение: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   /**

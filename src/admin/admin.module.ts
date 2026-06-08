@@ -13,6 +13,7 @@ import { CampaignsModule } from './campaigns/campaigns.module';
 import { TelegramWebhookController } from './webhook/telegram-webhook.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SimpleCacheService } from '../common/cache/simple-cache.service';
+import { BackupModule } from '../backup/backup.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { SimpleCacheService } from '../common/cache/simple-cache.service';
     AuditModule,
     CampaignsModule,
     PrismaModule,
+    BackupModule,
   ],
   controllers: [TelegramWebhookController],
   providers: [SimpleCacheService],
