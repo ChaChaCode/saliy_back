@@ -75,7 +75,7 @@ Query-параметры:
 | limit | number | Применённый лимит |
 | offset | number | Применённое смещение |
 
-Каждый товар в `products` содержит поля: `id`, `name`, `slug`, `description`, `cardStatus`, `gender`, `color`, `weight`, `price`, `discount`, `images` (массив объектов с `url`, `isPreview`, `previewOrder`), `stock` (объект «размер → остаток»), `isActive`, `viewCount`, `salesCount`, `createdAt`, `updatedAt`.
+Каждый товар в `products` содержит поля: `id`, `name`, `slug`, `description`, `cardStatus`, `gender`, `color`, `weight`, `price`, `discount`, `images` (массив объектов с `url`, `order`, `isPreview`, `previewOrder`), `stock` (объект «размер → остаток»), `isActive`, `viewCount`, `salesCount`, `createdAt`, `updatedAt`.
 
 Ошибки:
 
