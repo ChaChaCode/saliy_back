@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { pickMainImage } from '../../common/utils/product-image.util';
+import {
+  pickMainImage,
+  pickMainImageUrl,
+} from '../../common/utils/product-image.util';
 
 type Period = 'day' | 'week' | 'month' | 'year';
 
@@ -304,8 +307,373 @@ export class AdminDashboardService {
       createdAt: o.createdAt,
     }));
   }
+
+  /**
+   * Бизнес-метрики: рост выручки/заказов, средний чек, конверсия,
+   * зависшие неоплаченные деньги, возвраты.
+   */
+  async getBusinessMetrics() {
+    const now = new Date();
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const startOfWeek = new Date(now);
+    startOfWeek.setHours(0, 0, 0, 0);
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+
+    const startOfPrevWeek = new Date(startOfWeek);
+    startOfPrevWeek.setDate(startOfPrevWeek.getDate() - 7);
+
+    const paidFilter: Prisma.OrderWhereInput = {
+      isPaid: true,
+      status: { not: OrderStatus.CANCELLED },
+    };
+
+    const [
+      revMonth,
+      revPrevMonth,
+      revWeek,
+      revPrevWeek,
+      ordersAllTotal,
+      ordersPaidTotal,
+      ordersMonthTotal,
+      ordersMonthPaid,
+      unpaidAgg,
+      refundedAgg,
+    ] = await Promise.all([
+      // выручка + кол-во оплаченных за текущий месяц
+      this.prisma.order.aggregate({
+        where: { ...paidFilter, createdAt: { gte: startOfMonth } },
+        _sum: { total: true },
+        _avg: { total: true },
+        _count: true,
+      }),
+      // прошлый месяц
+      this.prisma.order.aggregate({
+        where: {
+          ...paidFilter,
+          createdAt: { gte: startOfPrevMonth, lt: startOfMonth },
+        },
+        _sum: { total: true },
+        _count: true,
+      }),
+      // текущая неделя
+      this.prisma.order.aggregate({
+        where: { ...paidFilter, createdAt: { gte: startOfWeek } },
+        _sum: { total: true },
+        _count: true,
+      }),
+      // прошлая неделя
+      this.prisma.order.aggregate({
+        where: {
+          ...paidFilter,
+          createdAt: { gte: startOfPrevWeek, lt: startOfWeek },
+        },
+        _sum: { total: true },
+        _count: true,
+      }),
+      // конверсия: все заказы всего
+      this.prisma.order.count(),
+      // оплаченные заказы всего
+      this.prisma.order.count({ where: paidFilter }),
+      // все заказы за месяц
+      this.prisma.order.count({ where: { createdAt: { gte: startOfMonth } } }),
+      // оплаченные заказы за месяц
+      this.prisma.order.count({
+        where: { ...paidFilter, createdAt: { gte: startOfMonth } },
+      }),
+      // неоплаченные зависшие (PENDING, isPaid=false)
+      this.prisma.order.aggregate({
+        where: { isPaid: false, status: OrderStatus.PENDING },
+        _sum: { total: true },
+        _count: true,
+      }),
+      // возвраты за всё время
+      this.prisma.order.aggregate({
+        where: { status: OrderStatus.REFUNDED },
+        _sum: { total: true },
+        _count: true,
+      }),
+    ]);
+
+    const curMonth = Math.round(revMonth._sum.total || 0);
+    const prevMonth = Math.round(revPrevMonth._sum.total || 0);
+    const curWeek = Math.round(revWeek._sum.total || 0);
+    const prevWeek = Math.round(revPrevWeek._sum.total || 0);
+
+    return {
+      revenue: {
+        currentMonth: curMonth,
+        prevMonth,
+        growthPercent: growth(curMonth, prevMonth),
+        currentMonthOrders: revMonth._count,
+        prevMonthOrders: revPrevMonth._count,
+        currentWeek: curWeek,
+        prevWeek,
+        weekGrowthPercent: growth(curWeek, prevWeek),
+        currentWeekOrders: revWeek._count,
+        prevWeekOrders: revPrevWeek._count,
+      },
+      averageOrderValue: Math.round(revMonth._avg.total || 0),
+      conversion: {
+        total:
+          ordersAllTotal > 0
+            ? Math.round((ordersPaidTotal / ordersAllTotal) * 1000) / 10
+            : 0,
+        thisMonth:
+          ordersMonthTotal > 0
+            ? Math.round((ordersMonthPaid / ordersMonthTotal) * 1000) / 10
+            : 0,
+      },
+      unpaid: {
+        count: unpaidAgg._count,
+        amount: Math.round(unpaidAgg._sum.total || 0),
+      },
+      refunded: {
+        count: refundedAgg._count,
+        amount: Math.round(refundedAgg._sum.total || 0),
+      },
+    };
+  }
+
+  /**
+   * Складская аналитика по активным товарам.
+   * stock — JSON {"размер": кол-во}, агрегируем в JS.
+   */
+  async getInventory(threshold = 5) {
+    const [products, soldItems] = await Promise.all([
+      this.prisma.product.findMany({
+        where: { isActive: true },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          stock: true,
+          price: true,
+          discount: true,
+          images: true,
+        },
+      }),
+      // productId'шники из оплаченных заказов
+      this.prisma.orderItem.groupBy({
+        by: ['productId'],
+        where: {
+          productId: { not: null },
+          order: {
+            isPaid: true,
+            status: { not: OrderStatus.CANCELLED },
+          },
+        },
+      }),
+    ]);
+
+    const soldProductIds = new Set(
+      soldItems
+        .map((i) => i.productId)
+        .filter((id): id is number => id !== null),
+    );
+
+    const lowStock: Array<{
+      id: number;
+      name: string;
+      slug: string;
+      totalStock: number;
+      imageUrl: string | null;
+    }> = [];
+    const outOfStock: Array<{
+      id: number;
+      name: string;
+      slug: string;
+      imageUrl: string | null;
+    }> = [];
+
+    let inventoryValue = 0;
+    let totalUnits = 0;
+    let productsWithoutSales = 0;
+
+    for (const p of products) {
+      const totalStock = sumStock(p.stock);
+      totalUnits += totalStock;
+
+      const finalPrice = Math.floor(p.price - (p.price * p.discount) / 100);
+      inventoryValue += totalStock * finalPrice;
+
+      if (!soldProductIds.has(p.id)) {
+        productsWithoutSales += 1;
+      }
+
+      if (totalStock === 0) {
+        outOfStock.push({
+          id: p.id,
+          name: p.name,
+          slug: p.slug,
+          imageUrl: pickMainImageUrl(p.images),
+        });
+      } else if (totalStock <= threshold) {
+        lowStock.push({
+          id: p.id,
+          name: p.name,
+          slug: p.slug,
+          totalStock,
+          imageUrl: pickMainImageUrl(p.images),
+        });
+      }
+    }
+
+    // Сортировка lowStock по возрастанию остатка (самые критичные сверху)
+    lowStock.sort((a, b) => a.totalStock - b.totalStock);
+
+    return {
+      threshold,
+      inventoryValue: Math.round(inventoryValue),
+      totalUnits,
+      productsWithoutSales,
+      lowStockCount: lowStock.length,
+      outOfStockCount: outOfStock.length,
+      lowStock: lowStock.slice(0, 50),
+      outOfStock: outOfStock.slice(0, 50),
+    };
+  }
+
+  /**
+   * Разбивка заказов по статусу / способу оплаты / типу доставки.
+   */
+  async getOrdersBreakdown() {
+    const paidFilter: Prisma.OrderWhereInput = {
+      isPaid: true,
+      status: { not: OrderStatus.CANCELLED },
+    };
+
+    const [byStatusRaw, byPaymentRaw, byDeliveryRaw] = await Promise.all([
+      this.prisma.order.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+        _sum: { total: true },
+        orderBy: { _count: { status: 'desc' } },
+      }),
+      this.prisma.order.groupBy({
+        by: ['paymentMethod'],
+        where: paidFilter,
+        _count: { _all: true },
+        _sum: { total: true },
+      }),
+      this.prisma.order.groupBy({
+        by: ['deliveryType'],
+        _count: { _all: true },
+      }),
+    ]);
+
+    return {
+      byStatus: byStatusRaw.map((r) => ({
+        status: r.status,
+        count: r._count._all,
+        revenue: Math.round(r._sum.total || 0),
+      })),
+      byPaymentMethod: byPaymentRaw
+        .map((r) => ({
+          method: r.paymentMethod,
+          count: r._count._all,
+          revenue: Math.round(r._sum.total || 0),
+        }))
+        .sort((a, b) => b.count - a.count),
+      byDeliveryType: byDeliveryRaw
+        .map((r) => ({
+          type: r.deliveryType,
+          count: r._count._all,
+        }))
+        .sort((a, b) => b.count - a.count),
+    };
+  }
+
+  /**
+   * Активность: отзывы на модерации, подписчики рассылки,
+   * корзины (прокси брошенных), новые пользователи.
+   */
+  async getActivity() {
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(startOfDay);
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      reviewsPending,
+      reviewsApproved,
+      reviewsRejected,
+      reviewsTotal,
+      activeSubscribers,
+      newSubscribers,
+      distinctCartUsers,
+      itemsInCarts,
+      usersToday,
+      usersWeek,
+      usersMonth,
+    ] = await Promise.all([
+      this.prisma.review.count({ where: { status: 'PENDING' } }),
+      this.prisma.review.count({ where: { status: 'APPROVED' } }),
+      this.prisma.review.count({ where: { status: 'REJECTED' } }),
+      this.prisma.review.count(),
+      this.prisma.newsletterSubscriber.count({ where: { isActive: true } }),
+      this.prisma.newsletterSubscriber.count({
+        where: { isActive: true, subscribedAt: { gte: startOfMonth } },
+      }),
+      this.prisma.cartItem.groupBy({ by: ['userId'] }),
+      this.prisma.cartItem.count(),
+      this.prisma.user.count({ where: { createdAt: { gte: startOfDay } } }),
+      this.prisma.user.count({ where: { createdAt: { gte: startOfWeek } } }),
+      this.prisma.user.count({ where: { createdAt: { gte: startOfMonth } } }),
+    ]);
+
+    return {
+      reviews: {
+        pending: reviewsPending,
+        approved: reviewsApproved,
+        rejected: reviewsRejected,
+        total: reviewsTotal,
+      },
+      newsletter: {
+        activeSubscribers,
+        newThisMonth: newSubscribers,
+      },
+      carts: {
+        activeCarts: distinctCartUsers.length,
+        itemsInCarts,
+      },
+      newUsers: {
+        today: usersToday,
+        thisWeek: usersWeek,
+        thisMonth: usersMonth,
+      },
+    };
+  }
 }
 
 function pad(n: number): string {
   return n.toString().padStart(2, '0');
+}
+
+/**
+ * Рост в %: ((cur - prev) / prev) * 100, округлённый до 0.1.
+ * Если prev === 0 — null (рост от нуля посчитать нельзя).
+ */
+function growth(cur: number, prev: number): number | null {
+  if (prev === 0) return null;
+  return Math.round(((cur - prev) / prev) * 1000) / 10;
+}
+
+/**
+ * Суммарный остаток товара по всем размерам из JSON stock {"S":10,"M":0}.
+ */
+function sumStock(stock: unknown): number {
+  if (!stock || typeof stock !== 'object' || Array.isArray(stock)) return 0;
+  let total = 0;
+  for (const v of Object.values(stock as Record<string, unknown>)) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) total += n;
+  }
+  return total;
 }
