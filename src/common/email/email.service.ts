@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 @Injectable()
 export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    this.transporter = nodemailer.createTransport({
+    const transportOptions: SMTPTransport.Options = {
       host: process.env.EMAIL_HOST,
       port: parseInt(process.env.EMAIL_PORT || '587'),
       secure: process.env.EMAIL_SECURE === 'true',
@@ -16,8 +17,11 @@ export class EmailService {
       },
       // Принудительно IPv4: на сервере исходящий IPv6 не работает, а
       // smtp.gmail.com резолвится и в IPv6 → connect ENETUNREACH на 587.
-      family: 4,
-    });
+      // family отсутствует в типах @types/nodemailer, но поддерживается
+      // nodemailer в рантайме — добавляем через приведение.
+      ...({ family: 4 } as Record<string, unknown>),
+    };
+    this.transporter = nodemailer.createTransport(transportOptions);
   }
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
