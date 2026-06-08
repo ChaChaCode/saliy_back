@@ -14,6 +14,9 @@ export class EmailService {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
       },
+      // Принудительно IPv4: на сервере исходящий IPv6 не работает, а
+      // smtp.gmail.com резолвится и в IPv6 → connect ENETUNREACH на 587.
+      family: 4,
     });
   }
 
