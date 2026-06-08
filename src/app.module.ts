@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -25,12 +26,14 @@ import { CacheModule } from './common/cache/cache.module';
 import { StorageModule } from './common/storage/storage.module';
 import { GqlThrottlerGuard } from './common/guards/graphql-throttler.guard';
 import { PaymentModule } from './payment/payment.module';
+import { BackupModule } from './backup/backup.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     CacheModule,
     StorageModule,
     // Rate limiting - 100 запросов в минуту на IP
@@ -62,6 +65,7 @@ import { PaymentModule } from './payment/payment.module';
     ReviewsModule,
     NewsletterModule,
     PaymentModule,
+    BackupModule,
   ],
   controllers: [AppController],
   providers: [
