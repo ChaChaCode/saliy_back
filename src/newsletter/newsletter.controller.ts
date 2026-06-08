@@ -4,8 +4,11 @@ import {
   Post,
   Body,
   Param,
+  Req,
   Res,
   HttpCode,
+  UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -17,6 +20,7 @@ import {
 } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
 import { NewsletterService } from './newsletter.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 class SubscribeDto {
   @IsEmail({}, { message: 'Некорректный email' })
@@ -38,12 +42,22 @@ export class NewsletterController {
   /**
    * Подписаться на рассылку.
    * POST /api/newsletter/subscribe
+   * Требует авторизацию. Подписаться можно только на СВОЮ почту — ту, под
+   * которой пользователь вошёл. Иначе ошибка с просьбой ввести свою почту.
    * Throttle: 5 попыток в минуту с одного IP — защита от спама.
    */
   @Post('subscribe')
+  @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(200)
-  subscribe(@Body() dto: SubscribeDto) {
+  subscribe(@Body() dto: SubscribeDto, @Req() request: any) {
+    const userEmail = (request.user?.email || '').trim().toLowerCase();
+    const inputEmail = dto.email.trim().toLowerCase();
+
+    if (!userEmail || inputEmail !== userEmail) {
+      throw new BadRequestException('Можно подписать только свою почту');
+    }
+
     return this.newsletterService.subscribe(dto);
   }
 
