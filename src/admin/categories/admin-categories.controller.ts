@@ -7,12 +7,9 @@ import {
   Param,
   Body,
   UseGuards,
-  UseInterceptors,
-  UploadedFiles,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { AdminCategoriesService } from './admin-categories.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/admin-category.dto';
@@ -54,85 +51,22 @@ export class AdminCategoriesController {
   }
 
   /**
-   * Создать новую категорию (с загрузкой баннеров)
+   * Создать новую категорию
    * POST /admin/categories
-   *
-   * Поддерживает multipart/form-data
-   * Поля изображений: desktopBanner, mobileBanner
    */
   @Post()
-  @UseInterceptors(
-    FileFieldsInterceptor(
-      [
-        { name: 'desktopBanner', maxCount: 1 },
-        { name: 'mobileBanner', maxCount: 1 },
-      ],
-      {
-        limits: {
-          fileSize: 5 * 1024 * 1024, // 5MB
-        },
-        fileFilter: (req, file, callback) => {
-          if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
-            return callback(
-              new BadRequestException('Only image files are allowed'),
-              false,
-            );
-          }
-          callback(null, true);
-        },
-      },
-    ),
-  )
-  async createCategory(
-    @Body() createCategoryDto: CreateCategoryDto,
-    @UploadedFiles()
-    files?: {
-      desktopBanner?: Express.Multer.File[];
-      mobileBanner?: Express.Multer.File[];
-    },
-  ) {
-    return this.adminCategoriesService.createCategory(
-      createCategoryDto,
-      files?.desktopBanner?.[0],
-      files?.mobileBanner?.[0],
-    );
+  async createCategory(@Body() createCategoryDto: CreateCategoryDto) {
+    return this.adminCategoriesService.createCategory(createCategoryDto);
   }
 
   /**
-   * Обновить категорию (с загрузкой баннеров)
+   * Обновить категорию
    * PATCH /admin/categories/:id
    */
   @Patch(':id')
-  @UseInterceptors(
-    FileFieldsInterceptor(
-      [
-        { name: 'desktopBanner', maxCount: 1 },
-        { name: 'mobileBanner', maxCount: 1 },
-      ],
-      {
-        limits: {
-          fileSize: 5 * 1024 * 1024, // 5MB
-        },
-        fileFilter: (req, file, callback) => {
-          if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
-            return callback(
-              new BadRequestException('Only image files are allowed'),
-              false,
-            );
-          }
-          callback(null, true);
-        },
-      },
-    ),
-  )
   async updateCategory(
     @Param('id') id: string,
     @Body() updateCategoryDto: UpdateCategoryDto,
-    @UploadedFiles()
-    files?: {
-      desktopBanner?: Express.Multer.File[];
-      mobileBanner?: Express.Multer.File[];
-    },
   ) {
     const categoryId = parseInt(id, 10);
     if (isNaN(categoryId)) {
@@ -142,8 +76,6 @@ export class AdminCategoriesController {
     return this.adminCategoriesService.updateCategory(
       categoryId,
       updateCategoryDto,
-      files?.desktopBanner?.[0],
-      files?.mobileBanner?.[0],
     );
   }
 
@@ -159,25 +91,5 @@ export class AdminCategoriesController {
     }
 
     return this.adminCategoriesService.deleteCategory(categoryId);
-  }
-
-  /**
-   * Удалить один баннер категории (без удаления самой категории)
-   * DELETE /admin/categories/:id/banner/:type
-   * :type — desktop | mobile
-   */
-  @Delete(':id/banner/:type')
-  async deleteCategoryBanner(
-    @Param('id') id: string,
-    @Param('type') type: string,
-  ) {
-    const categoryId = parseInt(id, 10);
-    if (isNaN(categoryId)) {
-      throw new BadRequestException('Invalid category ID');
-    }
-    if (type !== 'desktop' && type !== 'mobile') {
-      throw new BadRequestException('type must be "desktop" or "mobile"');
-    }
-    return this.adminCategoriesService.deleteCategoryBanner(categoryId, type);
   }
 }

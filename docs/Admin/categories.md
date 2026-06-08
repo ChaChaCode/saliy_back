@@ -29,34 +29,10 @@
 | `slug` | string | URL-friendly идентификатор (уникальный) |
 | `type` | CategoryType | Тип категории |
 | `description` | string \| null | Описание категории |
-| `desktopBannerUrl` | string \| null | URL баннера для десктопа |
-| `mobileBannerUrl` | string \| null | URL баннера для мобильных |
 | `isActive` | boolean | Активна ли категория |
 | `productsCount` | number | Количество товаров в категории |
 | `createdAt` | string | Дата создания |
 | `updatedAt` | string | Дата обновления |
-
----
-
-## Баннеры категории
-
-У каждой категории есть два баннера: `desktopBanner` и `mobileBanner`. Оба опциональны, оба хранятся в S3 (Yandex Object Storage).
-
-Где устанавливаются/меняются:
-- **Создание:** `POST /api/admin/categories` — передать файлы `desktopBanner` / `mobileBanner` в `multipart/form-data`.
-- **Замена:** `PATCH /api/admin/categories/:id` — передать новые файлы с теми же именами полей. Старые удаляются из S3 автоматически.
-- **Удаление по одному:** `DELETE /api/admin/categories/:id/banner/:type` (где `type` = `desktop` или `mobile`).
-- **Удаление вместе с категорией:** `DELETE /api/admin/categories/:id` — оба баннера чистятся из S3.
-
-Формат URL: в БД хранится S3-ключ (например `categories/desktop-cat5-1714000000000.jpg`); в ответе API (после `S3UrlInterceptor`) клиент видит полный URL вида `https://storage.yandexcloud.net/saliystudio.com/categories/...`.
-
-Ограничения на файл:
-
-| Параметр | Значение |
-|----------|----------|
-| Форматы | jpg, jpeg, png, webp |
-| Макс. размер | 5 MB на файл |
-| Макс. количество | 1 desktopBanner + 1 mobileBanner за запрос |
 
 ---
 
@@ -86,7 +62,7 @@
 
 **POST** `/api/admin/categories`
 
-Content-Type: `multipart/form-data`.
+Content-Type: `application/json`.
 
 | Поле | Тип | Обязательное | По умолчанию | Описание |
 |------|-----|--------------|--------------|----------|
@@ -95,8 +71,6 @@ Content-Type: `multipart/form-data`.
 | `type` | CategoryType | Нет | `OTHER` | Тип категории |
 | `description` | string | Нет | - | Описание |
 | `isActive` | boolean | Нет | `true` | Активность |
-| `desktopBanner` | file | Нет | - | Баннер для десктопа (jpg/png/webp, до 5MB) |
-| `mobileBanner` | file | Нет | - | Баннер для мобильных (jpg/png/webp, до 5MB) |
 
 Ответ: созданный объект Category.
 
@@ -106,7 +80,7 @@ Content-Type: `multipart/form-data`.
 
 **PATCH** `/api/admin/categories/:id`
 
-Content-Type: `multipart/form-data`.
+Content-Type: `application/json`.
 
 | Параметр пути | Тип | Описание |
 |---------------|-----|----------|
@@ -121,10 +95,8 @@ Content-Type: `multipart/form-data`.
 | `type` | CategoryType | Тип категории |
 | `description` | string | Описание |
 | `isActive` | boolean | Активность |
-| `desktopBanner` | file | Новый баннер для десктопа (замена) |
-| `mobileBanner` | file | Новый баннер для мобильных (замена) |
 
-Ответ: обновлённый объект Category. При замене баннеров старые файлы удаляются из S3.
+Ответ: обновлённый объект Category.
 
 ---
 
@@ -132,28 +104,13 @@ Content-Type: `multipart/form-data`.
 
 **DELETE** `/api/admin/categories/:id`
 
-Удаляет категорию только если у неё нет связанных товаров. Оба баннера удаляются из S3.
+Удаляет категорию только если у неё нет связанных товаров.
 
 | Параметр пути | Тип | Описание |
 |---------------|-----|----------|
 | `id` | number | ID категории |
 
 Ответ: сообщение об успешном удалении. Ошибки: `400` — нельзя удалить категорию со связанными товарами, `404` — категория не найдена.
-
----
-
-### Удалить один баннер категории
-
-**DELETE** `/api/admin/categories/:id/banner/:type`
-
-Удаляет один баннер (desktop или mobile), не трогая категорию и второй баннер. Файл удаляется из S3, соответствующее поле в БД становится `null`. Идемпотентно: если баннера уже нет — возвращает `200 OK` с сообщением «… уже отсутствует».
-
-| Параметр пути | Тип | Описание |
-|---------------|-----|----------|
-| `id` | number | ID категории |
-| `type` | `desktop` \| `mobile` | Какой баннер удалить |
-
-Ответ: сообщение и обновлённый объект категории. Ошибки: `400` — type не равен `desktop`/`mobile`, `404` — категория не найдена.
 
 ---
 
@@ -165,7 +122,6 @@ Content-Type: `multipart/form-data`.
 | 401 | Unauthorized — отсутствует/недействителен токен |
 | 403 | Forbidden — недостаточно прав |
 | 404 | Not Found — категория не найдена |
-| 413 | Payload Too Large — файл слишком большой (лимит 5MB) |
 | 500 | Internal Server Error — ошибка сервера |
 
 ---
@@ -173,8 +129,6 @@ Content-Type: `multipart/form-data`.
 ## Примечания
 
 1. **Уникальность slug:** поле `slug` должно быть уникальным; при дубликате — ошибка `400`.
-2. **Загрузка баннеров:** до 5MB на файл, форматы JPG/JPEG/PNG/WEBP; файлы загружаются в Yandex Object Storage (префикс `categories/`); при обновлении старый файл удаляется автоматически.
-3. **Удаление категории:** нельзя удалить категорию со связанными товарами; баннеры удаляются из S3.
-4. **Значения по умолчанию:** `type` — `OTHER`, `isActive` — `true`.
-5. **Авторизация:** все эндпоинты требуют `AdminGuard`. Запросы авторизуются через httpOnly cookie `adminToken` (заголовок `Authorization` также принимается для обратной совместимости).
-6. **Формат имён файлов:** desktop — `desktop-cat{id}-{timestamp}.{ext}`, mobile — `mobile-cat{id}-{timestamp}.{ext}`.
+2. **Удаление категории:** нельзя удалить категорию со связанными товарами.
+3. **Значения по умолчанию:** `type` — `OTHER`, `isActive` — `true`.
+4. **Авторизация:** все эндпоинты требуют `AdminGuard`. Запросы авторизуются через httpOnly cookie `adminToken` (заголовок `Authorization` также принимается для обратной совместимости).

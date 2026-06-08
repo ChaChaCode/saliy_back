@@ -10,16 +10,12 @@ import {
   UpdateProductDto,
   FilterProductsDto,
 } from './products.dto';
-import { S3StorageService } from '../common/storage/s3-storage.service';
 
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly s3: S3StorageService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // ==================== CRUD ОПЕРАЦИИ ====================
 
@@ -538,63 +534,5 @@ export class ProductsService {
     return this.prisma.category.findUnique({
       where: { slug },
     });
-  }
-
-  /**
-   * Обновить баннеры категории
-   */
-  async updateCategoryBanners(
-    categoryId: number,
-    desktopBanner?: Express.Multer.File,
-    mobileBanner?: Express.Multer.File,
-  ) {
-    // Проверяем что категория существует
-    const category = await this.prisma.category.findUnique({
-      where: { id: categoryId },
-    });
-
-    if (!category) {
-      throw new NotFoundException(`Category with ID ${categoryId} not found`);
-    }
-
-    const updateData: { desktopBannerUrl?: string; mobileBannerUrl?: string } = {};
-
-    if (desktopBanner) {
-      await this.s3.delete(category.desktopBannerUrl);
-      updateData.desktopBannerUrl = await this.uploadCategoryBanner(
-        desktopBanner,
-        categoryId,
-        'desktop',
-      );
-    }
-
-    if (mobileBanner) {
-      await this.s3.delete(category.mobileBannerUrl);
-      updateData.mobileBannerUrl = await this.uploadCategoryBanner(
-        mobileBanner,
-        categoryId,
-        'mobile',
-      );
-    }
-
-    return this.prisma.category.update({
-      where: { id: categoryId },
-      data: updateData,
-    });
-  }
-
-  private async uploadCategoryBanner(
-    file: Express.Multer.File,
-    categoryId: number,
-    type: 'desktop' | 'mobile',
-  ): Promise<string> {
-    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `categories/${type}-cat${categoryId}-${Date.now()}.${ext}`;
-    try {
-      return await this.s3.upload(key, file.buffer, file.mimetype);
-    } catch (error: any) {
-      this.logger.error(`Failed to upload category banner to S3: ${key}`, error);
-      throw new BadRequestException('Failed to save banner file');
-    }
   }
 }

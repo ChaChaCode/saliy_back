@@ -6,17 +6,12 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/admin-category.dto';
-import { S3StorageService } from '../../common/storage/s3-storage.service';
 
 @Injectable()
 export class AdminCategoriesService {
   private readonly logger = new Logger(AdminCategoriesService.name);
-  private readonly s3Prefix = 'categories';
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly s3: S3StorageService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async getAllCategories() {
     const categories = await this.prisma.category.findMany({
@@ -42,11 +37,7 @@ export class AdminCategoriesService {
     });
   }
 
-  async createCategory(
-    createCategoryDto: CreateCategoryDto,
-    desktopBannerFile?: Express.Multer.File,
-    mobileBannerFile?: Express.Multer.File,
-  ) {
+  async createCategory(createCategoryDto: CreateCategoryDto) {
     // Проверка уникальности slug
     const existingCategory = await this.prisma.category.findUnique({
       where: { slug: createCategoryDto.slug },
@@ -57,59 +48,16 @@ export class AdminCategoriesService {
       );
     }
 
-    // Создаём категорию, чтобы получить id для ключа S3
-    const category = await this.prisma.category.create({
+    return this.prisma.category.create({
       data: {
         ...createCategoryDto,
         type: createCategoryDto.type || 'OTHER',
         isActive: createCategoryDto.isActive ?? true,
       },
     });
-
-    try {
-      const updateData: {
-        desktopBannerUrl?: string;
-        mobileBannerUrl?: string;
-      } = {};
-
-      if (desktopBannerFile) {
-        updateData.desktopBannerUrl = await this.uploadBanner(
-          desktopBannerFile,
-          category.id,
-          'desktop',
-        );
-      }
-      if (mobileBannerFile) {
-        updateData.mobileBannerUrl = await this.uploadBanner(
-          mobileBannerFile,
-          category.id,
-          'mobile',
-        );
-      }
-
-      if (updateData.desktopBannerUrl || updateData.mobileBannerUrl) {
-        return this.prisma.category.update({
-          where: { id: category.id },
-          data: updateData,
-        });
-      }
-
-      return category;
-    } catch (error) {
-      // Откатываем запись, если загрузка в S3 упала
-      await this.prisma.category
-        .delete({ where: { id: category.id } })
-        .catch(() => {});
-      throw error;
-    }
   }
 
-  async updateCategory(
-    id: number,
-    updateCategoryDto: UpdateCategoryDto,
-    desktopBannerFile?: Express.Multer.File,
-    mobileBannerFile?: Express.Multer.File,
-  ) {
+  async updateCategory(id: number, updateCategoryDto: UpdateCategoryDto) {
     const existingCategory = await this.prisma.category.findUnique({
       where: { id },
     });
@@ -132,62 +80,10 @@ export class AdminCategoriesService {
       }
     }
 
-    const updateData: any = { ...updateCategoryDto };
-
-    if (desktopBannerFile) {
-      await this.s3.delete(existingCategory.desktopBannerUrl);
-      updateData.desktopBannerUrl = await this.uploadBanner(
-        desktopBannerFile,
-        id,
-        'desktop',
-      );
-    }
-
-    if (mobileBannerFile) {
-      await this.s3.delete(existingCategory.mobileBannerUrl);
-      updateData.mobileBannerUrl = await this.uploadBanner(
-        mobileBannerFile,
-        id,
-        'mobile',
-      );
-    }
-
     return this.prisma.category.update({
       where: { id },
-      data: updateData,
+      data: { ...updateCategoryDto },
     });
-  }
-
-  /**
-   * Удалить один баннер (desktop или mobile), оставив остальное нетронутым.
-   */
-  async deleteCategoryBanner(id: number, type: 'desktop' | 'mobile') {
-    const category = await this.prisma.category.findUnique({ where: { id } });
-    if (!category) {
-      throw new NotFoundException(`Category with ID ${id} not found`);
-    }
-
-    const field = type === 'desktop' ? 'desktopBannerUrl' : 'mobileBannerUrl';
-    const currentUrl = category[field];
-
-    if (!currentUrl) {
-      return {
-        message: `${type}Banner уже отсутствует`,
-        category,
-      };
-    }
-
-    await this.s3.delete(currentUrl);
-
-    const updated = await this.prisma.category.update({
-      where: { id },
-      data: { [field]: null },
-    });
-
-    return {
-      message: `${type}Banner удалён`,
-      category: updated,
-    };
   }
 
   async deleteCategory(id: number) {
@@ -207,30 +103,8 @@ export class AdminCategoriesService {
       );
     }
 
-    await this.s3.delete(category.desktopBannerUrl);
-    await this.s3.delete(category.mobileBannerUrl);
-
     await this.prisma.category.delete({ where: { id } });
 
     return { message: `Category "${category.name}" deleted successfully` };
-  }
-
-  /**
-   * Загрузить баннер категории в S3.
-   * Ключ: categories/{type}-cat{id}-{timestamp}.ext
-   */
-  private async uploadBanner(
-    file: Express.Multer.File,
-    categoryId: number,
-    type: 'desktop' | 'mobile',
-  ): Promise<string> {
-    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `${this.s3Prefix}/${type}-cat${categoryId}-${Date.now()}.${ext}`;
-    try {
-      return await this.s3.upload(key, file.buffer, file.mimetype);
-    } catch (error: any) {
-      this.logger.error(`Failed to upload category banner to S3: ${key}`, error);
-      throw new BadRequestException('Failed to save banner file');
-    }
   }
 }

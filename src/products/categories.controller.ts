@@ -1,16 +1,11 @@
 import {
   Controller,
   Get,
-  Put,
   Param,
   Query,
   ParseIntPipe,
   NotFoundException,
-  UseInterceptors,
-  UploadedFiles,
-  BadRequestException,
 } from '@nestjs/common';
-import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ProductsService } from './products.service';
 
 @Controller('categories')
@@ -77,37 +72,5 @@ export class CategoriesController {
       limit: result.limit,
       offset: result.offset,
     };
-  }
-
-  /**
-   * Загрузить баннеры для категории
-   * PUT /api/categories/:id/banners
-   */
-  @Put(':id/banners')
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'desktopBanner', maxCount: 1 },
-      { name: 'mobileBanner', maxCount: 1 },
-    ]),
-  )
-  async uploadCategoryBanners(
-    @Param('id', ParseIntPipe) id: number,
-    @UploadedFiles()
-    files?: {
-      desktopBanner?: Express.Multer.File[];
-      mobileBanner?: Express.Multer.File[];
-    },
-  ) {
-    if (!files?.desktopBanner && !files?.mobileBanner) {
-      throw new BadRequestException(
-        'At least one banner image (desktop or mobile) is required',
-      );
-    }
-
-    return this.productsService.updateCategoryBanners(
-      id,
-      files?.desktopBanner?.[0],
-      files?.mobileBanner?.[0],
-    );
   }
 }
