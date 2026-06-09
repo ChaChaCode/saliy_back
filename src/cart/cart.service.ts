@@ -46,8 +46,8 @@ export class CartService {
     const { productId, size, quantity } = dto;
 
     // Проверяем существование товара
-    const product = await this.prisma.product.findUnique({
-      where: { id: productId },
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, deletedAt: null },
     });
 
     if (!product) {
@@ -233,8 +233,8 @@ export class CartService {
     let subtotal = 0;
 
     for (const item of items) {
-      const product = await this.prisma.product.findUnique({
-        where: { id: item.productId },
+      const product = await this.prisma.product.findFirst({
+        where: { id: item.productId, deletedAt: null },
       });
 
       if (!product) {

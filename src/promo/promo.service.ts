@@ -191,7 +191,7 @@ export class PromoService {
         const productIds = cartItemsWithData.map((item) => item.productId);
         if (productIds.length > 0) {
           const products = await this.prisma.product.findMany({
-            where: { id: { in: productIds } },
+            where: { id: { in: productIds }, deletedAt: null },
             select: { id: true, cardStatus: true, name: true },
           });
           const productDataMap = new Map(

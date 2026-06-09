@@ -40,12 +40,28 @@ export class AdminProductsService {
     gender?: string;
     cardStatus?: string;
     isActive?: boolean;
+    deleted?: 'only' | 'exclude';
   }) {
-    const { page, limit, search, category, gender, cardStatus, isActive } =
-      filters;
+    const {
+      page,
+      limit,
+      search,
+      category,
+      gender,
+      cardStatus,
+      isActive,
+      deleted = 'exclude',
+    } = filters;
     const skip = (page - 1) * limit;
 
     const where: any = {};
+
+    // Архив: 'only' — только удалённые, 'exclude' (по умолчанию) — только живые
+    if (deleted === 'only') {
+      where.deletedAt = { not: null };
+    } else {
+      where.deletedAt = null;
+    }
 
     if (search) {
       where.OR = [
@@ -152,7 +168,7 @@ export class AdminProductsService {
    */
   async getLowStockProducts(threshold = 5) {
     const products = await this.prisma.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -288,54 +304,64 @@ export class AdminProductsService {
   }
 
   /**
-   * Удалить товар
+   * Удалить товар (soft-delete: перемещение в архив).
+   * Товар не удаляется физически и фото в S3 сохраняются —
+   * товар можно восстановить, а старые заказы продолжают ссылаться на фото.
    */
   async deleteProduct(id: number) {
     const product = await this.prisma.product.findUnique({
       where: { id },
-      include: {
-        orderItems: { select: { id: true } },
-        cartItems: { select: { id: true } },
-      },
     });
 
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    // Если есть заказы — деактивируем вместо удаления
-    if (product.orderItems.length > 0) {
-      const updated = await this.prisma.product.update({
-        where: { id },
-        data: { isActive: false },
-      });
+    const archived = await this.prisma.product.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
 
-      this.logger.warn(
-        `Товар ${id} деактивирован (есть заказы: ${product.orderItems.length})`,
-      );
-
-      return {
-        success: true,
-        deleted: false,
-        message: `Товар деактивирован, так как есть связанные заказы (${product.orderItems.length})`,
-        product: updated,
-      };
-    }
-
-    // Нет заказов — можно удалить физически
-    const images = (product.images as unknown as ProductImage[]) || [];
-    for (const img of images) {
-      await this.s3.delete(img.url);
-    }
-    // Cascade удалит: productCategories, cartItems
-    await this.prisma.product.delete({ where: { id } });
-
-    this.logger.warn(`Товар удалён: ${id} - ${product.name}`);
+    this.logger.warn(
+      `Товар архивирован (soft-delete): ${id} - ${product.name}`,
+    );
 
     return {
       success: true,
-      deleted: true,
-      message: 'Товар удалён',
+      deleted: false,
+      archived: true,
+      message: 'Товар перемещён в архив',
+      product: archived,
+    };
+  }
+
+  /**
+   * Восстановить товар из архива (снять soft-delete).
+   */
+  async restoreProduct(id: number) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+    });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    if (!product.deletedAt) {
+      throw new BadRequestException('Товар не находится в архиве');
+    }
+
+    const restored = await this.prisma.product.update({
+      where: { id },
+      data: { deletedAt: null },
+    });
+
+    this.logger.log(`Товар восстановлен из архива: ${id} - ${product.name}`);
+
+    return {
+      success: true,
+      message: 'Товар восстановлен из архива',
+      product: restored,
     };
   }
 

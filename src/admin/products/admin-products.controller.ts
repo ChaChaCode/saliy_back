@@ -40,6 +40,7 @@ export class AdminProductsController {
     @Query('gender') gender?: string,
     @Query('cardStatus') cardStatus?: string,
     @Query('isActive') isActive?: string,
+    @Query('deleted') deleted?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
@@ -52,6 +53,7 @@ export class AdminProductsController {
       gender,
       cardStatus,
       isActive: isActive ? isActive === 'true' : undefined,
+      deleted: deleted === 'only' ? 'only' : 'exclude',
     });
   }
 
@@ -129,10 +131,11 @@ export class AdminProductsController {
   }
 
   /**
-   * Удалить товар
+   * Удалить товар (soft-delete: перемещение в архив)
    * DELETE /admin/products/:id
    *
-   * Если есть связанные заказы — товар деактивируется, иначе удаляется физически.
+   * Товар всегда перемещается в архив (deletedAt), не удаляется физически.
+   * Восстановить можно через PATCH /admin/products/:id/restore.
    */
   @Delete(':id')
   async deleteProduct(@Param('id') id: string) {
@@ -141,6 +144,19 @@ export class AdminProductsController {
       throw new BadRequestException('Invalid product ID');
     }
     return this.adminProductsService.deleteProduct(productId);
+  }
+
+  /**
+   * Восстановить товар из архива
+   * PATCH /admin/products/:id/restore
+   */
+  @Patch(':id/restore')
+  async restoreProduct(@Param('id') id: string) {
+    const productId = parseInt(id, 10);
+    if (isNaN(productId)) {
+      throw new BadRequestException('Invalid product ID');
+    }
+    return this.adminProductsService.restoreProduct(productId);
   }
 
   /**

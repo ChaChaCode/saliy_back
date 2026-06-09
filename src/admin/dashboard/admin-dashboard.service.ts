@@ -77,8 +77,8 @@ export class AdminDashboardService {
       this.prisma.user.count(),
       this.prisma.user.count({ where: { createdAt: { gte: startOfDay } } }),
       this.prisma.user.count({ where: { createdAt: { gte: startOfMonth } } }),
-      this.prisma.product.count({ where: { isActive: true } }),
-      this.prisma.product.count(),
+      this.prisma.product.count({ where: { isActive: true, deletedAt: null } }),
+      this.prisma.product.count({ where: { deletedAt: null } }),
     ]);
 
     return {
@@ -217,7 +217,7 @@ export class AdminDashboardService {
       .filter((id): id is number => id !== null);
 
     const products = await this.prisma.product.findMany({
-      where: { id: { in: productIds } },
+      where: { id: { in: productIds }, deletedAt: null },
       select: {
         id: true,
         name: true,
@@ -444,7 +444,7 @@ export class AdminDashboardService {
   async getInventory(threshold = 5) {
     const [products, soldItems] = await Promise.all([
       this.prisma.product.findMany({
-        where: { isActive: true },
+        where: { isActive: true, deletedAt: null },
         select: {
           id: true,
           name: true,

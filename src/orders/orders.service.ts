@@ -351,8 +351,8 @@ export class OrdersService {
 
     for (const item of items) {
       // Получаем товар из БД
-      const product = await this.prisma.product.findUnique({
-        where: { id: item.productId },
+      const product = await this.prisma.product.findFirst({
+        where: { id: item.productId, deletedAt: null },
       });
 
       if (!product) {

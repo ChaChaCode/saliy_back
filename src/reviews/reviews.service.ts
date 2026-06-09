@@ -57,8 +57,8 @@ export class ReviewsService {
       );
     }
 
-    const product = await this.prisma.product.findUnique({
-      where: { id: dto.productId },
+    const product = await this.prisma.product.findFirst({
+      where: { id: dto.productId, deletedAt: null },
       select: { id: true },
     });
     if (!product) {

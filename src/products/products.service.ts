@@ -64,8 +64,8 @@ export class ProductsService {
    * Получить товар по ID
    */
   async getProductById(id: number) {
-    const product = await this.prisma.product.findUnique({
-      where: { id },
+    const product = await this.prisma.product.findFirst({
+      where: { id, deletedAt: null },
       include: {
         categories: {
           include: {
@@ -86,8 +86,8 @@ export class ProductsService {
    * Получить товар по slug
    */
   async getProductBySlug(slug: string) {
-    const product = await this.prisma.product.findUnique({
-      where: { slug },
+    const product = await this.prisma.product.findFirst({
+      where: { slug, deletedAt: null },
       include: {
         categories: {
           include: {
@@ -212,6 +212,7 @@ export class ProductsService {
     // Строим WHERE условие
     const where: any = {
       isActive: true,
+      deletedAt: null,
     };
 
     // Фильтр по категории
@@ -307,6 +308,7 @@ export class ProductsService {
     return this.prisma.product.findMany({
       where: {
         isActive: true,
+        deletedAt: null,
         OR: [
           { name: { contains: query, mode: 'insensitive' } },
           { description: { contains: query, mode: 'insensitive' } },
@@ -328,7 +330,7 @@ export class ProductsService {
    */
   async getPopularProducts(limit: number = 10) {
     return this.prisma.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, deletedAt: null },
       orderBy: { salesCount: 'desc' },
       take: limit,
       include: {
@@ -348,6 +350,7 @@ export class ProductsService {
     return this.prisma.product.findMany({
       where: {
         isActive: true,
+        deletedAt: null,
         cardStatus: 'SALE',
       },
       include: {
@@ -369,6 +372,7 @@ export class ProductsService {
     return this.prisma.product.findMany({
       where: {
         isActive: true,
+        deletedAt: null,
         cardStatus: 'NEW',
       },
       include: {
