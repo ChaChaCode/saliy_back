@@ -46,6 +46,22 @@ export class OrdersService {
   async createOrder(dto: CreateOrderDto, userId?: string) {
     const { items, promoCode, ...orderInfo } = dto;
 
+    // 🔒 ШАГ 0: ВАЛИДАЦИЯ АДРЕСА ДОСТАВКИ
+    // Почтовая доставка (STANDARD): на чекауте есть страна, полный адрес и индекс —
+    // требуем их и на сервере (не доверяем фронту). Самовывоз CDEK адрес не требует
+    // (там код ПВЗ, адрес подтягиваем из CDEK ниже).
+    if (dto.deliveryType === 'STANDARD') {
+      const missing: string[] = [];
+      if (!dto.countryName?.trim()) missing.push('страну');
+      if (!dto.street?.trim()) missing.push('полный адрес');
+      if (!dto.postalCode?.trim()) missing.push('почтовый индекс');
+      if (missing.length > 0) {
+        throw new BadRequestException(
+          `Для почтовой доставки укажите: ${missing.join(', ')}`,
+        );
+      }
+    }
+
     // 🔒 ШАГ 1: ВАЛИДАЦИЯ ТОВАРОВ И НАЛИЧИЯ НА СКЛАДЕ
     const validatedItems = await this.validateOrderItems(items);
 
