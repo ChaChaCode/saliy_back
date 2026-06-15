@@ -200,22 +200,16 @@ export class PaymentController {
       return { status: 'success' };
     }
 
-    this.logger.log(`Tochka webhook event: ${data?.event}`);
+    this.logger.log(`Tochka webhook type: ${data?.webhookType}, status: ${data?.status}`);
 
-    const payload = data?.payload ?? data;
-    const statusValue: string | undefined = payload?.status?.value;
-
-    // Наш orderNumber лежит в metadata (JSON-строка), которую мы клали при создании QR.
-    let orderNumber: string | undefined;
-    try {
-      const meta =
-        typeof payload?.metadata === 'string'
-          ? JSON.parse(payload.metadata)
-          : payload?.metadata;
-      orderNumber = meta?.orderNumber;
-    } catch {
-      orderNumber = undefined;
+    // Интернет-эквайринг Точки: webhookType=acquiringInternetPayment,
+    // наш orderNumber приходит как paymentLinkId, статус — плоское поле status.
+    if (data?.webhookType !== 'acquiringInternetPayment') {
+      return { status: 'success' };
     }
+
+    const orderNumber: string | undefined = data?.paymentLinkId;
+    const statusValue: string | undefined = data?.status;
 
     if (orderNumber && statusValue) {
       try {

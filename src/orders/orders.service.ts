@@ -207,12 +207,13 @@ export class OrdersService {
             amount: total,
             description: `Заказ ${order.orderNumber}`,
             redirectUrl: successUrl,
+            failRedirectUrl: failUrl,
           });
           paymentUrl = tochka.paymentUrl;
-          if (tochka.qrcId) {
+          if (tochka.operationId) {
             await this.prisma.order.update({
               where: { id: order.id },
-              data: { paymentId: tochka.qrcId },
+              data: { paymentId: tochka.operationId },
             });
           }
         }

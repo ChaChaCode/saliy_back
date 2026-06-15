@@ -282,28 +282,28 @@ URL нужно прописать в личном кабинете Альфы к
 
 ---
 
-## Банк Точка (СБП)
+## Банк Точка (интернет-эквайринг)
 
-Оплата по СБП через Tochka Pay Gateway. Метод оплаты — `SBP_TOCHKA`.
+Оплата через интернет-эквайринг Банка Точка — платёжная ссылка, поддерживает СБП и карту. Метод оплаты — `SBP_TOCHKA`.
 
 ### Как работает
 1. Клиент оформляет заказ с `paymentMethod: SBP_TOCHKA`.
-2. Backend создаёт динамический СБП QR-код в Точке и получает ссылку/QR — она возвращается в `paymentUrl`.
-3. Клиент оплачивает по СБП (открывает ссылку / сканирует QR в приложении банка).
-4. Точка присылает webhook об изменении статуса — заказ переводится в оплаченный при статусе `COMPLETED`.
+2. Backend создаёт платёжную ссылку в Точке (`POST /acquiring/v1.0/payments`) и получает `paymentLink` — она возвращается в `paymentUrl`.
+3. Клиент открывает ссылку и оплачивает (СБП или картой — зависит от `TOCHKA_PAYMENT_MODES`).
+4. Точка присылает webhook `acquiringInternetPayment` — заказ переводится в оплаченный при статусе `APPROVED`.
 
-Наш `orderNumber` передаётся в `metadata` QR-кода и возвращается в webhook — по нему находится заказ.
+Наш `orderNumber` передаётся как `paymentLinkId` и возвращается в webhook — по нему находится заказ.
 
 ### Endpoint в backend'е
 
-**POST** `/api/payment/tochka/webhook` — приём уведомлений от Точки о статусе платежа. Тело — JSON или подписанный JWT. Из `payload.status.value` берётся статус, из `payload.metadata` — `orderNumber`. Всегда отвечает `200`.
+**POST** `/api/payment/tochka/webhook` — приём уведомлений от Точки. Тело — JSON или подписанный JWT. Обрабатывается `webhookType: acquiringInternetPayment`; `paymentLinkId` = наш orderNumber, статус — поле `status`. Всегда отвечает `200`.
 
 ### Маппинг статусов Точки
 
 | Статус Точки | Внутренний |
 |---|---|
-| `CREATED` / `PENDING` | `PENDING` |
-| `COMPLETED` / `CONFIRMED` | `PAID` |
+| `CREATED` / `AUTHORIZED` | `PENDING` |
+| `APPROVED` | `PAID` |
 | `EXPIRED` / `CANCELLED` | `CANCELED` |
 | `REFUNDED` | `REFUNDED` |
 | `FAILED` | `FAILED` |
@@ -311,10 +311,12 @@ URL нужно прописать в личном кабинете Альфы к
 ### Настройка `.env` (Точка)
 
 - `TOCHKA_JWT_TOKEN` — JWT-токен из раздела «Интеграции и API» кабинета Точки (Bearer-авторизация).
-- `TOCHKA_SITE_UID` — ID сайта в Tochka Pay Gateway.
-- `TOCHKA_BASE_URL` — необязательно, по умолчанию `https://enter.tochka.com/uapi/pay/v1.0`.
+- `TOCHKA_CUSTOMER_CODE` — код клиента (9 цифр; зашит в JWT как `customer_code`).
+- `TOCHKA_MERCHANT_ID` — необязательно; нужен, если несколько торговых точек (15 цифр, метод Get Retailers).
+- `TOCHKA_PAYMENT_MODES` — необязательно; способы оплаты через запятую, по умолчанию `sbp,card`.
+- `TOCHKA_BASE_URL` — необязательно, по умолчанию `https://enter.tochka.com/uapi`.
 
 ### Что НЕ реализовано
 
-- Проверка подписи webhook (JWT RS256 публичным ключом Точки) — сейчас статус берём из тела уведомления.
-- Возвраты и оплата картой через Точку (реализован только приём по СБП).
+- Проверка подписи webhook (JWT публичным ключом Точки) — сейчас статус берём из тела уведомления.
+- Возвраты и двухстадийные платежи (preAuthorization).
