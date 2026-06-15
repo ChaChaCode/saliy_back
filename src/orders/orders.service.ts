@@ -79,6 +79,29 @@ export class OrdersService {
       validatedItems,
     );
 
+    // ШАГ 4.5: АДРЕС ПВЗ ДЛЯ САМОВЫВОЗА CDEK
+    // У самовывоза фронт присылает только код ПВЗ (pickupPoint) — улицы/города нет.
+    // Подтягиваем адрес пункта из CDEK по коду, чтобы в админке и заказе был
+    // читаемый адрес, а не код вида "CHEL47". Заполняем только пустые поля.
+    if (dto.deliveryType === 'CDEK_PICKUP' && dto.pickupPoint) {
+      try {
+        const pvz = await this.deliveryService.getCdekPickupPointByCode(
+          dto.pickupPoint,
+        );
+        if (pvz) {
+          orderInfo.cityName = orderInfo.cityName || pvz.city || undefined;
+          orderInfo.regionName = orderInfo.regionName || pvz.region || undefined;
+          orderInfo.postalCode = orderInfo.postalCode || pvz.postalCode || undefined;
+          orderInfo.street = orderInfo.street || pvz.addressFull || undefined;
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Не удалось подтянуть адрес ПВЗ ${dto.pickupPoint}: ${error.message}`,
+        );
+        // Не падаем — заказ оформится без адреса пункта
+      }
+    }
+
     // 🔒 ШАГ 5: ИТОГОВАЯ СУММА
     const total = subtotal - discountAmount + deliveryPrice;
 

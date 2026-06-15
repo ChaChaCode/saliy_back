@@ -93,12 +93,14 @@
 | `postalCode` | string | Индекс |
 | `pickupPoint` | string | Код ПВЗ |
 
+При самовывозе CDEK (`deliveryType=CDEK_PICKUP`) фронт присылает только код ПВЗ (`pickupPoint`). Backend автоматически подтягивает из CDEK по этому коду адрес пункта и заполняет `cityName`, `regionName`, `postalCode` и `street` (полный адрес ПВЗ), если они пришли пустыми. Так в админке виден читаемый адрес выдачи, а не только код вида `CHEL47`.
+
 Доставка и оплата:
 
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `deliveryType` | enum | CDEK_PICKUP / STANDARD |
-| `paymentMethod` | enum | CARD_ONLINE / YANDEX_PAY / CARD_MANUAL / CRYPTO / PAYPAL |
+| `paymentMethod` | enum | SBP_TOCHKA / YANDEX_PAY (активны); CARD_ONLINE / CARD_MANUAL / CRYPTO / PAYPAL (прочие) |
 | `deliveryPrice` | number | Цена доставки (>= 0) |
 | `deliveryTotal` | number | Итог по доставке (>= 0) |
 | `isPaid` | boolean | Признак оплаты |

@@ -283,6 +283,43 @@ export class DeliveryService {
   }
 
   /**
+   * Получить данные одного ПВЗ CDEK по его коду (например "CHEL47").
+   * Возвращает читаемый адрес/город пункта, либо null, если не найден.
+   * Используется при оформлении заказа-самовывоза, чтобы сохранить адрес ПВЗ.
+   */
+  async getCdekPickupPointByCode(code: string): Promise<{
+    code: string;
+    name: string;
+    addressFull: string;
+    city: string;
+    region: string | null;
+    postalCode: string | null;
+  } | null> {
+    try {
+      const response = await this.cdekRequest<any>(
+        'GET',
+        `/deliverypoints?code=${encodeURIComponent(code)}`,
+      );
+      const point = Array.isArray(response) ? response[0] : null;
+      if (!point) {
+        this.logger.warn(`CDEK: ПВЗ с кодом ${code} не найден`);
+        return null;
+      }
+      return {
+        code: point.code,
+        name: point.name,
+        addressFull: point.location?.address_full || point.location?.address || '',
+        city: point.location?.city || '',
+        region: point.location?.region || null,
+        postalCode: point.location?.postal_code || null,
+      };
+    } catch (error: any) {
+      this.logger.error(`Ошибка получения ПВЗ CDEK ${code}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Рассчитать стоимость доставки CDEK.
    * Сначала пробуем точечно тариф «Посылка склад-склад» (по умолчанию код 136 — переопределяется через env CDEK_PICKUP_TARIFF_CODE).
    * Если тариф недоступен для маршрута — фоллбэк на список тарифов /calculator/tarifflist.
