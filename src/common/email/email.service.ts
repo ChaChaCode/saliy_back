@@ -25,14 +25,23 @@ export class EmailService {
   }
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
+    // Письмо оформлено так, чтобы iOS/macOS предлагали autofill OTP:
+    //  - код стоит В НАЧАЛЕ темы письма (главный сигнал для Apple);
+    //  - есть plain-text часть (text), а не только HTML;
+    //  - код — сплошное число рядом со словом «код» (без пробелов/дефисов);
+    //    letter-spacing задаётся только CSS, сам текст кода не разбивается.
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: email,
-      subject: 'Код подтверждения - Saliy Clothes',
+      subject: `${code} — код для входа в Saliy Clothes`,
+      text:
+        `Ваш код для входа: ${code}\n` +
+        `Код действителен в течение 10 минут.\n\n` +
+        `Если вы не запрашивали этот код, просто проигнорируйте это письмо.`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Код подтверждения</h2>
-          <p>Ваш код для входа в Saliy Clothes:</p>
+          <p>Ваш код для входа в Saliy Clothes: <strong>${code}</strong></p>
           <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
             ${code}
           </div>
