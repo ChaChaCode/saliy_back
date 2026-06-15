@@ -237,32 +237,37 @@ export class OrdersService {
       }
     }
 
-    // 🔒 ШАГ 9: ОТПРАВКА EMAIL УВЕДОМЛЕНИЯ
-    try {
-      // Отправляем подтверждение заказа
-      await this.emailService.sendOrderConfirmation(orderInfo.email, {
-        orderNumber: order.orderNumber,
-        firstName: orderInfo.firstName,
-        lastName: orderInfo.lastName,
-        items: validatedItems.map((item) => ({
-          name: item.productName,
-          size: item.size,
-          quantity: item.quantity,
-          price: item.finalPrice,
-        })),
-        originalSubtotal,
-        subtotal,
-        discountAmount,
-        promoCode: promoCode || null,
-        deliveryPrice,
-        total,
-        paymentMethod: orderInfo.paymentMethod,
-      });
+    // 🔒 ШАГ 9: ОТПРАВКА EMAIL-ЧЕКА
+    // Для онлайн-оплат (Точка, Яндекс) чек НЕ отправляем сейчас — заказ ещё PENDING,
+    // иначе клиент получит «успешный» чек до фактической оплаты. Чек уйдёт из
+    // updatePaymentStatus при подтверждении оплаты (webhook со статусом PAID).
+    // Для остальных методов (CARD_MANUAL, CRYPTO, PAYPAL) отправляем сразу.
+    if (!isOnlinePayment) {
+      try {
+        await this.emailService.sendOrderConfirmation(orderInfo.email, {
+          orderNumber: order.orderNumber,
+          firstName: orderInfo.firstName,
+          lastName: orderInfo.lastName,
+          items: validatedItems.map((item) => ({
+            name: item.productName,
+            size: item.size,
+            quantity: item.quantity,
+            price: item.finalPrice,
+          })),
+          originalSubtotal,
+          subtotal,
+          discountAmount,
+          promoCode: promoCode || null,
+          deliveryPrice,
+          total,
+          paymentMethod: orderInfo.paymentMethod,
+        });
 
-      this.logger.log(`Email уведомление отправлено: ${orderInfo.email}`);
-    } catch (error) {
-      this.logger.error(`Не удалось отправить email: ${error.message}`);
-      // Не падаем, заказ уже создан
+        this.logger.log(`Email-чек отправлен: ${orderInfo.email}`);
+      } catch (error) {
+        this.logger.error(`Не удалось отправить email: ${error.message}`);
+        // Не падаем, заказ уже создан
+      }
     }
 
     // 🔒 ШАГ 10: ОЧИСТКА КОРЗИНЫ
@@ -768,19 +773,73 @@ export class OrdersService {
       `Статус заказа обновлен: ${orderNumber}, status=${orderStatus}, isPaid=${isPaid}`,
     );
 
-    // При первом успешном переходе в оплаченное состояние — чистим корзину пользователя.
-    // Идемпотентно: повторные вебхуки не сработают (previous.isPaid уже true).
-    if (isPaid && previous && !previous.isPaid && previous.userId) {
+    // При первом успешном переходе в оплаченное состояние — чистим корзину
+    // и отправляем email-чек. Идемпотентно: повторные вебхуки не сработают
+    // (previous.isPaid уже true).
+    if (isPaid && previous && !previous.isPaid) {
+      if (previous.userId) {
+        try {
+          await this.cartService.clearCart(previous.userId);
+          this.logger.log(
+            `Корзина очищена после успешной оплаты заказа ${orderNumber}`,
+          );
+        } catch (error: any) {
+          this.logger.error(`Не удалось очистить корзину: ${error.message}`);
+        }
+      }
+
       try {
-        await this.cartService.clearCart(previous.userId);
-        this.logger.log(
-          `Корзина очищена после успешной оплаты заказа ${orderNumber}`,
-        );
+        await this.sendPaidOrderReceipt(orderNumber);
       } catch (error: any) {
-        this.logger.error(`Не удалось очистить корзину: ${error.message}`);
+        this.logger.error(
+          `Не удалось отправить чек об оплате (${orderNumber}): ${error.message}`,
+        );
       }
     }
 
     return order;
+  }
+
+  /**
+   * Отправить email-чек об УСПЕШНОЙ оплате заказа.
+   * Вызывается из updatePaymentStatus при первом переходе заказа в isPaid=true
+   * (по webhook от платёжки). Для онлайн-оплат это единственное место отправки чека —
+   * чтобы клиент не получал «успешный» чек до фактической оплаты.
+   */
+  private async sendPaidOrderReceipt(orderNumber: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      include: { items: true },
+    });
+    if (!order) {
+      this.logger.warn(`Чек не отправлен: заказ ${orderNumber} не найден`);
+      return;
+    }
+
+    const subtotal = order.subtotal;
+    const discountAmount = order.discountAmount;
+    // originalSubtotal = сумма товаров до скидки (subtotal уже без доставки)
+    const originalSubtotal = subtotal + discountAmount;
+
+    await this.emailService.sendOrderConfirmation(order.email, {
+      orderNumber: order.orderNumber,
+      firstName: order.firstName,
+      lastName: order.lastName,
+      items: order.items.map((item) => ({
+        name: item.name,
+        size: item.size ?? '',
+        quantity: item.quantity,
+        price: item.price,
+      })),
+      originalSubtotal,
+      subtotal,
+      discountAmount,
+      promoCode: null,
+      deliveryPrice: order.deliveryTotal,
+      total: order.total,
+      paymentMethod: order.paymentMethod,
+    });
+
+    this.logger.log(`Email-чек об оплате отправлен: ${order.email} (${orderNumber})`);
   }
 }

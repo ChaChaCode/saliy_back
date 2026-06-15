@@ -111,7 +111,9 @@ export class EmailService {
   ): Promise<void> {
     // Преобразуем enum в читаемый текст
     const paymentMethodNames: Record<string, string> = {
-      CARD_ONLINE: 'ЯНДЕКС ПЕЙ',
+      SBP_TOCHKA: 'СБП (БАНК ТОЧКА)',
+      YANDEX_PAY: 'ЯНДЕКС СПЛИТ',
+      CARD_ONLINE: 'АЛЬФА-БАНК',
       CARD_MANUAL: 'ОПЛАТА КАРТОЙ ЧЕРЕЗ МЕНЕДЖЕРА',
       CRYPTO: 'КРИПТОВАЛЮТА',
       PAYPAL: 'PAYPAL',
