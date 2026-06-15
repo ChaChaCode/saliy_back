@@ -119,6 +119,10 @@ export class YandexPayService {
         : {}),
     };
 
+    this.logger.log(
+      `Yandex Pay register: orderId=${params.orderId}, sandbox=${this.isSandbox}, redirectUrls=${JSON.stringify(body.redirectUrls)}`,
+    );
+
     try {
       const { data } = await axios.post(url, body, {
         headers: {
