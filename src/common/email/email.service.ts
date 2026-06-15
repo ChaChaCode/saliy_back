@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter;
 
   constructor() {
@@ -22,6 +23,40 @@ export class EmailService {
       ...({ family: 4 } as Record<string, unknown>),
     };
     this.transporter = nodemailer.createTransport(transportOptions);
+
+    // Проверяем SMTP-соединение при старте — чтобы проблема с почтой
+    // была видна сразу в логах, а не при первой отправке.
+    if (process.env.EMAIL_HOST) {
+      this.transporter
+        .verify()
+        .then(() => this.logger.log('SMTP-соединение готово'))
+        .catch((e) =>
+          this.logger.error(
+            `SMTP не настроен/недоступен: ${e instanceof Error ? e.message : String(e)}`,
+          ),
+        );
+    } else {
+      this.logger.warn('EMAIL_HOST не задан — отправка писем отключена');
+    }
+  }
+
+  /**
+   * Безопасная отправка: ошибка SMTP логируется, но НЕ роняет бизнес-операцию
+   * (заказ/регистрация не должны падать из-за недоставленного письма).
+   * Возвращает true при успехе.
+   */
+  private async safeSend(
+    options: nodemailer.SendMailOptions,
+  ): Promise<boolean> {
+    try {
+      await this.transporter.sendMail(options);
+      return true;
+    } catch (e) {
+      this.logger.error(
+        `Не удалось отправить письмо "${options.subject}" на ${options.to}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return false;
+    }
   }
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
@@ -51,7 +86,7 @@ export class EmailService {
       `,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    await this.safeSend(mailOptions);
   }
 
   /**
@@ -113,13 +148,35 @@ export class EmailService {
       )
       .join('');
 
+    // Plain-text версия чека — для доставляемости (письмо без text-части
+    // спам-фильтры оценивают хуже) и для клиентов без HTML.
+    const itemsText = orderData.items
+      .map(
+        (item) =>
+          `- ${item.name} (размер ${item.size}) × ${item.quantity} @ ${item.price.toFixed(2)} ₽ = ${(item.price * item.quantity).toFixed(2)} ₽`,
+      )
+      .join('\n');
+    const orderText =
+      `SALIY CLOTHES — заказ #${orderData.orderNumber}\n` +
+      `${currentDate} ${currentTime}\n\n` +
+      `Товары:\n${itemsText}\n\n` +
+      `Товары: ${orderData.originalSubtotal.toFixed(2)} ₽\n` +
+      (orderData.discountAmount > 0
+        ? `Промокод${orderData.promoCode ? ` ${orderData.promoCode}` : ''}: -${orderData.discountAmount.toFixed(2)} ₽\n`
+        : '') +
+      `Доставка: ${orderData.deliveryPrice.toFixed(2)} ₽\n` +
+      `ИТОГО: ${orderData.total.toFixed(2)} ₽\n` +
+      `Оплата: ${paymentMethodText}\n` +
+      (orderData.paymentUrl ? `\nОплатить заказ: ${orderData.paymentUrl}\n` : '') +
+      `\nСпасибо за покупку!`;
+
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: email,
       subject: `Заказ #${orderData.orderNumber} оформлен - Saliy Clothes`,
+      text: orderText,
       html: `
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-        <div style="font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 400px; margin: 40px auto; padding: 0; background: #e8e8e8; color-scheme: light;">
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; max-width: 400px; margin: 40px auto; padding: 0; background: #e8e8e8; color-scheme: light;">
           <!-- Чек -->
           <div style="background: #ffffff; margin: 0 auto; position: relative; box-shadow: 0 8px 30px rgba(0,0,0,0.15); color: #000000;">
             <!-- Треугольные вырезы сверху -->
@@ -224,12 +281,6 @@ export class EmailService {
               <div style="text-align: center; margin: 25px 0; font-size: 12px; letter-spacing: 1px; color: #000000; text-transform: uppercase;">
                 СПАСИБО ЗА ПОКУПКУ!
               </div>
-
-              <!-- QR код -->
-              <div style="text-align: center; margin: 25px 0; background: #ffffff;">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://www.youtube.com/watch?v=dQw4w9WgXcQ" alt="QR Code" style="width: 150px; height: 150px; border: 2px solid #000000; padding: 5px; background: #ffffff;">
-                <div style="font-size: 10px; margin-top: 8px; letter-spacing: 2px; color: #666666; text-transform: uppercase;">ОТСКАНИРУЙТЕ ДЛЯ ОТСЛЕЖИВАНИЯ</div>
-              </div>
             </div>
 
             <!-- Треугольные вырезы снизу -->
@@ -246,18 +297,14 @@ export class EmailService {
       `,
     };
 
-    await this.transporter.sendMail(mailOptions);
+    await this.safeSend(mailOptions);
   }
 
   /**
    * Отправить произвольное письмо (для админа — рассылки, уведомления)
    */
-  async sendRaw(
-    to: string,
-    subject: string,
-    html: string,
-  ): Promise<void> {
-    await this.transporter.sendMail({
+  async sendRaw(to: string, subject: string, html: string): Promise<boolean> {
+    return this.safeSend({
       from: process.env.EMAIL_FROM,
       to,
       subject,
