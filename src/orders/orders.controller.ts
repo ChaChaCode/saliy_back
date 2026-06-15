@@ -23,12 +23,12 @@ export class OrdersController {
    */
   @Get('delivery-options')
   async getDeliveryOptions(@Query('country') countryCode: string) {
-    // Россия и Беларусь - только CDEK самовывоз
-    // Другие страны - только стандартная почта
+    // Почтовая доставка (STANDARD) доступна для любой страны.
+    // Для России и Беларуси дополнительно доступен самовывоз из ПВЗ CDEK.
     const isRussiaBelarus = ['RU', 'BY', 'RUS', 'BLR'].includes(countryCode?.toUpperCase());
 
     const deliveryTypes = isRussiaBelarus
-      ? ['CDEK_PICKUP']
+      ? ['CDEK_PICKUP', 'STANDARD']
       : ['STANDARD'];
 
     // Доступные способы оплаты: Точка (СБП/карта) и Яндекс Сплит.
