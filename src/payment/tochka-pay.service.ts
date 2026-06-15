@@ -7,6 +7,7 @@ export interface TochkaRegisterParams {
   description?: string; // назначение платежа (purpose)
   redirectUrl: string; // куда вернуть после успешной оплаты
   failRedirectUrl?: string; // куда вернуть при неуспехе
+  ttlMinutes?: number; // срок жизни платёжной ссылки в минутах (1..44640)
 }
 
 export interface TochkaRegisterResult {
@@ -81,6 +82,14 @@ export class TochkaPayService {
   async registerOrder(
     params: TochkaRegisterParams,
   ): Promise<TochkaRegisterResult> {
+    // ttl — срок жизни ссылки в минутах. Точка допускает 1..44640 (по умолчанию 7 дней).
+    // Привязываем к таймауту автоотмены заказа, чтобы ссылка протухала ровно когда
+    // заказ отменяется и сток возвращается — нельзя оплатить уже отменённый заказ.
+    const ttl =
+      params.ttlMinutes != null
+        ? Math.min(44640, Math.max(1, Math.round(params.ttlMinutes)))
+        : undefined;
+
     const body = {
       Data: {
         customerCode: this.customerCode,
@@ -92,6 +101,7 @@ export class TochkaPayService {
         // Наш orderNumber — вернётся в webhook как paymentLinkId.
         paymentLinkId: params.orderId.slice(0, 45),
         ...(this.merchantId ? { merchantId: this.merchantId } : {}),
+        ...(ttl != null ? { ttl } : {}),
       },
     };
 

@@ -254,6 +254,8 @@ export class OrdersService {
             description: `Заказ ${order.orderNumber}`,
             redirectUrl: successUrl,
             failRedirectUrl: failUrl,
+            // Ссылка живёт ровно столько же, сколько заказ до автоотмены.
+            ttlMinutes: this.getPendingTimeoutMin(),
           });
           paymentUrl = tochka.paymentUrl;
           if (tochka.operationId) {
@@ -844,14 +846,20 @@ export class OrdersService {
    * Автоотмена неоплаченных онлайн-заказов по таймауту.
    * Сток списывается при создании заказа, поэтому неоплаченный PENDING держит товар.
    * Раз в минуту находим онлайн-заказы в PENDING старше таймаута, отменяем их
-   * и возвращаем товар на склад. Таймаут — ORDER_PENDING_TIMEOUT_MIN (по умолчанию 10 мин).
+   * и возвращаем товар на склад. Таймаут — ORDER_PENDING_TIMEOUT_MIN (по умолчанию 15 мин).
    */
+  /**
+   * Таймаут жизни неоплаченного онлайн-заказа в минутах (ORDER_PENDING_TIMEOUT_MIN).
+   * Один источник правды и для автоотмены, и для ttl платёжной ссылки Точки.
+   */
+  private getPendingTimeoutMin(): number {
+    const v = parseInt(process.env.ORDER_PENDING_TIMEOUT_MIN || '15', 10);
+    return Number.isFinite(v) && v > 0 ? v : 15;
+  }
+
   @Cron(CronExpression.EVERY_MINUTE, { name: 'cancel-expired-orders' })
   async cancelExpiredOrders(): Promise<void> {
-    const timeoutMin = parseInt(
-      process.env.ORDER_PENDING_TIMEOUT_MIN || '10',
-      10,
-    );
+    const timeoutMin = this.getPendingTimeoutMin();
     const cutoff = new Date(Date.now() - timeoutMin * 60 * 1000);
 
     const expired = await this.prisma.order.findMany({
