@@ -16,7 +16,7 @@
 | `delivery_price_standard` | Цена почтовой доставки (фикс, ₽) — для стран без CDEK | `800` |
 | `low_stock_threshold` | Порог низкого остатка | `5` |
 | `site_name` | Название сайта | `"Saliy Clothes"` |
-| `contact_email` | Контактный email | `"info@saliystudio.com"` |
+| `contact_email` | Контактный email | `"info@saliyclothes.com"` |
 
 Список расширяется — можно добавлять любые произвольные ключи.
 

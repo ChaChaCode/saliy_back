@@ -1,6 +1,6 @@
 # API документация
 
-Базовый URL: `https://saliystudio.com/api/`
+Базовый URL: `https://saliyclothes.com/api/`
 
 ## Модули
 

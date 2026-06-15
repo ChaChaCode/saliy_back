@@ -122,7 +122,7 @@ Content-Type: `multipart/form-data`. Любые поля опциональны.
 
 Баннеры категорий хранятся в каталоге `uploads/categories/` (например, `desktop-cat1-1234567890.jpg`, `mobile-cat1-1234567890.jpg`).
 
-Все файлы доступны по URL вида `https://saliystudio.com/uploads/...`.
+Все файлы доступны по URL вида `https://saliyclothes.com/uploads/...`.
 
 ---
 

@@ -127,7 +127,7 @@ HTML-страничка с сообщением «Вы отписались от
 ### Юридические требования
 
 - Поле `acceptedTerms: true` — обязательное (ФЗ 152 «О персональных данных», + GDPR-friendly).
-- В каждом письме рассылки автоматически добавляется футер с unsubscribe-ссылкой вида `https://saliystudio.com/api/newsletter/unsubscribe/{unsubscribe_token}`.
+- В каждом письме рассылки автоматически добавляется футер с unsubscribe-ссылкой вида `https://saliyclothes.com/api/newsletter/unsubscribe/{unsubscribe_token}`.
 - `acceptedTerms` сохраняется в БД как доказательство согласия.
 
 ### Что приходит подписчикам

@@ -2,7 +2,7 @@
  * Опции для httpOnly auth-кук, управляемые через переменную окружения.
  *
  * COOKIE_SAMESITE задаёт политику SameSite:
- *   - lax (по умолчанию) — фронт и API на одном сайте (saliystudio.com);
+ *   - lax (по умолчанию) — фронт и API на одном сайте (saliyclothes.com);
  *     строже и безопаснее.
  *   - none — фронт на другом домене (cross-site, напр. Vercel). Браузер
  *     отправит куку на cross-site запросы. Требует Secure=true (ставится

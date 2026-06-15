@@ -42,7 +42,7 @@
 | `isActive` | Активна ли подписка |
 | `source` | Откуда подписка: `footer` / `popup` / `checkout` / null (для аналитики) |
 | `acceptedTerms` | Согласие с условиями |
-| `unsubscribeToken` | Секретный токен; ссылка на отписку: `https://saliystudio.com/api/newsletter/unsubscribe/{token}` |
+| `unsubscribeToken` | Секретный токен; ссылка на отписку: `https://saliyclothes.com/api/newsletter/unsubscribe/{token}` |
 | `userId` | id зарегистрированного пользователя или `null` (гость) |
 | `subscribedAt` | Дата подписки |
 | `unsubscribedAt` | Дата отписки или `null` |
