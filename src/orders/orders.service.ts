@@ -5,6 +5,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { OrderStatus, PaymentMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './orders.dto';
@@ -821,6 +822,103 @@ export class OrdersService {
     }
 
     return order;
+  }
+
+  /**
+   * Автоотмена неоплаченных онлайн-заказов по таймауту.
+   * Сток списывается при создании заказа, поэтому неоплаченный PENDING держит товар.
+   * Раз в минуту находим онлайн-заказы в PENDING старше таймаута, отменяем их
+   * и возвращаем товар на склад. Таймаут — ORDER_PENDING_TIMEOUT_MIN (по умолчанию 10 мин).
+   */
+  @Cron(CronExpression.EVERY_MINUTE, { name: 'cancel-expired-orders' })
+  async cancelExpiredOrders(): Promise<void> {
+    const timeoutMin = parseInt(
+      process.env.ORDER_PENDING_TIMEOUT_MIN || '10',
+      10,
+    );
+    const cutoff = new Date(Date.now() - timeoutMin * 60 * 1000);
+
+    const expired = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.PENDING,
+        isPaid: false,
+        createdAt: { lt: cutoff },
+        paymentMethod: {
+          in: [
+            PaymentMethod.YANDEX_PAY,
+            PaymentMethod.SBP_TOCHKA,
+            PaymentMethod.CARD_ONLINE,
+          ],
+        },
+      },
+      include: { items: true },
+    });
+
+    if (expired.length === 0) {
+      return;
+    }
+
+    for (const order of expired) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          // Возвращаем товар на склад и откатываем счётчик продаж
+          for (const item of order.items) {
+            if (item.productId == null) continue; // товар удалён — нечего возвращать
+            await this.restoreStock(
+              tx,
+              item.productId,
+              item.size ?? '',
+              item.quantity,
+            );
+          }
+          await tx.order.update({
+            where: { id: order.id },
+            data: { status: OrderStatus.CANCELLED },
+          });
+        });
+        this.logger.log(
+          `Заказ ${order.orderNumber} отменён по таймауту (${timeoutMin} мин), товар возвращён на склад`,
+        );
+      } catch (error: any) {
+        this.logger.error(
+          `Не удалось отменить заказ ${order.orderNumber} по таймауту: ${error.message}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Вернуть товар на склад (обратная операция к decreaseStock):
+   * увеличивает остаток по размеру и откатывает salesCount.
+   */
+  private async restoreStock(
+    tx: any,
+    productId: number,
+    size: string,
+    quantity: number,
+  ): Promise<void> {
+    const product = await tx.product.findUnique({ where: { id: productId } });
+    if (!product) {
+      this.logger.warn(`restoreStock: товар ${productId} не найден`);
+      return;
+    }
+
+    const stock = (product.stock as any) || {};
+    const currentStock = stock[size] || 0;
+    const newStock = { ...stock };
+    newStock[size] = currentStock + quantity;
+
+    await tx.product.update({
+      where: { id: productId },
+      data: {
+        stock: newStock,
+        salesCount: { decrement: quantity },
+      },
+    });
+
+    this.logger.log(
+      `Сток возвращён: товар ${productId}, размер ${size}: ${currentStock} -> ${newStock[size]}`,
+    );
   }
 
   /**
