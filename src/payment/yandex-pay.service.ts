@@ -182,6 +182,10 @@ export class YandexPayService {
         timeout: 15000,
       });
 
+      this.logger.log(
+        `Yandex Pay status raw для ${orderId}: ${JSON.stringify(data).slice(0, 500)}`,
+      );
+
       const orderStatus: string | undefined = data?.data?.order?.status;
       const mapped = orderStatus
         ? YANDEX_STATUS_MAP[orderStatus] ?? 'PENDING'
