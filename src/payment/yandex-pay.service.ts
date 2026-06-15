@@ -125,10 +125,6 @@ export class YandexPayService {
         : {}),
     };
 
-    this.logger.log(
-      `Yandex Pay register: orderId=${params.orderId}, sandbox=${this.isSandbox}, redirectUrls=${JSON.stringify(body.redirectUrls)}`,
-    );
-
     try {
       const { data } = await axios.post(url, body, {
         headers: {
@@ -189,12 +185,8 @@ export class YandexPayService {
       });
 
       const order = data?.data?.order;
-      // В песочнице статус оплаты лежит в paymentStatus (а не order.status).
-      // Логируем все возможные поля статуса, чтобы видеть фактическое.
-      this.logger.log(
-        `Yandex status fields для ${orderId}: order.status=${order?.status}, paymentStatus=${order?.paymentStatus}, deliveryStatus=${order?.deliveryStatus}`,
-      );
-
+      // Статус оплаты Яндекса лежит в order.paymentStatus (CAPTURED=оплачено),
+      // а не в order.status. Фолбэк на order.status на всякий случай.
       const orderStatus: string | undefined =
         order?.paymentStatus || order?.status;
       const mapped = orderStatus
