@@ -8,6 +8,7 @@ enum DeliveryType {
 enum PaymentMethod {
   CARD_ONLINE  // Онлайн оплата картой через Альфа-Банк
   YANDEX_PAY   // Онлайн оплата через Яндекс Пэй
+  SBP_TOCHKA   // Онлайн оплата по СБП через Банк Точка
   CARD_MANUAL  // Оплата картой через менеджера
   CRYPTO       // Криптовалюта
   PAYPAL       // PayPal

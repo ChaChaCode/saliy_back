@@ -15,6 +15,7 @@ import { AdminSettingsService } from '../admin/settings/admin-settings.service';
 import { AlfaPayService } from '../payment/alfa-pay.service';
 import { pickMainImage } from '../common/utils/product-image.util';
 import { YandexPayService } from '../payment/yandex-pay.service';
+import { TochkaPayService } from '../payment/tochka-pay.service';
 import { DeliveryService } from '../delivery/delivery.service';
 
 @Injectable()
@@ -32,6 +33,8 @@ export class OrdersService {
     private readonly alfaPayService: AlfaPayService,
     @Inject(forwardRef(() => YandexPayService))
     private readonly yandexPayService: YandexPayService,
+    @Inject(forwardRef(() => TochkaPayService))
+    private readonly tochkaPayService: TochkaPayService,
     private readonly deliveryService: DeliveryService,
   ) {}
 
@@ -83,7 +86,8 @@ export class OrdersService {
     // Остальные методы (CARD_MANUAL, CRYPTO, PAYPAL) — помечаем оплаченным сразу.
     const isAlfaOnline = dto.paymentMethod === PaymentMethod.CARD_ONLINE;
     const isYandexPay = dto.paymentMethod === PaymentMethod.YANDEX_PAY;
-    const isOnlinePayment = isAlfaOnline || isYandexPay;
+    const isTochkaSbp = dto.paymentMethod === PaymentMethod.SBP_TOCHKA;
+    const isOnlinePayment = isAlfaOnline || isYandexPay || isTochkaSbp;
 
     // 🔒 ШАГ 6: СОЗДАНИЕ ЗАКАЗА В ТРАНЗАКЦИИ
     const order = await this.prisma.$transaction(async (tx) => {
@@ -195,6 +199,20 @@ export class OrdersService {
             await this.prisma.order.update({
               where: { id: order.id },
               data: { paymentId: yandex.yandexOrderId },
+            });
+          }
+        } else if (isTochkaSbp) {
+          const tochka = await this.tochkaPayService.registerOrder({
+            orderId: order.orderNumber,
+            amount: total,
+            description: `Заказ ${order.orderNumber}`,
+            redirectUrl: successUrl,
+          });
+          paymentUrl = tochka.paymentUrl;
+          if (tochka.qrcId) {
+            await this.prisma.order.update({
+              where: { id: order.id },
+              data: { paymentId: tochka.qrcId },
             });
           }
         }

@@ -14,6 +14,7 @@ import {
 import type { Response, Request } from 'express';
 import { AlfaPayService } from './alfa-pay.service';
 import { YandexPayService } from './yandex-pay.service';
+import { TochkaPayService } from './tochka-pay.service';
 import { OrdersService } from '../orders/orders.service';
 
 @Controller('payment')
@@ -23,6 +24,7 @@ export class PaymentController {
   constructor(
     private readonly alfaPayService: AlfaPayService,
     private readonly yandexPayService: YandexPayService,
+    private readonly tochkaPayService: TochkaPayService,
     @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
   ) {}
@@ -164,5 +166,66 @@ export class PaymentController {
     const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
     const json = Buffer.from(padded, 'base64').toString('utf8');
     return JSON.parse(json);
+  }
+
+  /**
+   * Webhook от Tochka Pay (СБП) об изменении статуса платежа.
+   * Тело может прийти как JSON или как подписанный JWT (text/plain).
+   * orderNumber передавали в metadata при создании QR — берём оттуда.
+   * Статус оплаты: payload.status.value === 'COMPLETED'.
+   *
+   * POST /api/payment/tochka/webhook
+   */
+  @Post('tochka/webhook')
+  @HttpCode(200)
+  async handleTochkaWebhook(@Req() req: Request) {
+    const rawBody: any = (req as any).body;
+    let data: any = null;
+
+    try {
+      if (Buffer.isBuffer(rawBody)) {
+        const s = rawBody.toString('utf8').trim();
+        data = s.startsWith('{') ? JSON.parse(s) : this.decodeJwtPayload(s);
+      } else if (typeof rawBody === 'string') {
+        const s = rawBody.trim();
+        data = s.startsWith('{') ? JSON.parse(s) : this.decodeJwtPayload(s);
+      } else if (rawBody && typeof rawBody === 'object') {
+        data = rawBody;
+      } else {
+        this.logger.warn('Tochka webhook: неподдерживаемый формат тела');
+        return { status: 'success' };
+      }
+    } catch (error: any) {
+      this.logger.error(`Tochka webhook: не смог разобрать тело: ${error.message}`);
+      return { status: 'success' };
+    }
+
+    this.logger.log(`Tochka webhook event: ${data?.event}`);
+
+    const payload = data?.payload ?? data;
+    const statusValue: string | undefined = payload?.status?.value;
+
+    // Наш orderNumber лежит в metadata (JSON-строка), которую мы клали при создании QR.
+    let orderNumber: string | undefined;
+    try {
+      const meta =
+        typeof payload?.metadata === 'string'
+          ? JSON.parse(payload.metadata)
+          : payload?.metadata;
+      orderNumber = meta?.orderNumber;
+    } catch {
+      orderNumber = undefined;
+    }
+
+    if (orderNumber && statusValue) {
+      try {
+        const mappedStatus = this.tochkaPayService.mapStatus(statusValue);
+        await this.ordersService.updatePaymentStatus(orderNumber, mappedStatus);
+      } catch (error: any) {
+        this.logger.error(`Tochka webhook: ошибка обновления заказа: ${error.message}`);
+      }
+    }
+
+    return { status: 'success' };
   }
 }

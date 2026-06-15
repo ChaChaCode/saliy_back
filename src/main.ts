@@ -53,6 +53,13 @@ async function bootstrap() {
     raw({ type: 'application/octet-stream', limit: '1mb' }),
   );
 
+  // Tochka Pay webhook может прийти как text/plain (подписанный JWT) — raw-парсер.
+  // JSON-вариант парсится стандартно, его этот middleware не трогает.
+  app.use(
+    '/api/payment/tochka/webhook',
+    raw({ type: 'text/plain', limit: '1mb' }),
+  );
+
   // Раздача статических файлов (загруженные изображения)
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
