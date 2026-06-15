@@ -904,6 +904,49 @@ export class OrdersService {
     }
   }
 
+  /**
+   * Polling-фолбэк для оплат Яндекс Пэй/Сплит (на случай если webhook не дошёл).
+   * Раз в минуту опрашиваем статус неоплаченных заказов Яндекса через getOrderStatus
+   * (принимает наш orderNumber). При оплате (CAPTURED→PAID) подтверждаем заказ.
+   * Отключается переменной YANDEX_POLLING_ENABLED=false.
+   */
+  @Cron(CronExpression.EVERY_MINUTE, { name: 'poll-yandex-payments' })
+  async pollYandexPayments(): Promise<void> {
+    if (process.env.YANDEX_POLLING_ENABLED === 'false') {
+      return;
+    }
+    const timeoutMin = this.getPendingTimeoutMin();
+    const cutoff = new Date(Date.now() - timeoutMin * 60 * 1000);
+
+    const pending = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.PENDING,
+        isPaid: false,
+        paymentMethod: PaymentMethod.YANDEX_PAY,
+        createdAt: { gte: cutoff }, // протухшие отменит cancelExpiredOrders
+      },
+      select: { orderNumber: true },
+    });
+
+    for (const order of pending) {
+      try {
+        const { mappedStatus } = await this.yandexPayService.getOrderStatus(
+          order.orderNumber,
+        );
+        if (mappedStatus !== 'PENDING') {
+          await this.updatePaymentStatus(order.orderNumber, mappedStatus);
+          this.logger.log(
+            `Yandex polling: заказ ${order.orderNumber} → ${mappedStatus}`,
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Yandex polling: ошибка статуса ${order.orderNumber}: ${error.message}`,
+        );
+      }
+    }
+  }
+
   @Cron(CronExpression.EVERY_MINUTE, { name: 'cancel-expired-orders' })
   async cancelExpiredOrders(): Promise<void> {
     const timeoutMin = this.getPendingTimeoutMin();
