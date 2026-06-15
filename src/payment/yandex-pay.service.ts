@@ -30,6 +30,7 @@ export interface YandexPayRegisterResult {
  * https://pay.yandex.ru/docs/ru/custom/backend/yandex-pay-api/order/merchant_v1_order-get
  */
 const YANDEX_STATUS_MAP: Record<string, 'PENDING' | 'PAID' | 'FAILED' | 'CANCELED' | 'REFUNDED'> = {
+  // Статусы операции
   NEW: 'PENDING',
   AUTHORIZED: 'PENDING',
   CAPTURED: 'PAID',
@@ -37,6 +38,11 @@ const YANDEX_STATUS_MAP: Record<string, 'PENDING' | 'PAID' | 'FAILED' | 'CANCELE
   REFUNDED: 'REFUNDED',
   PARTIALLY_REFUNDED: 'REFUNDED',
   FAILED: 'FAILED',
+  // Статусы оплаты заказа (paymentStatus)
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+  CANCELLED: 'CANCELED',
+  CANCELED: 'CANCELED',
 };
 
 @Injectable()
@@ -182,11 +188,15 @@ export class YandexPayService {
         timeout: 15000,
       });
 
+      const order = data?.data?.order;
+      // В песочнице статус оплаты лежит в paymentStatus (а не order.status).
+      // Логируем все возможные поля статуса, чтобы видеть фактическое.
       this.logger.log(
-        `Yandex Pay status raw для ${orderId}: ${JSON.stringify(data).slice(0, 500)}`,
+        `Yandex status fields для ${orderId}: order.status=${order?.status}, paymentStatus=${order?.paymentStatus}, deliveryStatus=${order?.deliveryStatus}`,
       );
 
-      const orderStatus: string | undefined = data?.data?.order?.status;
+      const orderStatus: string | undefined =
+        order?.paymentStatus || order?.status;
       const mapped = orderStatus
         ? YANDEX_STATUS_MAP[orderStatus] ?? 'PENDING'
         : 'PENDING';
