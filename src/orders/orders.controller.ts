@@ -31,8 +31,9 @@ export class OrdersController {
       ? ['CDEK_PICKUP']
       : ['STANDARD'];
 
-    // Только Яндекс Пей (CARD_ONLINE) для всех стран
-    const paymentMethods = ['CARD_ONLINE']; // Фейковая оплата, сразу проходит
+    // Доступные способы оплаты: Точка (СБП/карта) и Яндекс Сплит.
+    // Альфа (CARD_ONLINE) отключена — код сервиса остаётся, но в выбор не попадает.
+    const paymentMethods = ['SBP_TOCHKA', 'YANDEX_PAY'];
 
     return {
       deliveryTypes,

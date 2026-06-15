@@ -89,6 +89,12 @@ export class OrdersService {
     const isTochkaSbp = dto.paymentMethod === PaymentMethod.SBP_TOCHKA;
     const isOnlinePayment = isAlfaOnline || isYandexPay || isTochkaSbp;
 
+    // Альфа (CARD_ONLINE) отключена. Не доверяем клиенту: даже если фронт пришлёт
+    // этот метод, заказ оформить нельзя. Доступны только Точка и Яндекс Сплит.
+    if (isAlfaOnline) {
+      throw new BadRequestException('Этот способ оплаты недоступен');
+    }
+
     // 🔒 ШАГ 6: СОЗДАНИЕ ЗАКАЗА В ТРАНЗАКЦИИ
     const order = await this.prisma.$transaction(async (tx) => {
       // Генерируем номер заказа

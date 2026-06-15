@@ -46,6 +46,8 @@ export class YandexPayService {
   private readonly apiKey: string;
   private readonly merchantId: string;
   private readonly isSandbox: boolean;
+  /** Разрешённые способы оплаты внутри Яндекс Пэй. По умолчанию только SPLIT. */
+  private readonly availableMethods: string[];
 
   constructor() {
     this.isSandbox = process.env.YANDEX_PAY_SANDBOX !== 'false';
@@ -54,6 +56,12 @@ export class YandexPayService {
       : 'https://pay.yandex.ru/api/merchant';
     this.apiKey = process.env.YANDEX_PAY_API_KEY || '';
     this.merchantId = process.env.YANDEX_PAY_MERCHANT_ID || '';
+    // YANDEX_PAY_METHODS — список через запятую (например "SPLIT" или "SPLIT,CARD").
+    // Пусто/не задано → только SPLIT (нам нужна оплата частями).
+    this.availableMethods = (process.env.YANDEX_PAY_METHODS || 'SPLIT')
+      .split(',')
+      .map((m) => m.trim().toUpperCase())
+      .filter(Boolean);
 
     if (!this.apiKey || !this.merchantId) {
       this.logger.warn(
@@ -105,7 +113,10 @@ export class YandexPayService {
         onError: params.cancelUrl || params.redirectUrl,
         onAbort: params.cancelUrl || params.redirectUrl,
       },
-      // availablePaymentMethods не задаём — Яндекс возьмёт методы, включённые в настройках мерчанта.
+      // Ограничиваем способы оплаты (по умолчанию только SPLIT — оплата частями).
+      ...(this.availableMethods.length
+        ? { availablePaymentMethods: this.availableMethods }
+        : {}),
     };
 
     try {
