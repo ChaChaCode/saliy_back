@@ -857,6 +857,53 @@ export class OrdersService {
     return Number.isFinite(v) && v > 0 ? v : 15;
   }
 
+  /**
+   * Polling-фолбэк для оплат Точки, пока не настроен webhook.
+   * Раз в минуту опрашиваем статус неоплаченных заказов Точки через getOperationStatus
+   * (право на чтение платежей у токена есть). При оплате подтверждаем заказ —
+   * как это сделал бы webhook. Запускается до автоотмены, чтобы успеть поймать оплату.
+   * Отключается переменной TOCHKA_POLLING_ENABLED=false (когда заработает webhook).
+   */
+  @Cron(CronExpression.EVERY_MINUTE, { name: 'poll-tochka-payments' })
+  async pollTochkaPayments(): Promise<void> {
+    if (process.env.TOCHKA_POLLING_ENABLED === 'false') {
+      return;
+    }
+    // Берём только заказы Точки в PENDING с известным operationId (paymentId).
+    const timeoutMin = this.getPendingTimeoutMin();
+    const cutoff = new Date(Date.now() - timeoutMin * 60 * 1000);
+
+    const pending = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.PENDING,
+        isPaid: false,
+        paymentMethod: PaymentMethod.SBP_TOCHKA,
+        paymentId: { not: null },
+        createdAt: { gte: cutoff }, // ещё не протухшие — протухшие отменит cancelExpiredOrders
+      },
+      select: { orderNumber: true, paymentId: true },
+    });
+
+    for (const order of pending) {
+      if (!order.paymentId) continue;
+      try {
+        const { mappedStatus } = await this.tochkaPayService.getOperationStatus(
+          order.paymentId,
+        );
+        if (mappedStatus !== 'PENDING') {
+          await this.updatePaymentStatus(order.orderNumber, mappedStatus);
+          this.logger.log(
+            `Tochka polling: заказ ${order.orderNumber} → ${mappedStatus}`,
+          );
+        }
+      } catch (error: any) {
+        this.logger.error(
+          `Tochka polling: ошибка статуса ${order.orderNumber}: ${error.message}`,
+        );
+      }
+    }
+  }
+
   @Cron(CronExpression.EVERY_MINUTE, { name: 'cancel-expired-orders' })
   async cancelExpiredOrders(): Promise<void> {
     const timeoutMin = this.getPendingTimeoutMin();
