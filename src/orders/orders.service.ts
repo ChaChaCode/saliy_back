@@ -624,18 +624,22 @@ export class OrdersService {
     const year = date.getFullYear().toString().slice(-2);
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
+    const prefix = `SALIY${year}${month}${day}`;
 
-    // Получаем количество заказов за сегодня
-    const count = await this.prisma.order.count({
-      where: {
-        createdAt: {
-          gte: new Date(date.getFullYear(), date.getMonth(), date.getDate()),
-        },
-      },
+    // Берём МАКСИМАЛЬНЫЙ существующий номер с этим префиксом и +1.
+    // НЕ count() — иначе после удаления заказов номера переиспользуются
+    // и упираются в unique-конфликт (duplicate key order_number).
+    const last = await this.prisma.order.findFirst({
+      where: { orderNumber: { startsWith: prefix } },
+      orderBy: { orderNumber: 'desc' },
+      select: { orderNumber: true },
     });
 
-    const orderNum = (count + 1).toString().padStart(5, '0');
-    return `SALIY${year}${month}${day}${orderNum}`;
+    const lastSeq = last
+      ? parseInt(last.orderNumber.slice(prefix.length), 10) || 0
+      : 0;
+    const orderNum = (lastSeq + 1).toString().padStart(5, '0');
+    return `${prefix}${orderNum}`;
   }
 
   /**
