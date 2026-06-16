@@ -571,8 +571,15 @@ export class DeliveryService {
         tariff_code: tariffCode,
         comment: orderData.comment || `Заказ ${orderData.orderNumber}`,
         sender: {
-          company: 'SALIY',
-          phones: [{ number: '+375291234567' }],
+          company: this.configService.get<string>('CDEK_SENDER_NAME') || 'SALIY',
+          name: this.configService.get<string>('CDEK_SENDER_NAME') || 'SALIY',
+          phones: [
+            {
+              number:
+                this.configService.get<string>('CDEK_SENDER_PHONE') ||
+                '+375291234567',
+            },
+          ],
         },
         recipient: {
           name: `${orderData.recipient.firstName} ${orderData.recipient.lastName}`,
@@ -727,6 +734,49 @@ export class DeliveryService {
    */
   getCdekTrackingUrl(cdekNumber: string): string {
     return `https://www.cdek.ru/ru/tracking?order_id=${cdekNumber}`;
+  }
+
+  /**
+   * Сформировать и скачать квитанцию (накладную) CDEK в PDF по uuid заказа.
+   * Двухшаговый процесс: POST /print/orders создаёт печатную форму (готовится не сразу),
+   * затем GET /print/orders/{uuid}.pdf отдаёт PDF. Пуллим готовность с паузами.
+   */
+  async getCdekWaybillPdf(orderUuid: string): Promise<Buffer> {
+    const token = await this.getCdekToken();
+    const apiUrl = this.getCdekApiUrl();
+
+    // 1. Создаём печатную форму
+    const created = await this.cdekRequest<any>('POST', '/print/orders', {
+      orders: [{ order_uuid: orderUuid }],
+      copy_count: 1,
+    });
+    const formUuid = created?.entity?.uuid;
+    if (!formUuid) {
+      throw new Error('CDEK не вернул uuid печатной формы');
+    }
+
+    // 2. Пуллим PDF — форма готовится несколько секунд
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.request({
+            method: 'GET',
+            url: `${apiUrl}/print/orders/${formUuid}.pdf`,
+            responseType: 'arraybuffer',
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        );
+        const buf = Buffer.from(response.data);
+        // Готовый PDF начинается с "%PDF"; иначе CDEK вернул JSON «ещё не готово»
+        if (buf.slice(0, 4).toString() === '%PDF') {
+          return buf;
+        }
+      } catch {
+        // 4xx пока форма не готова — продолжаем ждать
+      }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+    throw new Error('Квитанция CDEK не готова — попробуйте позже');
   }
 
   /**

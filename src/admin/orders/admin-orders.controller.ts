@@ -184,6 +184,32 @@ export class AdminOrdersController {
   }
 
   /**
+   * Создать накладную CDEK для заказа вручную (если не создалась автоматически)
+   * POST /api/admin/orders/:orderNumber/cdek/create
+   */
+  @Post(':orderNumber/cdek/create')
+  createCdekInvoice(@Param('orderNumber') orderNumber: string) {
+    return this.adminOrdersService.createCdekInvoice(orderNumber);
+  }
+
+  /**
+   * Скачать квитанцию (накладную) CDEK в PDF
+   * GET /api/admin/orders/:orderNumber/waybill.pdf
+   */
+  @Get(':orderNumber/waybill.pdf')
+  async getWaybill(
+    @Param('orderNumber') orderNumber: string,
+    @Res() res: Response,
+  ) {
+    const pdf = await this.adminOrdersService.getWaybillPdf(orderNumber);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="waybill-${orderNumber}.pdf"`,
+    });
+    res.send(pdf);
+  }
+
+  /**
    * Отправить произвольное письмо клиенту
    * POST /api/admin/orders/:orderNumber/send-email
    */

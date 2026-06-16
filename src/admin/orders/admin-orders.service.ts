@@ -39,6 +39,83 @@ export class AdminOrdersService {
   }
 
   /**
+   * Создать накладную CDEK для существующего заказа (ручной/разовый вызов из админки).
+   * Для заказов, оплаченных до автосоздания, или если накладная не создалась.
+   */
+  async createCdekInvoice(orderNumber: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      include: { items: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`Заказ ${orderNumber} не найден`);
+    }
+    if (order.deliveryType !== 'CDEK_PICKUP') {
+      throw new BadRequestException('У заказа не CDEK-доставка');
+    }
+    if (order.cdekUuid) {
+      throw new BadRequestException('Накладная CDEK уже создана');
+    }
+    if (!order.cdekCityCode) {
+      throw new BadRequestException('У заказа нет кода города CDEK');
+    }
+
+    const result = await this.deliveryService.createCdekOrder({
+      orderNumber: order.orderNumber,
+      deliveryType: 'CDEK_PICKUP',
+      recipient: {
+        firstName: order.firstName,
+        lastName: order.lastName,
+        phone: order.phone,
+        email: order.email,
+      },
+      address: {
+        cityCode: order.cdekCityCode,
+        postalCode: order.postalCode ?? undefined,
+        pickupPointCode: order.pickupPoint ?? undefined,
+      },
+      items: order.items.map((item) => ({
+        name: item.name,
+        sku: item.productId != null ? String(item.productId) : item.name,
+        quantity: item.quantity,
+        price: item.price,
+        weight: 200,
+      })),
+    });
+
+    const updated = await this.prisma.order.update({
+      where: { orderNumber },
+      data: {
+        cdekUuid: result.uuid,
+        ...(result.cdekNumber ? { cdekNumber: result.cdekNumber } : {}),
+      },
+    });
+    this.logger.log(
+      `Накладная CDEK создана вручную для ${orderNumber}: uuid=${result.uuid}`,
+    );
+    return updated;
+  }
+
+  /**
+   * Получить PDF-квитанцию (накладную) CDEK по заказу.
+   */
+  async getWaybillPdf(orderNumber: string): Promise<Buffer> {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      select: { cdekUuid: true },
+    });
+    if (!order) {
+      throw new NotFoundException(`Заказ ${orderNumber} не найден`);
+    }
+    if (!order.cdekUuid) {
+      throw new BadRequestException(
+        'Накладная CDEK ещё не создана для этого заказа',
+      );
+    }
+    return this.deliveryService.getCdekWaybillPdf(order.cdekUuid);
+  }
+
+  /**
    * Получить список всех заказов с фильтрами
    */
   async findAll(params: FindAllParams) {
