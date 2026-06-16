@@ -44,6 +44,8 @@ model Order {
 
   // Статус заказа
   status    OrderStatus @default(PENDING)
+  // Причина отмены/неоплаты (таймаут, отказ платёжки, ошибка регистрации, ручная)
+  cancelReason String? @map("cancel_reason")
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 

@@ -225,7 +225,12 @@ export class AdminOrdersService {
 
       return tx.order.update({
         where: { orderNumber },
-        data: { status: OrderStatus.CANCELLED },
+        data: {
+          status: OrderStatus.CANCELLED,
+          cancelReason: reason
+            ? `Отменён администратором: ${reason}`
+            : 'Отменён администратором',
+        },
       });
     });
 

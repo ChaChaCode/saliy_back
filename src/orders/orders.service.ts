@@ -271,7 +271,10 @@ export class OrdersService {
         );
         await this.prisma.order.update({
           where: { id: order.id },
-          data: { status: OrderStatus.PAYMENT_FAILED },
+          data: {
+            status: OrderStatus.PAYMENT_FAILED,
+            cancelReason: `Ошибка регистрации платежа (${dto.paymentMethod}): ${error.message}`.slice(0, 500),
+          },
         });
         throw new BadRequestException(
           'Не удалось инициализировать платёж. Попробуйте позже.',
@@ -794,6 +797,7 @@ export class OrdersService {
   async updatePaymentStatus(
     orderNumber: string,
     paymentStatus: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELED' | 'REFUNDED',
+    rawStatus?: string,
   ) {
     const statusMap: Record<string, OrderStatus> = {
       PENDING: OrderStatus.PENDING,
@@ -806,6 +810,17 @@ export class OrdersService {
     const orderStatus = statusMap[paymentStatus] ?? OrderStatus.PENDING;
     const isPaid = paymentStatus === 'PAID';
 
+    // Причина для неуспешных статусов — чтобы видеть в админке, почему не оплачено.
+    const reasonMap: Record<string, string> = {
+      FAILED: 'Платёж отклонён платёжной системой',
+      CANCELED: 'Оплата отменена / истёк срок платёжной ссылки',
+      REFUNDED: 'Оформлен возврат средств',
+    };
+    const cancelReason =
+      reasonMap[paymentStatus] != null
+        ? `${reasonMap[paymentStatus]}${rawStatus ? ` (статус: ${rawStatus})` : ''}`
+        : undefined;
+
     // Запоминаем предыдущее состояние, чтобы понять — это ПЕРЕХОД в paid или повторный вебхук.
     const previous = await this.prisma.order.findUnique({
       where: { orderNumber },
@@ -817,6 +832,12 @@ export class OrdersService {
       data: {
         status: orderStatus,
         isPaid,
+        // При успехе/ожидании причину очищаем, при отказе — проставляем.
+        ...(cancelReason !== undefined
+          ? { cancelReason }
+          : isPaid || paymentStatus === 'PENDING'
+            ? { cancelReason: null }
+            : {}),
       },
     });
 
@@ -996,7 +1017,10 @@ export class OrdersService {
           }
           await tx.order.update({
             where: { id: order.id },
-            data: { status: OrderStatus.CANCELLED },
+            data: {
+              status: OrderStatus.CANCELLED,
+              cancelReason: `Не оплачен в течение ${timeoutMin} мин — автоотмена`,
+            },
           });
         });
         this.logger.log(
