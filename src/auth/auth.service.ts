@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,6 +28,8 @@ export function formatBirthdate(date: Date | null | undefined): string | null {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -120,6 +123,26 @@ export class AuthService {
       user = await this.prisma.user.create({
         data: { email },
       });
+    }
+
+    // Привязываем гостевые заказы, оформленные на эту (теперь подтверждённую)
+    // почту, к пользователю — чтобы они появились в его «Моих заказах».
+    // Email подтверждён кодом, поэтому привязка безопасна.
+    try {
+      const linked = await this.prisma.order.updateMany({
+        where: { email, userId: null },
+        data: { userId: user.id },
+      });
+      if (linked.count > 0) {
+        this.logger.log(
+          `Привязано гостевых заказов к пользователю ${user.id} (${email}): ${linked.count}`,
+        );
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Не удалось привязать гостевые заказы для ${email}: ${error.message}`,
+      );
+      // Не падаем — вход важнее
     }
 
     // Генерируем токены
