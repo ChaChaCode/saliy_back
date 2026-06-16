@@ -867,9 +867,78 @@ export class OrdersService {
           `Не удалось отправить чек об оплате (${orderNumber}): ${error.message}`,
         );
       }
+
+      // Создаём накладную CDEK — появится трек-номер, дальше статус обновляет webhook CDEK.
+      try {
+        await this.createCdekInvoiceForOrder(orderNumber);
+      } catch (error: any) {
+        this.logger.error(
+          `Не удалось создать накладную CDEK (${orderNumber}): ${error.message}`,
+        );
+      }
     }
 
     return order;
+  }
+
+  /**
+   * Создать накладную CDEK для оплаченного заказа (если доставка CDEK и накладной ещё нет).
+   * Сохраняет cdekUuid (и cdekNumber, если CDEK вернул сразу). Трек-номер и статусы
+   * дальше приходят через webhook CDEK. Идемпотентно: если cdekUuid уже есть — пропускаем.
+   */
+  private async createCdekInvoiceForOrder(orderNumber: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      include: { items: true },
+    });
+    if (!order) return;
+
+    // Только CDEK-доставка и только если накладная ещё не создана
+    if (order.deliveryType !== 'CDEK_PICKUP' || order.cdekUuid) {
+      return;
+    }
+    if (!order.cdekCityCode) {
+      this.logger.warn(
+        `CDEK накладная не создана для ${orderNumber}: нет cdekCityCode`,
+      );
+      return;
+    }
+
+    const result = await this.deliveryService.createCdekOrder({
+      orderNumber: order.orderNumber,
+      deliveryType: 'CDEK_PICKUP',
+      recipient: {
+        firstName: order.firstName,
+        lastName: order.lastName,
+        phone: order.phone,
+        email: order.email,
+      },
+      address: {
+        cityCode: order.cdekCityCode,
+        postalCode: order.postalCode ?? undefined,
+        pickupPointCode: order.pickupPoint ?? undefined,
+      },
+      items: order.items.map((item) => ({
+        name: item.name,
+        sku: item.productId != null ? String(item.productId) : item.name,
+        quantity: item.quantity,
+        price: item.price,
+        weight: 200,
+      })),
+    });
+
+    await this.prisma.order.update({
+      where: { orderNumber },
+      data: {
+        cdekUuid: result.uuid,
+        // cdekTrackingUrl не храним — он вычисляется из cdekNumber при отдаче заказа.
+        ...(result.cdekNumber ? { cdekNumber: result.cdekNumber } : {}),
+      },
+    });
+
+    this.logger.log(
+      `Накладная CDEK создана для ${orderNumber}: uuid=${result.uuid}, cdekNumber=${result.cdekNumber ?? '(придёт по webhook)'}`,
+    );
   }
 
   /**
