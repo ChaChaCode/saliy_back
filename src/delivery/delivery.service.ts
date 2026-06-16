@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { firstValueFrom } from 'rxjs';
 import * as countries from 'i18n-iso-countries';
 import { OrderStatus } from '@prisma/client';
@@ -994,6 +995,36 @@ export class DeliveryService {
         ? this.getCdekTrackingUrl(updated.cdekNumber)
         : null,
     };
+  }
+
+  /**
+   * Авто-добор трек-номера CDEK. Раз в 10 минут обновляем CDEK-заказы, у которых
+   * накладная создана (есть cdekUuid), но номер ещё не присвоен (cdekNumber пуст)
+   * и заказ ещё в пути. Подстраховка к webhook — если он не дошёл. Берём не больше 30
+   * за раз, не трогаем доставленные/отменённые.
+   */
+  @Cron(CronExpression.EVERY_10_MINUTES, { name: 'cdek-track-number-poll' })
+  async pollCdekTrackNumbers(): Promise<void> {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        deliveryType: 'CDEK_PICKUP',
+        cdekUuid: { not: null },
+        cdekNumber: null,
+        status: { notIn: [OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.DELIVERED] },
+      },
+      select: { orderNumber: true },
+      take: 30,
+    });
+
+    for (const o of orders) {
+      try {
+        await this.refreshCdekStatusForOrder(o.orderNumber);
+      } catch (error: any) {
+        this.logger.error(
+          `CDEK track-poll: ошибка для ${o.orderNumber}: ${error.message}`,
+        );
+      }
+    }
   }
 
   /**

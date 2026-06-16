@@ -106,6 +106,16 @@ export class AdminOrdersController {
   }
 
   /**
+   * Создать накладные CDEK для всех оплаченных заказов без накладной (массово).
+   * Объявлен ДО :orderNumber-роутов, чтобы статический путь не перехватывался параметром.
+   * POST /api/admin/orders/cdek/create-missing
+   */
+  @Post('cdek/create-missing')
+  createMissingCdekInvoices() {
+    return this.adminOrdersService.createMissingCdekInvoices();
+  }
+
+  /**
    * Получить заказ по номеру
    * GET /api/admin/orders/:orderNumber
    */

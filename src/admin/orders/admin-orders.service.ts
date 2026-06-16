@@ -97,6 +97,37 @@ export class AdminOrdersService {
   }
 
   /**
+   * Создать накладные CDEK для всех оплаченных CDEK-заказов без накладной.
+   * Разовая массовая операция (для заказов, оплаченных до автосоздания, или
+   * если webhook/создание пропустилось). Возвращает сводку.
+   */
+  async createMissingCdekInvoices() {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        isPaid: true,
+        deliveryType: 'CDEK_PICKUP',
+        cdekUuid: null,
+        cdekCityCode: { not: null },
+      },
+      select: { orderNumber: true },
+    });
+
+    const result = { total: orders.length, created: 0, failed: [] as string[] };
+    for (const o of orders) {
+      try {
+        await this.createCdekInvoice(o.orderNumber);
+        result.created++;
+      } catch (error: any) {
+        result.failed.push(`${o.orderNumber}: ${error.message}`);
+      }
+    }
+    this.logger.log(
+      `Массовое создание накладных CDEK: создано ${result.created}/${result.total}`,
+    );
+    return result;
+  }
+
+  /**
    * Получить PDF-квитанцию (накладную) CDEK по заказу.
    */
   async getWaybillPdf(orderNumber: string): Promise<Buffer> {
