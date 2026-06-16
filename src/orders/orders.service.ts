@@ -715,9 +715,14 @@ export class OrdersService {
   /**
    * Получить заказы пользователя
    */
-  async getUserOrders(userId: string) {
+  async getUserOrders(userId: string, email?: string) {
+    // Показываем заказы по владельцу (userId) И по почте пользователя —
+    // чтобы гостевые заказы на эту же почту были видны сразу, даже если
+    // привязка по userId ещё не выполнилась. Привязка при входе — подстраховка.
     const orders = await this.prisma.order.findMany({
-      where: { userId },
+      where: email
+        ? { OR: [{ userId }, { email }] }
+        : { userId },
       include: {
         items: {
           include: {

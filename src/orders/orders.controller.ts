@@ -81,6 +81,6 @@ export class OrdersController {
   @Get()
   @UseGuards(JwtAuthGuard)
   async getUserOrders(@Req() req: any) {
-    return this.ordersService.getUserOrders(req.user.id);
+    return this.ordersService.getUserOrders(req.user.id, req.user.email);
   }
 }
