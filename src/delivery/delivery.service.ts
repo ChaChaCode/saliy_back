@@ -878,8 +878,10 @@ export class DeliveryService {
     });
 
     if (!order) {
-      this.logger.warn(
-        `CDEK webhook: заказ не найден (uuid=${uuid}, cdekNumber=${cdekNumber})`,
+      // Нормально: CDEK шлёт статусы и по чужим/тестовым заказам в рамках договора.
+      // Не наш заказ — просто игнорируем (не ошибка).
+      this.logger.log(
+        `CDEK webhook: заказ не наш, игнор (uuid=${uuid}, cdekNumber=${cdekNumber})`,
       );
       return {
         cdekStatus: cdekStatusCode,

@@ -7,6 +7,7 @@ import {
   Param,
   ParseIntPipe,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { DeliveryService } from './delivery.service';
 
@@ -155,27 +156,49 @@ export class DeliveryController {
   }
 
   /**
-   * Webhook для получения обновлений от CDEK
+   * Webhook CDEK с секретом в пути (защита от подделки).
+   * URL регистрируется в CDEK с секретом: POST /delivery/webhook/<CDEK_WEBHOOK_SECRET>.
+   * Только запросы с верным секретом обрабатываются.
+   * POST /delivery/webhook/:secret
+   */
+  @Post('webhook/:secret')
+  async handleCdekWebhookSecure(
+    @Param('secret') secret: string,
+    @Body() payload: any,
+  ) {
+    const expected = process.env.CDEK_WEBHOOK_SECRET;
+    if (expected && secret !== expected) {
+      this.logger.warn('CDEK webhook: неверный секрет в URL — отклонён');
+      throw new UnauthorizedException('Invalid webhook secret');
+    }
+    return this.processCdekWebhook(payload);
+  }
+
+  /**
+   * Старый webhook без секрета (обратная совместимость, пока CDEK не перерегистрирован).
+   * Работает ТОЛЬКО если CDEK_WEBHOOK_SECRET не задан — иначе закрыт.
    * POST /delivery/webhook
    */
   @Post('webhook')
   async handleCdekWebhook(@Body() payload: any) {
-    this.logger.log(`CDEK webhook received: ${JSON.stringify(payload)}`);
+    if (process.env.CDEK_WEBHOOK_SECRET) {
+      this.logger.warn(
+        'CDEK webhook без секрета отклонён — используйте /webhook/<secret>',
+      );
+      throw new UnauthorizedException('Webhook secret required');
+    }
+    return this.processCdekWebhook(payload);
+  }
 
+  private async processCdekWebhook(payload: any) {
+    this.logger.log(`CDEK webhook received: ${JSON.stringify(payload)}`);
     try {
       const result = await this.deliveryService.handleCdekWebhook(payload);
       this.logger.log(`CDEK webhook processed: ${JSON.stringify(result)}`);
-
-      return {
-        success: true,
-        ...result,
-      };
-    } catch (error) {
+      return { success: true, ...result };
+    } catch (error: any) {
       this.logger.error(`CDEK webhook error: ${error.message}`);
-      return {
-        success: false,
-        error: error.message,
-      };
+      return { success: false, error: error.message };
     }
   }
 }
