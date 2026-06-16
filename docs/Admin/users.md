@@ -55,7 +55,7 @@
 | `address` | Адрес: `street`, `apartment`, `postalCode`, `countryName`, `regionName`, `cityName`, `fullAddress` (полный адрес одной строкой для почтовой доставки) |
 | `delivery` | Настройки доставки: `deliveryType`, `deliveryCountryCode`, `cdekCityCode`, `cdekCountryCode`, `cdekRegionCode`, `cdekPickupPointCode` |
 | `stats` | Агрегаты: `ordersCount`, `cartItemsCount`, `totalSpent`, `lastOrderAt` |
-| `orders` | Все заказы с составом (`items`). Полная инфа по заказу — `GET /api/admin/orders/:orderNumber` |
+| `orders` | Все заказы клиента с составом (`items`) — как привязанные к аккаунту, так и гостевые на ту же почту (что были оформлены до регистрации). `totalSpent` тоже учитывает заказы по почте. Полная инфа по заказу — `GET /api/admin/orders/:orderNumber` |
 | `reviews` | Отзывы пользователя с привязкой к товару и статусом модерации (`PENDING` / `APPROVED` / `REJECTED`) |
 
 Ошибки: `404` — пользователь не найден.

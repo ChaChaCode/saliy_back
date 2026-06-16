@@ -170,13 +170,17 @@ export class AdminUsersService {
       throw new NotFoundException(`Пользователь ${id} не найден`);
     }
 
+    // Заказы клиента — по владельцу (userId) И по его почте, чтобы гостевые
+    // заказы на ту же почту тоже отображались на странице клиента.
+    const ordersOwnerFilter = { OR: [{ userId: id }, { email: user.email }] };
+
     const [ordersAgg, orders, reviews, cartItemsCount] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { userId: id, isPaid: true, status: { not: 'CANCELLED' } },
+        where: { ...ordersOwnerFilter, isPaid: true, status: { not: 'CANCELLED' } },
         _sum: { total: true },
       }),
       this.prisma.order.findMany({
-        where: { userId: id },
+        where: ordersOwnerFilter,
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
