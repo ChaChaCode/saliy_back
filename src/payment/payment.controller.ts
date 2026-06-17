@@ -121,11 +121,10 @@ export class PaymentController {
         payload?.order?.orderId || payload?.operation?.orderId;
       if (orderNumber) {
         try {
-          // Подтягиваем статус через API (единственный источник правды без проверки подписи)
-          const { mappedStatus } = await this.yandexPayService.getOrderStatus(orderNumber);
-          await this.ordersService.updatePaymentStatus(orderNumber, mappedStatus);
+          // Не доверяем телу webhook — переспрашиваем статус у API Яндекса.
+          await this.ordersService.confirmYandexByApi(orderNumber);
         } catch (error: any) {
-          this.logger.error(`Yandex webhook: ошибка обновления заказа: ${error.message}`);
+          this.logger.error(`Yandex webhook: ошибка подтверждения: ${error.message}`);
         }
       }
     }
@@ -209,14 +208,14 @@ export class PaymentController {
     }
 
     const orderNumber: string | undefined = data?.paymentLinkId;
-    const statusValue: string | undefined = data?.status;
 
-    if (orderNumber && statusValue) {
+    // НЕ доверяем статусу из тела webhook (его можно подделать). Webhook — лишь
+    // триггер: переспрашиваем реальный статус у API Точки по operationId.
+    if (orderNumber) {
       try {
-        const mappedStatus = this.tochkaPayService.mapStatus(statusValue);
-        await this.ordersService.updatePaymentStatus(orderNumber, mappedStatus);
+        await this.ordersService.confirmTochkaByApi(orderNumber);
       } catch (error: any) {
-        this.logger.error(`Tochka webhook: ошибка обновления заказа: ${error.message}`);
+        this.logger.error(`Tochka webhook: ошибка подтверждения: ${error.message}`);
       }
     }
 

@@ -915,6 +915,61 @@ export class OrdersService {
   }
 
   /**
+   * Подтвердить оплату Точки, ПЕРЕСПРОСИВ статус через API (не доверяя телу webhook).
+   * Webhook лишь триггер — реальный статус берём у Точки по operationId (order.paymentId).
+   * Так поддельный webhook не сможет пометить заказ оплаченным.
+   */
+  async confirmTochkaByApi(orderNumber: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      select: { paymentId: true, isPaid: true },
+    });
+    if (!order) {
+      this.logger.warn(`Tochka confirm: заказ ${orderNumber} не найден`);
+      return;
+    }
+    if (order.isPaid) return; // уже оплачен — идемпотентность
+    if (!order.paymentId) {
+      this.logger.warn(
+        `Tochka confirm: у ${orderNumber} нет operationId — пропуск (не доверяем телу webhook)`,
+      );
+      return;
+    }
+    const { rawStatus, mappedStatus } =
+      await this.tochkaPayService.getOperationStatus(order.paymentId);
+    if (mappedStatus !== 'PENDING') {
+      await this.updatePaymentStatus(orderNumber, mappedStatus, rawStatus);
+      this.logger.log(
+        `Tochka confirm (API): ${orderNumber} → ${mappedStatus} (${rawStatus})`,
+      );
+    }
+  }
+
+  /**
+   * Подтвердить оплату Яндекса, ПЕРЕСПРОСИВ статус через API (не доверяя телу webhook).
+   * getOrderStatus принимает наш orderNumber.
+   */
+  async confirmYandexByApi(orderNumber: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      select: { isPaid: true },
+    });
+    if (!order) {
+      this.logger.warn(`Yandex confirm: заказ ${orderNumber} не найден`);
+      return;
+    }
+    if (order.isPaid) return; // уже оплачен — идемпотентность
+    const { rawStatus, mappedStatus } =
+      await this.yandexPayService.getOrderStatus(orderNumber);
+    if (mappedStatus !== 'PENDING') {
+      await this.updatePaymentStatus(orderNumber, mappedStatus, rawStatus ?? undefined);
+      this.logger.log(
+        `Yandex confirm (API): ${orderNumber} → ${mappedStatus} (${rawStatus})`,
+      );
+    }
+  }
+
+  /**
    * Создать накладную CDEK для оплаченного заказа (если доставка CDEK и накладной ещё нет).
    * Сохраняет cdekUuid (и cdekNumber, если CDEK вернул сразу). Трек-номер и статусы
    * дальше приходят через webhook CDEK. Идемпотентно: если cdekUuid уже есть — пропускаем.
