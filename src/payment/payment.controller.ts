@@ -12,6 +12,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import type { Response, Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AlfaPayService } from './alfa-pay.service';
 import { YandexPayService } from './yandex-pay.service';
 import { TochkaPayService } from './tochka-pay.service';
@@ -86,6 +87,8 @@ export class PaymentController {
    *
    * POST /api/payment/yandex/webhook
    */
+  // Жёсткий rate-limit: webhook без подписи, защита от флуда фейками к API банка.
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('yandex/webhook')
   @HttpCode(200)
   async handleYandexPayWebhook(@Req() req: Request) {
@@ -175,6 +178,8 @@ export class PaymentController {
    *
    * POST /api/payment/tochka/webhook
    */
+  // Жёсткий rate-limit: webhook без подписи, защита от флуда фейками к API банка.
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   @Post('tochka/webhook')
   @HttpCode(200)
   async handleTochkaWebhook(@Req() req: Request) {

@@ -827,89 +827,81 @@ export class OrdersService {
       select: { isPaid: true, userId: true, status: true, items: true },
     });
 
-    // КРАЙНИЙ СЛУЧАЙ: оплата пришла ПОСЛЕ автоотмены (клиент платил в последнюю
-    // минуту, платёж обработался дольше таймаута). Заказ уже CANCELLED, товар
-    // возвращён на склад. Воскрешаем заказ и СНОВА списываем товар.
-    if (
-      isPaid &&
-      previous &&
-      !previous.isPaid &&
-      previous.status === OrderStatus.CANCELLED
-    ) {
-      this.logger.warn(
-        `Оплата пришла после автоотмены заказа ${orderNumber} — воскрешаю и пере-списываю товар`,
-      );
-      try {
-        await this.prisma.$transaction(async (tx) => {
-          for (const item of previous.items) {
-            if (item.productId == null) continue;
-            await this.decreaseStock(
-              tx,
-              item.productId,
-              item.size ?? '',
-              item.quantity,
-            );
-          }
-        });
-      } catch (error: any) {
-        // Если товара уже не хватает (раскупили после возврата) — заказ всё равно
-        // помечаем оплаченным, но логируем для ручной обработки менеджером.
-        this.logger.error(
-          `Не удалось пере-списать товар для воскрешённого ${orderNumber}: ${error.message}. ТРЕБУЕТСЯ РУЧНАЯ ПРОВЕРКА (клиент оплатил, остатков может не хватать)`,
-        );
+    // ПЕРЕХОД В ОПЛАЧЕНО — атомарно, чтобы исключить TOCTOU-гонку webhook vs polling.
+    // updateMany ... WHERE isPaid=false: побочки (чек/корзина/накладная) выполняет
+    // ТОЛЬКО тот вызов, который реально перевёл заказ (count===1). Параллельный
+    // второй вызов получит count===0 и побочки не продублирует.
+    if (isPaid) {
+      const transition = await this.prisma.order.updateMany({
+        where: { orderNumber, isPaid: false },
+        data: { status: orderStatus, isPaid: true, cancelReason: null },
+      });
+
+      if (transition.count === 0) {
+        // Гонку проиграли или заказ уже оплачен — побочки не повторяем.
+        return this.prisma.order.findUnique({ where: { orderNumber } });
       }
+
+      // Мы — победитель перехода. Если заказ был отменён автоотменой (оплата пришла
+      // после неё) — воскрешаем: пере-списываем товар, который вернули при отмене.
+      if (previous?.status === OrderStatus.CANCELLED) {
+        this.logger.warn(
+          `Оплата пришла после автоотмены заказа ${orderNumber} — воскрешаю и пере-списываю товар`,
+        );
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            for (const item of previous.items) {
+              if (item.productId == null) continue;
+              await this.decreaseStock(tx, item.productId, item.size ?? '', item.quantity);
+            }
+          });
+        } catch (error: any) {
+          this.logger.error(
+            `Не удалось пере-списать товар для воскрешённого ${orderNumber}: ${error.message}. ТРЕБУЕТСЯ РУЧНАЯ ПРОВЕРКА`,
+          );
+        }
+      }
+
+      this.logger.log(`Статус заказа обновлен: ${orderNumber}, оплачен`);
+
+      if (previous?.userId) {
+        try {
+          await this.cartService.clearCart(previous.userId);
+        } catch (error: any) {
+          this.logger.error(`Не удалось очистить корзину: ${error.message}`);
+        }
+      }
+      try {
+        await this.sendPaidOrderReceipt(orderNumber);
+      } catch (error: any) {
+        this.logger.error(`Не удалось отправить чек (${orderNumber}): ${error.message}`);
+      }
+      try {
+        await this.createCdekInvoiceForOrder(orderNumber);
+      } catch (error: any) {
+        this.logger.error(`Не удалось создать накладную CDEK (${orderNumber}): ${error.message}`);
+      }
+
+      return this.prisma.order.findUnique({ where: { orderNumber } });
     }
 
+    // Неуспешные/промежуточные статусы (FAILED/CANCELED/PENDING/REFUNDED) — обычный апдейт.
     const order = await this.prisma.order.update({
       where: { orderNumber },
       data: {
         status: orderStatus,
-        isPaid,
-        // При успехе/ожидании причину очищаем, при отказе — проставляем.
+        isPaid: false,
         ...(cancelReason !== undefined
           ? { cancelReason }
-          : isPaid || paymentStatus === 'PENDING'
+          : paymentStatus === 'PENDING'
             ? { cancelReason: null }
             : {}),
       },
     });
 
     this.logger.log(
-      `Статус заказа обновлен: ${orderNumber}, status=${orderStatus}, isPaid=${isPaid}`,
+      `Статус заказа обновлен: ${orderNumber}, status=${orderStatus}, isPaid=false`,
     );
-
-    // При первом успешном переходе в оплаченное состояние — чистим корзину
-    // и отправляем email-чек. Идемпотентно: повторные вебхуки не сработают
-    // (previous.isPaid уже true).
-    if (isPaid && previous && !previous.isPaid) {
-      if (previous.userId) {
-        try {
-          await this.cartService.clearCart(previous.userId);
-          this.logger.log(
-            `Корзина очищена после успешной оплаты заказа ${orderNumber}`,
-          );
-        } catch (error: any) {
-          this.logger.error(`Не удалось очистить корзину: ${error.message}`);
-        }
-      }
-
-      try {
-        await this.sendPaidOrderReceipt(orderNumber);
-      } catch (error: any) {
-        this.logger.error(
-          `Не удалось отправить чек об оплате (${orderNumber}): ${error.message}`,
-        );
-      }
-
-      // Создаём накладную CDEK — появится трек-номер, дальше статус обновляет webhook CDEK.
-      try {
-        await this.createCdekInvoiceForOrder(orderNumber);
-      } catch (error: any) {
-        this.logger.error(
-          `Не удалось создать накладную CDEK (${orderNumber}): ${error.message}`,
-        );
-      }
-    }
 
     return order;
   }
