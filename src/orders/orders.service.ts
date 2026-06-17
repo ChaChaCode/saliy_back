@@ -254,8 +254,8 @@ export class OrdersService {
             description: `Заказ ${order.orderNumber}`,
             redirectUrl: successUrl,
             failRedirectUrl: failUrl,
-            // Ссылка живёт ровно столько же, сколько заказ до автоотмены.
-            ttlMinutes: this.getPendingTimeoutMin(),
+            // Ссылка живёт меньше, чем заказ до автоотмены (запас на обработку платежа).
+            ttlMinutes: this.getPaymentLinkTtlMin(),
           });
           paymentUrl = tochka.paymentUrl;
           if (tochka.operationId) {
@@ -824,8 +824,41 @@ export class OrdersService {
     // Запоминаем предыдущее состояние, чтобы понять — это ПЕРЕХОД в paid или повторный вебхук.
     const previous = await this.prisma.order.findUnique({
       where: { orderNumber },
-      select: { isPaid: true, userId: true },
+      select: { isPaid: true, userId: true, status: true, items: true },
     });
+
+    // КРАЙНИЙ СЛУЧАЙ: оплата пришла ПОСЛЕ автоотмены (клиент платил в последнюю
+    // минуту, платёж обработался дольше таймаута). Заказ уже CANCELLED, товар
+    // возвращён на склад. Воскрешаем заказ и СНОВА списываем товар.
+    if (
+      isPaid &&
+      previous &&
+      !previous.isPaid &&
+      previous.status === OrderStatus.CANCELLED
+    ) {
+      this.logger.warn(
+        `Оплата пришла после автоотмены заказа ${orderNumber} — воскрешаю и пере-списываю товар`,
+      );
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          for (const item of previous.items) {
+            if (item.productId == null) continue;
+            await this.decreaseStock(
+              tx,
+              item.productId,
+              item.size ?? '',
+              item.quantity,
+            );
+          }
+        });
+      } catch (error: any) {
+        // Если товара уже не хватает (раскупили после возврата) — заказ всё равно
+        // помечаем оплаченным, но логируем для ручной обработки менеджером.
+        this.logger.error(
+          `Не удалось пере-списать товар для воскрешённого ${orderNumber}: ${error.message}. ТРЕБУЕТСЯ РУЧНАЯ ПРОВЕРКА (клиент оплатил, остатков может не хватать)`,
+        );
+      }
+    }
 
     const order = await this.prisma.order.update({
       where: { orderNumber },
@@ -948,11 +981,24 @@ export class OrdersService {
    * и возвращаем товар на склад. Таймаут — ORDER_PENDING_TIMEOUT_MIN (по умолчанию 15 мин).
    */
   /**
-   * Таймаут жизни неоплаченного онлайн-заказа в минутах (ORDER_PENDING_TIMEOUT_MIN).
-   * Один источник правды и для автоотмены, и для ttl платёжной ссылки Точки.
+   * Через сколько минут неоплаченный заказ автоматически отменяется и товар
+   * возвращается на склад (ORDER_PENDING_TIMEOUT_MIN, по умолчанию 25 мин).
+   * ВАЖНО: должно быть БОЛЬШЕ ttl платёжной ссылки — чтобы платёж, начатый в
+   * последнюю минуту жизни ссылки, успел обработаться (Сплит/банк могут думать
+   * дольше минуты) до того, как сработает автоотмена.
    */
   private getPendingTimeoutMin(): number {
-    const v = parseInt(process.env.ORDER_PENDING_TIMEOUT_MIN || '15', 10);
+    const v = parseInt(process.env.ORDER_PENDING_TIMEOUT_MIN || '25', 10);
+    return Number.isFinite(v) && v > 0 ? v : 25;
+  }
+
+  /**
+   * Срок жизни платёжной ссылки в минутах (ORDER_PAYMENT_LINK_TTL_MIN, по умолчанию
+   * 15). После него начать НОВЫЙ платёж нельзя. Меньше таймаута автоотмены —
+   * запас между протуханием ссылки и отменой заказа уходит на обработку платежа.
+   */
+  private getPaymentLinkTtlMin(): number {
+    const v = parseInt(process.env.ORDER_PAYMENT_LINK_TTL_MIN || '15', 10);
     return Number.isFinite(v) && v > 0 ? v : 15;
   }
 
@@ -1073,10 +1119,23 @@ export class OrdersService {
 
     for (const order of expired) {
       try {
-        await this.prisma.$transaction(async (tx) => {
+        const cancelled = await this.prisma.$transaction(async (tx) => {
+          // Атомарно отменяем ТОЛЬКО если заказ всё ещё PENDING и не оплачен.
+          // Закрывает гонку: между выборкой и этим моментом могла прийти оплата —
+          // тогда updateMany затронет 0 строк, и сток мы НЕ возвращаем.
+          const res = await tx.order.updateMany({
+            where: { id: order.id, status: OrderStatus.PENDING, isPaid: false },
+            data: {
+              status: OrderStatus.CANCELLED,
+              cancelReason: `Не оплачен в течение ${timeoutMin} мин — автоотмена`,
+            },
+          });
+          if (res.count === 0) {
+            return false; // заказ уже изменился (оплачен) — не трогаем сток
+          }
           // Возвращаем товар на склад и откатываем счётчик продаж
           for (const item of order.items) {
-            if (item.productId == null) continue; // товар удалён — нечего возвращать
+            if (item.productId == null) continue;
             await this.restoreStock(
               tx,
               item.productId,
@@ -1084,14 +1143,14 @@ export class OrdersService {
               item.quantity,
             );
           }
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              status: OrderStatus.CANCELLED,
-              cancelReason: `Не оплачен в течение ${timeoutMin} мин — автоотмена`,
-            },
-          });
+          return true;
         });
+        if (!cancelled) {
+          this.logger.log(
+            `Заказ ${order.orderNumber} НЕ отменён — оплата пришла во время обработки`,
+          );
+          continue;
+        }
         this.logger.log(
           `Заказ ${order.orderNumber} отменён по таймауту (${timeoutMin} мин), товар возвращён на склад`,
         );
