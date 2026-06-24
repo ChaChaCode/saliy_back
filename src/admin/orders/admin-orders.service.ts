@@ -391,6 +391,110 @@ export class AdminOrdersService {
   }
 
   /**
+   * Полностью заменить состав заказа (размер/кол-во/удалить/добавить).
+   * В одной транзакции: возвращаем сток по старым позициям, валидируем и списываем
+   * по новым (с проверкой наличия), пересоздаём order_items со снэпшотом цен из БД,
+   * пересчитываем subtotal/total. Цены берём из БД (не от клиента).
+   * Доставку и промокод-скидку не трогаем. Нельзя для отменённых/доставленных.
+   */
+  async updateOrderItems(
+    orderNumber: string,
+    newItems: Array<{ productId: number; size: string; quantity: number }>,
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      include: { items: true },
+    });
+    if (!order) throw new NotFoundException(`Заказ ${orderNumber} не найден`);
+    if (
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.REFUNDED ||
+      order.status === OrderStatus.DELIVERED
+    ) {
+      throw new BadRequestException(
+        'Нельзя менять состав отменённого/возвращённого/доставленного заказа',
+      );
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      // 1. Возвращаем на склад товар по СТАРЫМ позициям
+      for (const old of order.items) {
+        if (old.productId == null || !old.size) continue;
+        const p = await tx.product.findUnique({ where: { id: old.productId } });
+        if (!p) continue;
+        const stock = (p.stock as any) || {};
+        stock[old.size] = (stock[old.size] || 0) + old.quantity;
+        await tx.product.update({
+          where: { id: old.productId },
+          data: { stock, salesCount: { decrement: old.quantity } },
+        });
+      }
+
+      // 2. Валидируем и списываем по НОВЫМ позициям, собираем снэпшот
+      const itemsData: Array<{
+        productId: number; name: string; sku: string | null; color: string | null;
+        size: string; quantity: number; price: number; discount: number;
+      }> = [];
+      let subtotal = 0;
+
+      for (const it of newItems) {
+        const product = await tx.product.findFirst({
+          where: { id: it.productId, deletedAt: null },
+        });
+        if (!product) {
+          throw new BadRequestException(`Товар ${it.productId} не найден`);
+        }
+        const stock = (product.stock as any) || {};
+        const available = stock[it.size] || 0;
+        if (available < it.quantity) {
+          throw new BadRequestException(
+            `${product.name} (${it.size}): доступно только ${available} шт`,
+          );
+        }
+        stock[it.size] = available - it.quantity;
+        await tx.product.update({
+          where: { id: product.id },
+          data: { stock, salesCount: { increment: it.quantity } },
+        });
+
+        const finalPrice = Math.floor(
+          product.price - (product.price * product.discount) / 100,
+        );
+        subtotal += finalPrice * it.quantity;
+        itemsData.push({
+          productId: product.id,
+          name: product.name,
+          sku: String(product.id),
+          color: product.color,
+          size: it.size,
+          quantity: it.quantity,
+          price: product.price,
+          discount: product.discount,
+        });
+      }
+
+      // 3. Пересоздаём позиции заказа
+      await tx.orderItem.deleteMany({ where: { orderId: order.id } });
+      await tx.orderItem.createMany({
+        data: itemsData.map((i) => ({ ...i, orderId: order.id })),
+      });
+
+      // 4. Пересчёт сумм (скидку промокода и доставку не трогаем)
+      const total = subtotal - order.discountAmount + order.deliveryTotal;
+      return tx.order.update({
+        where: { id: order.id },
+        data: { subtotal, total },
+        include: { items: true },
+      });
+    });
+
+    this.logger.log(
+      `Состав заказа ${orderNumber} изменён: позиций ${updated.items.length}, total ${updated.total}`,
+    );
+    return updated;
+  }
+
+  /**
    * Сравнить старый/новый заказ и собрать diff для CDEK PATCH.
    * Возвращаем null если ни одного поля, релевантного для CDEK, не поменялось.
    */

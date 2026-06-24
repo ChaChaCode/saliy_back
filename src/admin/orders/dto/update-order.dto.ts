@@ -6,9 +6,29 @@ import {
   IsInt,
   IsNumber,
   IsBoolean,
+  IsArray,
+  ArrayMinSize,
+  ValidateNested,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { OrderStatus, DeliveryType, PaymentMethod } from '@prisma/client';
+
+/** Одна позиция при редактировании состава заказа (цены берём из БД, не от клиента) */
+export class OrderItemEditDto {
+  @IsInt() productId: number;
+  @IsString() size: string;
+  @IsInt() @Min(1) quantity: number;
+}
+
+/** Новый состав заказа целиком (заменяет текущие позиции) */
+export class UpdateOrderItemsDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemEditDto)
+  items: OrderItemEditDto[];
+}
 
 export class UpdateOrderStatusDto {
   @IsEnum(OrderStatus)

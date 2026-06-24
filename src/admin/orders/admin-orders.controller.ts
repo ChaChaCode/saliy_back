@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Param,
   Body,
   Query,
@@ -17,6 +18,7 @@ import {
   UpdateOrderStatusDto,
   CancelOrderDto,
   UpdateOrderDto,
+  UpdateOrderItemsDto,
 } from './dto/update-order.dto';
 import { AdminGuard } from '../../common/guards/admin.guard';
 
@@ -134,6 +136,18 @@ export class AdminOrdersController {
     @Body() dto: UpdateOrderDto,
   ) {
     return this.adminOrdersService.updateOrder(orderNumber, dto as any);
+  }
+
+  /**
+   * Изменить состав заказа (размер/кол-во/удалить/добавить товары).
+   * Заменяет позиции целиком, пересчитывает сток и сумму. PUT /api/admin/orders/:orderNumber/items
+   */
+  @Put(':orderNumber/items')
+  updateOrderItems(
+    @Param('orderNumber') orderNumber: string,
+    @Body() dto: UpdateOrderItemsDto,
+  ) {
+    return this.adminOrdersService.updateOrderItems(orderNumber, dto.items);
   }
 
   /**
