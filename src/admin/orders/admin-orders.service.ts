@@ -3,11 +3,14 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { OrderStatus, PaymentMethod, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailService } from '../../common/email/email.service';
 import { DeliveryService } from '../../delivery/delivery.service';
+import { OrdersService } from '../../orders/orders.service';
 import { pickMainImage } from '../../common/utils/product-image.util';
 
 interface FindAllParams {
@@ -28,6 +31,8 @@ export class AdminOrdersService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly deliveryService: DeliveryService,
+    @Inject(forwardRef(() => OrdersService))
+    private readonly ordersService: OrdersService,
   ) {}
 
   /**
@@ -533,6 +538,59 @@ export class AdminOrdersService {
       where: { orderNumber },
       include: { items: true },
     });
+  }
+
+  /**
+   * Сменить способ оплаты и/или отметить оплату вручную (менеджером).
+   * Кейс: клиент не смог оплатить онлайн, заплатил по реквизитам — меняем способ
+   * на BANK_TRANSFER и ставим «оплачено». Можно и просто сменить способ, оставив
+   * заказ неоплаченным (ждём оплату — подтвердится сама по webhook/polling).
+   * Пометка «оплачено» идёт через updatePaymentStatus — со всеми побочками
+   * (чек, очистка корзины, создание накладной CDEK), атомарно и идемпотентно.
+   */
+  async updatePayment(
+    orderNumber: string,
+    data: { paymentMethod?: PaymentMethod; paid?: boolean },
+  ) {
+    const order = await this.prisma.order.findUnique({ where: { orderNumber } });
+    if (!order) throw new NotFoundException(`Заказ ${orderNumber} не найден`);
+
+    // 1. Смена способа оплаты (если передан)
+    if (data.paymentMethod && data.paymentMethod !== order.paymentMethod) {
+      await this.prisma.order.update({
+        where: { orderNumber },
+        data: { paymentMethod: data.paymentMethod },
+      });
+      this.logger.log(
+        `Заказ ${orderNumber}: способ оплаты ${order.paymentMethod} → ${data.paymentMethod}`,
+      );
+    }
+
+    // 2. Пометка оплаты (если передана)
+    if (data.paid === true && !order.isPaid) {
+      // Через updatePaymentStatus — чек, корзина, накладная CDEK, идемпотентность.
+      await this.ordersService.updatePaymentStatus(orderNumber, 'PAID', 'manual');
+      this.logger.log(`Заказ ${orderNumber}: помечен оплаченным вручную`);
+    } else if (data.paid === false && order.isPaid) {
+      // Снять оплату (откат) — редкий случай, без возврата денег (это вручную).
+      await this.prisma.order.update({
+        where: { orderNumber },
+        data: { isPaid: false, status: OrderStatus.PENDING },
+      });
+      this.logger.warn(`Заказ ${orderNumber}: оплата снята вручную (откат в PENDING)`);
+    }
+
+    return this.prisma.order.findUnique({
+      where: { orderNumber },
+      include: { items: true },
+    });
+  }
+
+  /**
+   * Создать заказ вручную (менеджером). Проксирует в OrdersService.createManualOrder.
+   */
+  async createManualOrder(dto: Parameters<OrdersService['createManualOrder']>[0]) {
+    return this.ordersService.createManualOrder(dto);
   }
 
   /**

@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { OrderStatus, PaymentMethod } from '@prisma/client';
+import { OrderStatus, PaymentMethod, DeliveryType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './orders.dto';
 import { EmailService } from '../common/email/email.service';
@@ -415,6 +415,121 @@ export class OrdersService {
       total,
       currency: 'RUB',
     };
+  }
+
+  /**
+   * Создать заказ ВРУЧНУЮ из админки (менеджером). Клиент написал в личку/инсту —
+   * менеджер заносит заказ. Без онлайн-платёжки: способ оплаты задаётся вручную
+   * (обычно BANK_TRANSFER/CARD_MANUAL), оплату можно сразу пометить или ждать.
+   * Цены и сток — из БД. Если paid=true — подтверждаем через updatePaymentStatus
+   * (чек, накладная CDEK). Если нет — заказ PENDING (НЕ онлайн → автоотмена не трогает).
+   */
+  async createManualOrder(dto: {
+    items: { productId: number; size: string; quantity: number }[];
+    firstName: string;
+    lastName: string;
+    phone: string;
+    email: string;
+    socialContact?: string;
+    comment?: string;
+    deliveryType: DeliveryType;
+    paymentMethod: PaymentMethod;
+    paid?: boolean;
+    countryName?: string;
+    regionName?: string;
+    cityName?: string;
+    cdekCityCode?: number;
+    street?: string;
+    apartment?: string;
+    postalCode?: string;
+    pickupPoint?: string;
+    deliveryPrice?: number;
+  }) {
+    const validatedItems = await this.validateOrderItems(dto.items);
+    const subtotal = validatedItems.reduce((s, i) => s + i.totalPrice, 0);
+    const deliveryPrice = dto.deliveryPrice ?? 0;
+    const total = subtotal + deliveryPrice;
+
+    // Для CDEK_PICKUP подтянем адрес ПВЗ, как в обычном createOrder
+    let cityName = dto.cityName;
+    let regionName = dto.regionName;
+    let postalCode = dto.postalCode;
+    let street = dto.street;
+    if (dto.deliveryType === 'CDEK_PICKUP' && dto.pickupPoint) {
+      try {
+        const pvz = await this.deliveryService.getCdekPickupPointByCode(dto.pickupPoint);
+        if (pvz) {
+          cityName = cityName || pvz.city || undefined;
+          regionName = regionName || pvz.region || undefined;
+          postalCode = postalCode || pvz.postalCode || undefined;
+          street = street || pvz.addressFull || undefined;
+        }
+      } catch (e: any) {
+        this.logger.error(`Ручной заказ: не подтянул ПВЗ ${dto.pickupPoint}: ${e.message}`);
+      }
+    }
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      const orderNumber = await this.generateOrderNumber();
+      const newOrder = await tx.order.create({
+        data: {
+          orderNumber,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          phone: dto.phone,
+          email: dto.email,
+          socialContact: dto.socialContact,
+          comment: dto.comment,
+          countryName: dto.countryName,
+          regionName,
+          cityName,
+          cdekCityCode: dto.cdekCityCode,
+          street,
+          apartment: dto.apartment,
+          postalCode,
+          pickupPoint: dto.pickupPoint,
+          deliveryType: dto.deliveryType,
+          paymentMethod: dto.paymentMethod,
+          deliveryPrice,
+          deliveryTotal: deliveryPrice,
+          subtotal,
+          discountAmount: 0,
+          total,
+          currency: 'RUB',
+          status: OrderStatus.PENDING,
+          isPaid: false,
+          items: {
+            create: validatedItems.map((item) => ({
+              productId: item.productId,
+              name: item.productName,
+              size: item.size,
+              color: item.color,
+              quantity: item.quantity,
+              price: item.price,
+              discount: item.discount,
+            })),
+          },
+        } as any,
+        include: { items: true },
+      });
+
+      for (const item of validatedItems) {
+        await this.decreaseStock(tx, item.productId, item.size, item.quantity);
+      }
+      return newOrder;
+    });
+
+    this.logger.log(`Ручной заказ создан: ${order.orderNumber}, сумма ${total} RUB`);
+
+    // Если менеджер сразу отметил оплату — подтверждаем (чек, накладная CDEK).
+    if (dto.paid) {
+      await this.updatePaymentStatus(order.orderNumber, 'PAID', 'manual');
+    }
+
+    return this.prisma.order.findUnique({
+      where: { orderNumber: order.orderNumber },
+      include: { items: true },
+    });
   }
 
   /**

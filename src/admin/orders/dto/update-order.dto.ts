@@ -30,6 +30,42 @@ export class UpdateOrderItemsDto {
   items: OrderItemEditDto[];
 }
 
+/** Смена способа оплаты и/или отметка оплаты вручную (менеджером) */
+export class UpdatePaymentDto {
+  @IsOptional() @IsEnum(PaymentMethod) paymentMethod?: PaymentMethod;
+  @IsOptional() @IsBoolean() paid?: boolean;
+}
+
+/** Ручное создание заказа менеджером из админки */
+export class CreateManualOrderDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemEditDto)
+  items: OrderItemEditDto[];
+
+  @IsString() firstName: string;
+  @IsString() lastName: string;
+  @IsString() phone: string;
+  @IsEmail() email: string;
+  @IsOptional() @IsString() socialContact?: string;
+  @IsOptional() @IsString() comment?: string;
+
+  @IsEnum(DeliveryType) deliveryType: DeliveryType;
+  @IsEnum(PaymentMethod) paymentMethod: PaymentMethod;
+  @IsOptional() @IsBoolean() paid?: boolean;
+
+  @IsOptional() @IsString() countryName?: string;
+  @IsOptional() @IsString() regionName?: string;
+  @IsOptional() @IsString() cityName?: string;
+  @IsOptional() @IsInt() cdekCityCode?: number;
+  @IsOptional() @IsString() street?: string;
+  @IsOptional() @IsString() apartment?: string;
+  @IsOptional() @IsString() postalCode?: string;
+  @IsOptional() @IsString() pickupPoint?: string;
+  @IsOptional() @IsNumber() @Min(0) deliveryPrice?: number;
+}
+
 export class UpdateOrderStatusDto {
   @IsEnum(OrderStatus)
   status: OrderStatus;

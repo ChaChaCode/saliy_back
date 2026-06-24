@@ -19,6 +19,8 @@ import {
   CancelOrderDto,
   UpdateOrderDto,
   UpdateOrderItemsDto,
+  UpdatePaymentDto,
+  CreateManualOrderDto,
 } from './dto/update-order.dto';
 import { AdminGuard } from '../../common/guards/admin.guard';
 
@@ -108,6 +110,15 @@ export class AdminOrdersController {
   }
 
   /**
+   * Создать заказ вручную (менеджером из админки)
+   * POST /api/admin/orders
+   */
+  @Post()
+  createManualOrder(@Body() dto: CreateManualOrderDto) {
+    return this.adminOrdersService.createManualOrder(dto);
+  }
+
+  /**
    * Создать накладные CDEK для всех оплаченных заказов без накладной (массово).
    * Объявлен ДО :orderNumber-роутов, чтобы статический путь не перехватывался параметром.
    * POST /api/admin/orders/cdek/create-missing
@@ -148,6 +159,18 @@ export class AdminOrdersController {
     @Body() dto: UpdateOrderItemsDto,
   ) {
     return this.adminOrdersService.updateOrderItems(orderNumber, dto.items);
+  }
+
+  /**
+   * Сменить способ оплаты и/или отметить оплату вручную (менеджером).
+   * PATCH /api/admin/orders/:orderNumber/payment
+   */
+  @Patch(':orderNumber/payment')
+  updatePayment(
+    @Param('orderNumber') orderNumber: string,
+    @Body() dto: UpdatePaymentDto,
+  ) {
+    return this.adminOrdersService.updatePayment(orderNumber, dto);
   }
 
   /**
