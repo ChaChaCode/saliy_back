@@ -587,11 +587,20 @@ export class DeliveryService {
           phones: [{ number: orderData.recipient.phone }],
           email: orderData.recipient.email,
         },
-        from_location: {
-          code: warehouseCityCode,
-        },
         packages,
       };
+
+      // Отправитель: если задан конкретный ПВЗ сдачи (CDEK_SENDER_PICKUP_POINT) —
+      // используем shipment_point (CDEK сам определит город по ПВЗ). Иначе —
+      // from_location по коду города склада.
+      const senderPickupPoint = this.configService.get<string>(
+        'CDEK_SENDER_PICKUP_POINT',
+      );
+      if (senderPickupPoint) {
+        requestBody.shipment_point = senderPickupPoint;
+      } else {
+        requestBody.from_location = { code: warehouseCityCode };
+      }
 
       // Для ПВЗ отправляем ТОЛЬКО delivery_point (без to_location)
       // Для курьера отправляем ТОЛЬКО to_location (без delivery_point)
