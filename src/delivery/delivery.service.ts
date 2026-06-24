@@ -634,6 +634,46 @@ export class DeliveryService {
   }
 
   /**
+   * CDEK-статусы, на которых посылка УЖЕ уехала со склада отправителя —
+   * после них накладную менять/удалять нельзя (CDEK откажет), редактирование запрещаем.
+   */
+  private readonly cdekShippedCodes = new Set([
+    'TAKEN_BY_TRANSPORTER_FROM_SENDER_CITY',
+    'SENT_TO_TRANSIT_CITY',
+    'ACCEPTED_IN_TRANSIT_CITY',
+    'TAKEN_BY_TRANSPORTER_FROM_TRANSIT_CITY',
+    'SENT_TO_RECIPIENT_CITY',
+    'ACCEPTED_AT_RECIPIENT_CITY_WAREHOUSE',
+    'ACCEPTED_AT_PICK_UP_POINT',
+    'READY_TO_BE_HANDED_OVER',
+    'TAKEN_BY_COURIER',
+    'RECEIVED',
+    'DELIVERED',
+    'NOT_DELIVERED',
+    'RETURNED',
+    'RETURNED_TO_SENDER',
+  ]);
+
+  /** Уехала ли посылка со склада отправителя (по коду CDEK-статуса). */
+  isCdekShipped(cdekStatusCode: string | null | undefined): boolean {
+    return !!cdekStatusCode && this.cdekShippedCodes.has(cdekStatusCode);
+  }
+
+  /**
+   * Удалить заказ (накладную) в CDEK по uuid. Возможно только пока посылка не уехала.
+   * DELETE /v2/orders/{uuid}.
+   */
+  async deleteCdekOrder(uuid: string): Promise<void> {
+    try {
+      await this.cdekRequest<any>('DELETE', `/orders/${uuid}`);
+      this.logger.log(`CDEK заказ удалён: ${uuid}`);
+    } catch (error: any) {
+      this.logger.warn(`Не удалось удалить заказ CDEK ${uuid}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Обновить заказ в CDEK (PATCH /v2/orders/{uuid}).
    * CDEK разрешает менять данные только пока посылка не уехала со склада отправителя.
    * Если CDEK откажет (посылка уже в пути) — кидаем исключение, вызывающий сам решит что делать.

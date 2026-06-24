@@ -415,6 +415,14 @@ export class AdminOrdersService {
         'Нельзя менять состав отменённого/возвращённого/доставленного заказа',
       );
     }
+    // Главное ограничение: посылка не должна быть уже забрана перевозчиком.
+    // Реальный рубеж — CDEK-статус (после TAKEN_BY_TRANSPORTER... CDEK не даст
+    // менять накладную). Если накладной ещё нет — менять можно свободно.
+    if (this.deliveryService.isCdekShipped(order.cdekStatus)) {
+      throw new BadRequestException(
+        `Посылка уже отправлена (статус: ${order.cdekStatusName || order.cdekStatus}) — состав менять нельзя`,
+      );
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       // 1. Возвращаем на склад товар по СТАРЫМ позициям
@@ -491,7 +499,40 @@ export class AdminOrdersService {
     this.logger.log(
       `Состав заказа ${orderNumber} изменён: позиций ${updated.items.length}, total ${updated.total}`,
     );
-    return updated;
+
+    // Авто-пересоздание накладной CDEK: старая (с прежним составом) больше не
+    // актуальна. Удаляем её в CDEK, обнуляем CDEK-поля и создаём новую.
+    // Делаем только если накладная была и посылка ещё не уехала.
+    if (order.cdekUuid && !this.deliveryService.isCdekShipped(order.cdekStatus)) {
+      try {
+        await this.deliveryService.deleteCdekOrder(order.cdekUuid);
+      } catch {
+        // CDEK мог уже не дать удалить — не критично, старая отбракуется как INVALID
+      }
+      await this.prisma.order.update({
+        where: { id: order.id },
+        data: {
+          cdekUuid: null,
+          cdekNumber: null,
+          cdekStatus: null,
+          cdekStatusName: null,
+          cdekStatusDate: null,
+        },
+      });
+      try {
+        await this.createCdekInvoice(orderNumber);
+        this.logger.log(`Накладная CDEK пересоздана для ${orderNumber} после смены состава`);
+      } catch (error: any) {
+        this.logger.error(
+          `Не удалось пересоздать накладную CDEK для ${orderNumber}: ${error.message} — создать вручную`,
+        );
+      }
+    }
+
+    return this.prisma.order.findUnique({
+      where: { orderNumber },
+      include: { items: true },
+    });
   }
 
   /**
