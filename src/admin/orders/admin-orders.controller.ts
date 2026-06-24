@@ -129,6 +129,15 @@ export class AdminOrdersController {
   }
 
   /**
+   * Массово пересоздать накладные CDEK у неуехавших заказов (с актуальным
+   * составом/размерами). POST /api/admin/orders/cdek/recreate-all
+   */
+  @Post('cdek/recreate-all')
+  recreateAllCdekInvoices() {
+    return this.adminOrdersService.recreateAllCdekInvoices();
+  }
+
+  /**
    * Получить заказ по номеру
    * GET /api/admin/orders/:orderNumber
    */
@@ -237,6 +246,15 @@ export class AdminOrdersController {
   @Post(':orderNumber/cdek/create')
   createCdekInvoice(@Param('orderNumber') orderNumber: string) {
     return this.adminOrdersService.createCdekInvoice(orderNumber);
+  }
+
+  /**
+   * Пересоздать накладную CDEK (удалить старую + создать новую с актуальным составом)
+   * POST /api/admin/orders/:orderNumber/cdek/recreate
+   */
+  @Post(':orderNumber/cdek/recreate')
+  recreateCdekInvoice(@Param('orderNumber') orderNumber: string) {
+    return this.adminOrdersService.recreateCdekInvoice(orderNumber);
   }
 
   /**

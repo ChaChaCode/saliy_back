@@ -103,6 +103,72 @@ export class AdminOrdersService {
   }
 
   /**
+   * Пересоздать накладную CDEK для заказа: удалить старую в CDEK и создать новую
+   * (с актуальным составом/размерами). Только если посылка ещё не уехала.
+   */
+  async recreateCdekInvoice(orderNumber: string) {
+    const order = await this.prisma.order.findUnique({ where: { orderNumber } });
+    if (!order) throw new NotFoundException(`Заказ ${orderNumber} не найден`);
+    if (order.deliveryType !== 'CDEK_PICKUP') {
+      throw new BadRequestException('У заказа не CDEK-доставка');
+    }
+    if (this.deliveryService.isCdekShipped(order.cdekStatus)) {
+      throw new BadRequestException(
+        `Посылка уже отправлена (${order.cdekStatusName || order.cdekStatus}) — накладную пересоздать нельзя`,
+      );
+    }
+
+    // Удаляем старую накладную в CDEK (если была) и обнуляем CDEK-поля
+    if (order.cdekUuid) {
+      try {
+        await this.deliveryService.deleteCdekOrder(order.cdekUuid);
+      } catch {
+        // CDEK мог уже не дать удалить — старая отбракуется как INVALID
+      }
+      await this.prisma.order.update({
+        where: { orderNumber },
+        data: {
+          cdekUuid: null, cdekNumber: null, cdekStatus: null,
+          cdekStatusName: null, cdekStatusDate: null,
+        },
+      });
+    }
+    // Создаём новую (подхватит размер в названии из актуального кода)
+    return this.createCdekInvoice(orderNumber);
+  }
+
+  /**
+   * Массово пересоздать накладные для всех CDEK-заказов с накладной, которые ещё
+   * НЕ уехали со склада. Удаляет старые в CDEK и создаёт новые (с размером в
+   * названии). У уехавших накладную не трогаем. Возвращает сводку.
+   */
+  async recreateAllCdekInvoices() {
+    const orders = await this.prisma.order.findMany({
+      where: { deliveryType: 'CDEK_PICKUP', cdekUuid: { not: null } },
+      select: { orderNumber: true, cdekStatus: true },
+    });
+
+    const result = { total: 0, recreated: 0, skipped: 0, failed: [] as string[] };
+    for (const o of orders) {
+      if (this.deliveryService.isCdekShipped(o.cdekStatus)) {
+        result.skipped++; // уже уехала — не трогаем
+        continue;
+      }
+      result.total++;
+      try {
+        await this.recreateCdekInvoice(o.orderNumber);
+        result.recreated++;
+      } catch (error: any) {
+        result.failed.push(`${o.orderNumber}: ${error.message}`);
+      }
+    }
+    this.logger.log(
+      `Массовое пересоздание накладных CDEK: ${result.recreated}/${result.total} (пропущено уехавших ${result.skipped})`,
+    );
+    return result;
+  }
+
+  /**
    * Создать накладные CDEK для всех оплаченных CDEK-заказов без накладной.
    * Разовая массовая операция (для заказов, оплаченных до автосоздания, или
    * если webhook/создание пропустилось). Возвращает сводку.
