@@ -132,6 +132,9 @@ export class AdminOrdersService {
           cdekStatusName: null, cdekStatusDate: null,
         },
       });
+      // CDEK удаляет асинхронно — даём время освободить номер заказа, иначе
+      // новая накладная с тем же number попадёт в INVALID («уже существует»).
+      await new Promise((r) => setTimeout(r, 4000));
     }
     // Создаём новую (подхватит размер в названии из актуального кода)
     return this.createCdekInvoice(orderNumber);
@@ -161,6 +164,8 @@ export class AdminOrdersService {
       } catch (error: any) {
         result.failed.push(`${o.orderNumber}: ${error.message}`);
       }
+      // Пауза между заказами — не долбить CDEK пачкой (защита от анти-бот WAF).
+      await new Promise((r) => setTimeout(r, 1500));
     }
     this.logger.log(
       `Массовое пересоздание накладных CDEK: ${result.recreated}/${result.total} (пропущено уехавших ${result.skipped})`,
