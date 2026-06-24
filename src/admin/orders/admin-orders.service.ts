@@ -423,6 +423,26 @@ export class AdminOrdersService {
       `Заказ ${orderNumber} отменён${reason ? `, причина: ${reason}` : ''}`,
     );
 
+    // Удаляем накладную в CDEK, чтобы посылка не поехала по отменённому заказу.
+    // Только если накладная есть и ещё не уехала со склада отправителя.
+    if (order.cdekUuid && !this.deliveryService.isCdekShipped(order.cdekStatus)) {
+      try {
+        await this.deliveryService.deleteCdekOrder(order.cdekUuid);
+        await this.prisma.order.update({
+          where: { orderNumber },
+          data: {
+            cdekUuid: null, cdekNumber: null, cdekStatus: null,
+            cdekStatusName: null, cdekStatusDate: null,
+          },
+        });
+        this.logger.log(`Накладная CDEK удалена при отмене заказа ${orderNumber}`);
+      } catch (error: any) {
+        this.logger.warn(
+          `Не удалось удалить накладную CDEK при отмене ${orderNumber}: ${error.message} — удалить вручную в кабинете CDEK`,
+        );
+      }
+    }
+
     return cancelled;
   }
 
