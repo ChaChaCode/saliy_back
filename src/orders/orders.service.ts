@@ -999,7 +999,9 @@ export class OrdersService {
         pickupPointCode: order.pickupPoint ?? undefined,
       },
       items: order.items.map((item) => ({
-        name: item.name,
+        // Размер в названии — чтобы отправитель видел в накладной CDEK, что класть
+        // (у CDEK нет отдельного поля размера).
+        name: item.size ? `${item.name} (${item.size})` : item.name,
         sku: item.productId != null ? String(item.productId) : item.name,
         quantity: item.quantity,
         price: item.price,
