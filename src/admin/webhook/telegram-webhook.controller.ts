@@ -83,6 +83,14 @@ export class TelegramWebhookController {
       throw new UnauthorizedException('Invalid webhook secret');
     }
 
+    return this.processUpdate(update);
+  }
+
+  /**
+   * Обработка одного update от Telegram. Вызывается из webhook (POST) и из
+   * polling-сервиса (getUpdates) — логика общая, источник не важен.
+   */
+  async processUpdate(update: TelegramUpdate) {
     this.logger.log(`Received Telegram update: ${JSON.stringify(update)}`);
 
     // Обработка текстовых команд боту (например /dump).

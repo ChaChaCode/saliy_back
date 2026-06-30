@@ -11,6 +11,7 @@ import { AdminsModule } from './admins/admins.module';
 import { AuditModule } from './audit/audit.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { TelegramWebhookController } from './webhook/telegram-webhook.controller';
+import { TelegramPollingService } from './webhook/telegram-polling.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SimpleCacheService } from '../common/cache/simple-cache.service';
 import { BackupModule } from '../backup/backup.module';
@@ -32,7 +33,7 @@ import { BackupModule } from '../backup/backup.module';
     BackupModule,
   ],
   controllers: [TelegramWebhookController],
-  providers: [SimpleCacheService],
+  providers: [TelegramWebhookController, SimpleCacheService, TelegramPollingService],
   exports: [
     AdminAuthModule,
     AdminProductsModule,
