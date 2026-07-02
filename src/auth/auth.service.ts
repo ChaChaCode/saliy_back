@@ -40,12 +40,14 @@ export class AuthService {
   ) {}
 
   // Максимум неудачных попыток ввода кода на email до его инвалидации.
-  private static readonly MAX_CODE_ATTEMPTS = 5;
+  // Это и есть основная защита от перебора: даже 4-значный код (9000 вариантов)
+  // не подобрать за 10 попыток, пока он живёт (10 минут).
+  private static readonly MAX_CODE_ATTEMPTS = 10;
 
   private generateCode(): string {
-    // Криптостойкий 6-значный код (100000–999999). Раньше был 4-значный на
-    // Math.random() — предсказуемый и всего 9000 комбинаций, перебираемый.
-    return crypto.randomInt(100000, 1000000).toString();
+    // 4-значный код (1000–9999), но через криптостойкий crypto.randomInt
+    // вместо предсказуемого Math.random(). Перебор закрыт лимитом попыток.
+    return crypto.randomInt(1000, 10000).toString();
   }
 
   /** Подмешать birthdateFormatted к user-объекту перед отдачей. */

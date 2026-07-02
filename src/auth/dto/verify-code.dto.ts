@@ -7,6 +7,6 @@ export class VerifyCodeDto {
 
   @IsString({ message: 'Код должен быть строкой' })
   @IsNotEmpty({ message: 'Код обязателен' })
-  @Length(6, 6, { message: 'Код должен содержать 6 цифр' })
+  @Length(4, 4, { message: 'Код должен содержать 4 цифры' })
   code: string;
 }
