@@ -10,6 +10,7 @@ import { EmailService } from '../common/email/email.service';
 import { DeliveryService } from '../delivery/delivery.service';
 import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
 import { S3StorageService } from '../common/storage/s3-storage.service';
+import { getAccessSecret } from '../common/utils/jwt-secrets';
 import * as crypto from 'crypto';
 
 /**
@@ -38,8 +39,13 @@ export class AuthService {
     private s3: S3StorageService,
   ) {}
 
+  // Максимум неудачных попыток ввода кода на email до его инвалидации.
+  private static readonly MAX_CODE_ATTEMPTS = 5;
+
   private generateCode(): string {
-    return Math.floor(1000 + Math.random() * 9000).toString();
+    // Криптостойкий 6-значный код (100000–999999). Раньше был 4-значный на
+    // Math.random() — предсказуемый и всего 9000 комбинаций, перебираемый.
+    return crypto.randomInt(100000, 1000000).toString();
   }
 
   /** Подмешать birthdateFormatted к user-объекту перед отдачей. */
@@ -94,25 +100,51 @@ export class AuthService {
     email: string,
     code: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    // Ищем код
-    const verificationCode = await this.prisma.verificationCode.findFirst({
+    // Берём последний активный код для этого email (не сам код из запроса —
+    // сравнение делаем ниже, чтобы считать неудачные попытки).
+    const active = await this.prisma.verificationCode.findFirst({
       where: {
         email,
-        code,
         verified: false,
         expiresAt: { gte: new Date() },
       },
+      orderBy: { createdAt: 'desc' },
     });
 
-    if (!verificationCode) {
+    if (!active) {
       throw new UnauthorizedException('Неверный или истекший код');
     }
 
-    // Помечаем код как использованный
-    await this.prisma.verificationCode.update({
-      where: { id: verificationCode.id },
+    // Слишком много неудачных попыток → инвалидируем код (защита от перебора).
+    if (active.attempts >= AuthService.MAX_CODE_ATTEMPTS) {
+      await this.prisma.verificationCode.update({
+        where: { id: active.id },
+        data: { verified: true },
+      });
+      throw new UnauthorizedException(
+        'Превышено число попыток. Запросите новый код.',
+      );
+    }
+
+    // Неверный код → атомарно инкрементим счётчик попыток и отказываем.
+    if (active.code !== code) {
+      await this.prisma.verificationCode.update({
+        where: { id: active.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new UnauthorizedException('Неверный или истекший код');
+    }
+
+    // Код верный → атомарно помечаем использованным. updateMany с условием
+    // verified:false гарантирует, что параллельные запросы не пройдут дважды
+    // (закрывает race condition — код одноразовый).
+    const used = await this.prisma.verificationCode.updateMany({
+      where: { id: active.id, verified: false },
       data: { verified: true },
     });
+    if (used.count === 0) {
+      throw new UnauthorizedException('Неверный или истекший код');
+    }
 
     // Находим или создаем пользователя
     let user = await this.prisma.user.findUnique({
@@ -157,7 +189,7 @@ export class AuthService {
 
     // Access token на 15 минут
     const accessToken = this.jwtService.sign(payload, {
-      secret: process.env.JWT_ACCESS_SECRET || 'access-secret-key',
+      secret: getAccessSecret(),
       expiresIn: '15m',
     });
 

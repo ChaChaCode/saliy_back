@@ -10,6 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { SimpleCacheService } from '../cache/simple-cache.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { getAdminSecret } from '../utils/jwt-secrets';
 
 interface FailedAttempt {
   count: number;
@@ -123,7 +124,7 @@ export class AdminGuard implements CanActivate {
       }
 
       const payload = this.jwtService.verify(token, {
-        secret: process.env.JWT_ADMIN_SECRET || 'admin-secret-key',
+        secret: getAdminSecret(),
         algorithms: ['HS256'],
       });
 

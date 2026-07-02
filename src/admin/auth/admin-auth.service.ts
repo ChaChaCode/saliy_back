@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SimpleCacheService } from '../../common/cache/simple-cache.service';
+import { getAdminSecret } from '../../common/utils/jwt-secrets';
 import * as crypto from 'crypto';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -121,7 +122,7 @@ export class AdminAuthService {
         role: admin.role,
       },
       {
-        secret: process.env.JWT_ADMIN_SECRET || 'admin-secret-key',
+        secret: getAdminSecret(),
         expiresIn: '24h',
       },
     );
@@ -156,7 +157,7 @@ export class AdminAuthService {
   async refreshToken(oldToken: string) {
     try {
       const payload = this.jwtService.verify(oldToken, {
-        secret: process.env.JWT_ADMIN_SECRET || 'admin-secret-key',
+        secret: getAdminSecret(),
       });
 
       // Проверяем, не отозван ли токен
@@ -182,7 +183,7 @@ export class AdminAuthService {
           role: admin.role,
         },
         {
-          secret: process.env.JWT_ADMIN_SECRET || 'admin-secret-key',
+          secret: getAdminSecret(),
           expiresIn: '24h',
         },
       );

@@ -57,6 +57,9 @@ model VerificationCode {
   email     String
   expiresAt DateTime
   verified  Boolean  @default(false)
+  // Кол-во неудачных попыток ввода этого кода. При достижении лимита код
+  // инвалидируется — защита от перебора 6-значного кода.
+  attempts  Int      @default(0)
   createdAt DateTime @default(now())
 
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)

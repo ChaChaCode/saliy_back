@@ -763,7 +763,11 @@ export class OrdersService {
   /**
    * Получить заказ по номеру
    */
-  async getOrderByNumber(orderNumber: string) {
+  async getOrderByNumber(
+    orderNumber: string,
+    requesterUserId?: string,
+    requesterEmail?: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { orderNumber },
       include: {
@@ -820,13 +824,43 @@ export class OrdersService {
       (sum, item) => sum + item.price * item.quantity, 0,
     );
 
-    return {
+    // Владелец заказа: авторизованный пользователь, чей userId или email
+    // совпадает с заказом. Только ему отдаём персональные данные — иначе
+    // перебором предсказуемых номеров заказа сливались бы ПДн всех клиентов.
+    const isOwner =
+      (!!requesterUserId && order.userId === requesterUserId) ||
+      (!!requesterEmail &&
+        !!order.email &&
+        order.email.toLowerCase() === requesterEmail.toLowerCase());
+
+    const base = {
       ...order,
       items: formattedItems,
       originalSubtotal,
       promoCode: order.promoCodeUsages.length > 0
         ? order.promoCodeUsages[0].promoCode
         : null,
+    };
+
+    if (isOwner) {
+      return base;
+    }
+
+    // Не владелец: возвращаем заказ БЕЗ персональных данных. Статус, суммы и
+    // состав нужны для страницы «спасибо за заказ», ПДн — нет.
+    return {
+      ...base,
+      firstName: null,
+      lastName: null,
+      phone: null,
+      email: null,
+      socialContact: null,
+      street: null,
+      apartment: null,
+      postalCode: null,
+      cityName: null,
+      regionName: null,
+      countryName: null,
     };
   }
 

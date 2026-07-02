@@ -4,12 +4,13 @@ import { NewsletterService } from './newsletter.service';
 import { NewsletterController } from './newsletter.controller';
 import { AdminNewsletterController } from '../admin/newsletter/admin-newsletter.controller';
 import { PrismaModule } from '../prisma/prisma.module';
+import { getAdminSecret } from '../common/utils/jwt-secrets';
 
 @Module({
   imports: [
     PrismaModule,
     JwtModule.register({
-      secret: process.env.JWT_ADMIN_SECRET || 'admin-secret-key',
+      secret: getAdminSecret(),
       signOptions: { expiresIn: '24h' },
     }),
   ],

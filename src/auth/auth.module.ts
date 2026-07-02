@@ -6,12 +6,13 @@ import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { EmailModule } from '../common/email/email.module';
 import { DeliveryModule } from '../delivery/delivery.module';
+import { getAccessSecret } from '../common/utils/jwt-secrets';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_ACCESS_SECRET || 'access-secret-key',
+      secret: getAccessSecret(),
       signOptions: { expiresIn: '15m' },
     }),
     EmailModule,

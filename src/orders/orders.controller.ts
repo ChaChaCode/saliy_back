@@ -67,10 +67,23 @@ export class OrdersController {
   /**
    * Получить заказ по номеру
    * GET /api/orders/:orderNumber
+   *
+   * Доступно и гостям (страница «спасибо за заказ»), НО персональные данные
+   * (ФИО, телефон, email, адрес) отдаются только владельцу заказа —
+   * авторизованному пользователю, чей userId или email совпадает с заказом.
+   * Иначе перебором предсказуемых номеров заказа сливались бы ПДн всех клиентов.
    */
   @Get(':orderNumber')
-  async getOrderByNumber(@Param('orderNumber') orderNumber: string) {
-    return this.ordersService.getOrderByNumber(orderNumber);
+  @UseGuards(OptionalJwtAuthGuard)
+  async getOrderByNumber(
+    @Param('orderNumber') orderNumber: string,
+    @Req() req: any,
+  ) {
+    return this.ordersService.getOrderByNumber(
+      orderNumber,
+      req.user?.id,
+      req.user?.email,
+    );
   }
 
   /**

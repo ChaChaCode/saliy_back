@@ -25,11 +25,14 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { authCookieOptions } from '../common/utils/cookie.util';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Жёсткий лимит на отправку кода: защита от email-бомбинга и перебора.
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('send-code')
   @HttpCode(HttpStatus.OK)
   async sendCode(@Body() sendCodeDto: SendCodeDto) {
@@ -39,6 +42,8 @@ export class AuthController {
     };
   }
 
+  // Жёсткий лимит на проверку кода: защита от перебора 6-значного кода.
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('verify-code')
   @HttpCode(HttpStatus.OK)
   async verifyCode(
