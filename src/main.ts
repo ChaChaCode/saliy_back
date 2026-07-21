@@ -5,10 +5,35 @@ import cookieParser from 'cookie-parser';
 import { raw } from 'express';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import helmet from 'helmet';
+import compression from 'compression';
 import { S3UrlInterceptor, LoggingInterceptor } from './common/interceptors';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // За nginx (терминирует TLS). Без trust proxy req.secure/HSTS вычисляются
+  // неверно, а req.ip берёт адрес nginx (127.0.0.1) вместо реального клиента.
+  // 'loopback' — доверяем только локальному прокси, X-Forwarded-* от внешних
+  // клиентов игнорируются (нельзя подделать IP для rate-limit/блокировок).
+  app.set('trust proxy', 'loopback');
+
+  // Скрываем X-Powered-By: Express (не раскрываем стек).
+  app.getHttpAdapter().getInstance().disable('x-powered-by');
+
+  // Security-заголовки для API. CSP отключаем — API отдаёт JSON, а CSP для
+  // страниц фронта/админки задаётся в nginx. HSTS ставит nginx на всех доменах
+  // (единая политика), поэтому здесь его тоже выключаем, чтобы не дублировать.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      strictTransportSecurity: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
+
+  // Gzip-сжатие ответов API (JSON). Статику фронта/админки сжимает nginx.
+  app.use(compression());
 
   // Включаем CORS.
   // Список разрешённых origin берётся из CORS_ORIGINS (через запятую).
