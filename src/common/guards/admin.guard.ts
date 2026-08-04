@@ -270,48 +270,76 @@ export class AdminGuard implements CanActivate {
       ? this.parseUserAgent(userAgent)
       : 'Неизвестно';
 
+    // parse_mode: HTML с экранированием — geo-поля (isp вида JSC "TIMEWEB")
+    // содержат символы, ломающие Markdown, из-за чего Telegram отвечал
+    // {"ok":false} и алерт о брутфорсе молча не доставлялся.
+    const e = (v: string) => this.escapeHtml(v);
     const message = `
-⚠️ *Подозрительная активность*
+⚠️ <b>Подозрительная активность</b>
 
-🚨 *Попытка брутфорса админки!*
+🚨 <b>Попытка брутфорса админки!</b>
 
-📍 *IP:* \`${ip}\`
-🌍 *Локация:* ${geo.city}, ${geo.country}
-🏢 *Провайдер:* ${geo.isp}
-🌐 *Браузер:* ${browserInfo}
-🔢 *Попыток:* ${attempts || MAX_FAILED_ATTEMPTS}
-🕐 *Время (МСК):* ${now}
+📍 <b>IP:</b> <code>${e(ip)}</code>
+🌍 <b>Локация:</b> ${e(geo.city)}, ${e(geo.country)}
+🏢 <b>Провайдер:</b> ${e(geo.isp)}
+🌐 <b>Браузер:</b> ${e(browserInfo)}
+🔢 <b>Попыток:</b> ${e(String(attempts || MAX_FAILED_ATTEMPTS))}
+🕐 <b>Время (МСК):</b> ${e(now)}
 
 ⏱ IP временно заблокирован на 15 минут
     `.trim();
 
     try {
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_SECRET_CHANNEL_ID,
-          text: message,
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: '🔓 Разблокировать',
-                  callback_data: `admin_unblock:${ip}`,
-                },
-                {
-                  text: '🚫 Заблокировать навсегда',
-                  callback_data: `admin_block_bruteforce:${ip}`,
-                },
+      const response = await fetch(
+        `https://api.telegram.org/bot${botToken}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_SECRET_CHANNEL_ID,
+            text: message,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: '🔓 Разблокировать',
+                    callback_data: `admin_unblock:${ip}`,
+                  },
+                  {
+                    text: '🚫 Заблокировать навсегда',
+                    callback_data: `admin_block_bruteforce:${ip}`,
+                  },
+                ],
               ],
-            ],
-          },
-        }),
-      });
+            },
+          }),
+        },
+      );
+
+      // Telegram отдаёт HTTP 200 и при ошибке API — проверяем тело явно.
+      const result = (await response.json()) as {
+        ok: boolean;
+        description?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          `Telegram API error: ${result.description || response.status}`,
+        );
+      }
     } catch (error) {
       this.logger.error(`Failed to send bruteforce alert: ${error.message}`);
     }
+  }
+
+  /**
+   * Экранирует символы, значимые для parse_mode: HTML в Telegram.
+   */
+  private escapeHtml(value: string): string {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   /**

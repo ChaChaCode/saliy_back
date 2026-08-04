@@ -229,49 +229,79 @@ export class AdminAuthService {
       timeZone: 'Europe/Moscow',
     });
 
+    // parse_mode: HTML, а не Markdown — geo-поля (isp вида JSC "TIMEWEB")
+    // и UA содержат символы, ломающие Markdown-парсер, из-за чего Telegram
+    // отвечал {"ok":false} и код входа не доставлялся. HTML безопаснее:
+    // экранируем только < > & в каждом подставляемом значении.
+    const e = (v: string) => this.escapeHtml(v);
     const message = `
-🔐 *Запрос входа в админку*
+🔐 <b>Запрос входа в админку</b>
 
-🔑 *Код:* \`${verificationCode}\`
+🔑 <b>Код:</b> <code>${e(verificationCode)}</code>
 
-📍 *IP:* \`${ip}\`
-🌍 *Локация:* ${geo.city}, ${geo.country}
-🏢 *Провайдер:* ${geo.isp}
-🌐 *Браузер:* ${browserInfo}
-🕐 *Время (МСК):* ${now}
+📍 <b>IP:</b> <code>${e(ip)}</code>
+🌍 <b>Локация:</b> ${e(geo.city)}, ${e(geo.country)}
+🏢 <b>Провайдер:</b> ${e(geo.isp)}
+🌐 <b>Браузер:</b> ${e(browserInfo)}
+🕐 <b>Время (МСК):</b> ${e(now)}
 
 ⏱ Ссылка действительна 5 минут
     `.trim();
 
     try {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: TELEGRAM_CHANNEL_ID,
-          text: message,
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: '✅ Подтвердить',
-                  callback_data: `admin_approve:${loginId}`,
-                },
-                {
-                  text: '❌ Блок IP',
-                  callback_data: `admin_block:${ip}`,
-                },
+      const response = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHANNEL_ID,
+            text: message,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: '✅ Подтвердить',
+                    callback_data: `admin_approve:${loginId}`,
+                  },
+                  {
+                    text: '❌ Блок IP',
+                    callback_data: `admin_block:${ip}`,
+                  },
+                ],
               ],
-            ],
-          },
-        }),
-      });
+            },
+          }),
+        },
+      );
+
+      // Telegram отвечает HTTP 200 даже при ошибке API — fetch не бросает
+      // исключение, поэтому проверяем тело ответа явно, иначе сбой немой.
+      const result = (await response.json()) as {
+        ok: boolean;
+        description?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          `Telegram API error: ${result.description || response.status}`,
+        );
+      }
 
       this.logger.log(`Login request sent to Telegram for ${ip}`);
     } catch (error) {
       this.logger.error(`Failed to send login request: ${error.message}`);
     }
+  }
+
+  /**
+   * Экранирует символы, значимые для parse_mode: HTML в Telegram.
+   */
+  private escapeHtml(value: string): string {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   /**
