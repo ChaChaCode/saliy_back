@@ -1,5 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
+import { existsSync, readFileSync } from 'fs';
+import { Agent } from 'https';
+import { join } from 'path';
+import { rootCertificates } from 'tls';
+
+/**
+ * Корневой сертификат Минцифры (Russian Trusted Root CA). С июня 2026 API Точки
+ * отдаёт сертификат этого УЦ, которого нет в хранилище Node.js — без него
+ * любой запрос падает с «self-signed certificate in certificate chain».
+ */
+const RU_ROOT_CA_PATH =
+  process.env.TOCHKA_CA_CERT_PATH ||
+  join(process.cwd(), 'certs', 'russian_trusted_root_ca.pem');
 
 export interface TochkaRegisterParams {
   orderId: string; // наш orderNumber → paymentLinkId
@@ -50,6 +63,7 @@ export class TochkaPayService {
   private readonly customerCode: string;
   private readonly merchantId: string;
   private readonly paymentModes: string[];
+  private readonly http: AxiosInstance;
 
   constructor() {
     this.baseUrl = (
@@ -69,6 +83,29 @@ export class TochkaPayService {
         'TOCHKA_JWT_TOKEN/TOCHKA_CUSTOMER_CODE не заданы — оплата через Точку работать не будет',
       );
     }
+
+    // Доверяем УЦ Минцифры только для запросов к Точке, а не всему процессу
+    let httpsAgent: Agent | undefined;
+    if (existsSync(RU_ROOT_CA_PATH)) {
+      httpsAgent = new Agent({
+        ca: [...rootCertificates, readFileSync(RU_ROOT_CA_PATH, 'utf8')],
+      });
+    } else {
+      this.logger.error(
+        `Не найден сертификат Минцифры (${RU_ROOT_CA_PATH}) — запросы к Точке будут падать на TLS`,
+      );
+    }
+    this.http = axios.create({ httpsAgent, timeout: 20000 });
+  }
+
+  /** Текст ошибки для логов и cancelReason, без падения на пустом ответе. */
+  private describeError(e: unknown): string {
+    if (axios.isAxiosError(e)) {
+      if (!e.response) return `${e.code ?? 'NETWORK'}: ${e.message}`;
+      const body = JSON.stringify(e.response.data) ?? '';
+      return `HTTP ${e.response.status} ${body.slice(0, 300)}`;
+    }
+    return e instanceof Error ? e.message : String(e);
   }
 
   mapStatus(value: string): 'PENDING' | 'PAID' | 'FAILED' | 'CANCELED' | 'REFUNDED' {
@@ -106,7 +143,7 @@ export class TochkaPayService {
     };
 
     try {
-      const { data } = await axios.post(
+      const { data } = await this.http.post(
         `${this.baseUrl}/acquiring/v1.0/payments`,
         body,
         {
@@ -123,18 +160,17 @@ export class TochkaPayService {
       const operationId = d.operationId;
 
       if (!paymentUrl) {
-        throw new Error(`Точка не вернула paymentLink: ${JSON.stringify(data).slice(0, 300)}`);
+        throw new Error(
+          `Точка не вернула paymentLink: ${(JSON.stringify(data) ?? '').slice(0, 300)}`,
+        );
       }
 
       return { orderId: params.orderId, paymentUrl, operationId };
     } catch (e) {
-      const msg = axios.isAxiosError(e)
-        ? `${e.response?.status} ${JSON.stringify(e.response?.data).slice(0, 300)}`
-        : e instanceof Error
-          ? e.message
-          : String(e);
+      const msg = this.describeError(e);
       this.logger.error(`Ошибка создания платежа Точки: ${msg}`);
-      throw e;
+      // Наверх — понятный текст: он попадает в cancelReason заказа
+      throw new Error(msg);
     }
   }
 
@@ -145,7 +181,7 @@ export class TochkaPayService {
   async getOperationStatus(
     operationId: string,
   ): Promise<{ rawStatus: string; mappedStatus: ReturnType<TochkaPayService['mapStatus']> }> {
-    const { data } = await axios.get(
+    const { data } = await this.http.get(
       `${this.baseUrl}/acquiring/v1.0/payments/${operationId}`,
       {
         headers: {
