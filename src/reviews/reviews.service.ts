@@ -94,9 +94,11 @@ export class ReviewsService {
     const uploadedKeys: string[] = [];
     try {
       for (const file of images) {
-        const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
-        const key = `${this.s3Prefix}/${dto.productId}/${userId}-${Date.now()}-${uploadedKeys.length}.${ext}`;
-        await this.s3.upload(key, file.buffer, file.mimetype);
+        const key = await this.s3.uploadImage(
+          `${this.s3Prefix}/${dto.productId}/${userId}-${Date.now()}-${uploadedKeys.length}`,
+          file.buffer,
+          'review',
+        );
         uploadedKeys.push(key);
       }
     } catch (error: any) {
@@ -512,11 +514,10 @@ export class ReviewsService {
     productId: number,
     userId?: string,
   ): Promise<string> {
-    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
     const author = userId || 'admin';
-    const key = `reviews/${productId}/${author}-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
+    const key = `reviews/${productId}/${author}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     try {
-      return await this.s3.upload(key, file.buffer, file.mimetype);
+      return await this.s3.uploadImage(key, file.buffer, 'review');
     } catch (error: any) {
       this.logger.error(`Не удалось загрузить фото отзыва: ${error.message}`);
       throw error;

@@ -102,8 +102,8 @@ export class BannersService {
     file: Express.Multer.File,
     type: 'desktop' | 'mobile',
   ): Promise<string> {
-    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `${this.s3Prefix}/${type}-${Date.now()}.${ext}`;
-    return this.s3.upload(key, file.buffer, file.mimetype);
+    const key = `${this.s3Prefix}/${type}-${Date.now()}`;
+    const preset = type === 'desktop' ? 'bannerDesktop' : 'bannerMobile';
+    return this.s3.uploadImage(key, file.buffer, preset);
   }
 }

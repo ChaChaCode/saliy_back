@@ -97,7 +97,7 @@ Content-Type: `multipart/form-data`. Поддерживает загрузку �
 | `stock` | JSON | Нет | Остатки по размерам, например `{"S": 10, "M": 5, "L": 0}` |
 | `isActive` | boolean | Нет | По умолчанию `true` |
 | `categoryIds` | number[] | Нет | ID категорий для привязки (JSON-массив или CSV) |
-| `images[]` | file[] | Нет | До 10 изображений (jpg/png/webp, до 10MB каждое) |
+| `images[]` | file[] | Нет | До 10 изображений (jpg/png/webp, до 10MB каждое). Сохраняются сжатыми в WebP, до 2000 px — см. [images.md](./images.md) |
 
 Ответ: созданный товар со связями категорий.
 

@@ -702,18 +702,17 @@ export class AdminProductsService {
   }
 
   /**
-   * Загрузить файл в S3 по ключу `products/{productId?}/{timestamp}-{i}.ext`.
+   * Сжать и загрузить фото в S3 по ключу `products/{productId?}/{timestamp}-{i}.webp`.
    */
   private async uploadImage(
     file: Express.Multer.File,
     index: number,
     productId?: number,
   ): Promise<string> {
-    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
     const dir = productId ? `${this.s3Prefix}/${productId}` : this.s3Prefix;
-    const key = `${dir}/${Date.now()}-${index}.${ext}`;
+    const key = `${dir}/${Date.now()}-${index}`;
     try {
-      return await this.s3.upload(key, file.buffer, file.mimetype);
+      return await this.s3.uploadImage(key, file.buffer, 'product');
     } catch (error: any) {
       this.logger.error(`Failed to upload product image to S3: ${key}`, error);
       throw new BadRequestException('Не удалось загрузить изображение');

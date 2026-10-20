@@ -64,3 +64,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Cookie files (session data)
 cookies*.txt
 docs/openapi_api_v2_integration.json
+
+# Бэкапы ссылок скрипта optimize_existing_images.ts
+optimize_images_backup_*.jsonl

@@ -123,11 +123,11 @@ export class AdminBannersService {
     bannerId: string,
     type: 'desktop' | 'mobile',
   ): Promise<string> {
-    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `${this.s3Prefix}/${type}-banner-${bannerId}-${Date.now()}.${ext}`;
+    const key = `${this.s3Prefix}/${type}-banner-${bannerId}-${Date.now()}`;
+    const preset = type === 'desktop' ? 'bannerDesktop' : 'bannerMobile';
 
     try {
-      return await this.s3.upload(key, file.buffer, file.mimetype);
+      return await this.s3.uploadImage(key, file.buffer, preset);
     } catch (error: any) {
       this.logger.error(`Failed to upload banner file to S3: ${key}`, error);
       throw new BadRequestException('Failed to save banner file');

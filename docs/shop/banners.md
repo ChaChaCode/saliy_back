@@ -118,11 +118,9 @@ Content-Type: `multipart/form-data`. Любые поля опциональны.
 
 ## Хранение файлов
 
-Баннеры главной страницы хранятся в каталоге `uploads/banners/` (например, `desktop-1234567890.jpg`, `mobile-1234567890.jpg`).
+Баннеры хранятся в Yandex Object Storage в каталоге `banners/` (например, `desktop-1234567890.webp`, `mobile-1234567890.webp`). При загрузке изображения автоматически сжимаются в WebP: десктопный баннер до 2560 px, мобильный до 1440 px по длинной стороне. Подробнее — [docs/Admin/images.md](../Admin/images.md).
 
-Баннеры категорий хранятся в каталоге `uploads/categories/` (например, `desktop-cat1-1234567890.jpg`, `mobile-cat1-1234567890.jpg`).
-
-Все файлы доступны по URL вида `https://saliyclothes.com/uploads/...`.
+В ответах API поля `desktopImageUrl` / `mobileImageUrl` уже содержат полный публичный URL.
 
 ---
 

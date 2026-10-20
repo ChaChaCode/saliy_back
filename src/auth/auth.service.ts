@@ -284,15 +284,17 @@ export class AuthService {
       select: { avatarUrl: true },
     });
 
+    // Загружаем новый (сжатый в WebP). Если файл битый — старый аватар остаётся
+    const key = await this.s3.uploadImage(
+      `avatars/${userId}-${Date.now()}`,
+      file.buffer,
+      'avatar',
+    );
+
     // Удаляем старый аватар из S3, если был
     if (user?.avatarUrl) {
       await this.s3.delete(user.avatarUrl);
     }
-
-    // Загружаем новый
-    const ext = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
-    const key = `avatars/${userId}-${Date.now()}.${ext}`;
-    await this.s3.upload(key, file.buffer, file.mimetype);
 
     return this.prisma.user.update({
       where: { id: userId },

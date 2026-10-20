@@ -1,9 +1,17 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { ImagePreset, OptimizedImage, optimizeImage } from './image-optimizer';
+
+const kb = (bytes: number) => `${Math.round(bytes / 1024)} KB`;
 
 @Injectable()
 export class S3StorageService implements OnModuleInit {
@@ -56,6 +64,41 @@ export class S3StorageService implements OnModuleInit {
       }),
     );
     this.logger.log(`Загружено в S3: ${key}`);
+    return key;
+  }
+
+  /**
+   * Сжать изображение в WebP (см. optimizeImage) и загрузить в S3.
+   * @param keyBase ключ без расширения (например, "products/12/1700000000-0")
+   * @returns итоговый key с расширением .webp — для сохранения в БД
+   */
+  async uploadImage(
+    keyBase: string,
+    body: Buffer,
+    preset: ImagePreset,
+  ): Promise<string> {
+    let optimized: OptimizedImage;
+    try {
+      optimized = await optimizeImage(body, preset);
+    } catch (error: any) {
+      this.logger.warn(`Не удалось обработать изображение ${keyBase}: ${error.message}`);
+      throw new BadRequestException('Файл не является корректным изображением');
+    }
+
+    const key = `${keyBase}.${optimized.ext}`;
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: optimized.buffer,
+        ContentType: optimized.contentType,
+        // Ключи уникальны (timestamp в имени) — файл по ключу не меняется
+        CacheControl: 'public, max-age=31536000, immutable',
+      }),
+    );
+    this.logger.log(
+      `Загружено в S3: ${key} (${kb(body.length)} → ${kb(optimized.buffer.length)}, ${optimized.width}x${optimized.height})`,
+    );
     return key;
   }
 
