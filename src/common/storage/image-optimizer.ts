@@ -18,7 +18,7 @@ export type ImagePreset = keyof typeof IMAGE_PRESETS;
  * Основной формат — AVIF. effort 2: на сервере с 1 ядром кодирование ~1,5 с
  * на фото вместо ~8 с при effort 4, а вес больше всего на ~8%.
  */
-const AVIF_OPTIONS = { quality: 75, effort: 2 };
+const AVIF_OPTIONS = { quality: 85, effort: 2 };
 /** Запасная копия для браузеров без AVIF (iOS 15 и старше): JPEG... */
 const FALLBACK_JPEG_OPTIONS = { quality: 85, mozjpeg: true };
 /** ...или WebP, если у фото есть прозрачность (JPEG её не держит). */
