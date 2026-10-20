@@ -68,9 +68,9 @@ export class S3StorageService implements OnModuleInit {
   }
 
   /**
-   * Сжать изображение в WebP (см. optimizeImage) и загрузить в S3.
+   * Сжать изображение (см. optimizeImage) и загрузить в S3.
    * @param keyBase ключ без расширения (например, "products/12/1700000000-0")
-   * @returns итоговый key с расширением .webp — для сохранения в БД
+   * @returns итоговый key с расширением .jpg или .webp — для сохранения в БД
    */
   async uploadImage(
     keyBase: string,

@@ -702,7 +702,7 @@ export class AdminProductsService {
   }
 
   /**
-   * Сжать и загрузить фото в S3 по ключу `products/{productId?}/{timestamp}-{i}.webp`.
+   * Сжать и загрузить фото в S3 по ключу `products/{productId?}/{timestamp}-{i}.jpg` (или .webp для фото с прозрачностью).
    */
   private async uploadImage(
     file: Express.Multer.File,

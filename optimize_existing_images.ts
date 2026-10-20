@@ -1,9 +1,9 @@
 /**
- * Пережать уже загруженные в S3 фото в WebP (товары, баннеры, отзывы, аватары)
+ * Пережать уже загруженные в S3 фото (товары — JPEG, остальное — WebP)
  * и переписать ссылки в БД на новые ключи.
  *
  * По умолчанию — пробный прогон: скачивает и сжимает, показывает экономию,
- * ничего не пишет. С флагом --apply загружает .webp и обновляет БД.
+ * ничего не пишет. С флагом --apply загружает сжатые копии (*-opt.jpg / *-opt.webp) и обновляет БД.
  * Оригиналы в S3 НЕ удаляются — их можно удалить вручную после проверки сайта.
  * В режиме --apply каждое изменение ссылки пишется в optimize_images_backup_*.jsonl
  * (таблица, id, поле, старое и новое значение) — по нему можно откатить.
@@ -87,8 +87,8 @@ async function convert(
   preset: ImagePreset,
 ): Promise<string | null> {
   const key = toKey(value);
-  // -opt.webp — результат прошлого запуска скрипта
-  if (!key || key.toLowerCase().endsWith('-opt.webp')) return null;
+  // *-opt.<ext> — результат прошлого запуска скрипта
+  if (!key || /-opt\.[a-z0-9]+$/i.test(key)) return null;
   if (done.has(key)) return done.get(key)!;
 
   let result: string | null = null;
@@ -103,11 +103,8 @@ async function convert(
       console.log(`  = ${key}: уже оптимально (${kb(original.length)})`);
       stats.skipped++;
     } else {
-      // Исходник уже .webp — новое имя не должно совпасть с оригиналом
-      const base = key.replace(/\.[^./]+$/, '');
-      const newKey = key.toLowerCase().endsWith('.webp')
-        ? `${base}-opt.webp`
-        : `${base}.webp`;
+      // Суффикс -opt: формат может совпасть с исходным (jpg → jpg), а оригинал не трогаем
+      const newKey = `${key.replace(/\.[^./]+$/, '')}-opt.${optimized.ext}`;
       if (APPLY) {
         await s3.send(
           new PutObjectCommand({
