@@ -9,7 +9,14 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
-import { ImagePreset, OptimizedImage, optimizeImage } from './image-optimizer';
+import {
+  EncodedImage,
+  ImagePreset,
+  OPTIMIZED_SUFFIX,
+  OptimizedImage,
+  avifSiblingKey,
+  optimizeImage,
+} from './image-optimizer';
 
 const kb = (bytes: number) => `${Math.round(bytes / 1024)} KB`;
 
@@ -68,9 +75,10 @@ export class S3StorageService implements OnModuleInit {
   }
 
   /**
-   * Сжать изображение (см. optimizeImage) и загрузить в S3.
+   * Сжать изображение (см. optimizeImage) и загрузить в S3 две копии:
+   * `<keyBase>-opt.avif` и запасную `<keyBase>-opt.jpg` (или .webp при прозрачности).
    * @param keyBase ключ без расширения (например, "products/12/1700000000-0")
-   * @returns итоговый key с расширением .jpg или .webp — для сохранения в БД
+   * @returns ключ запасной копии — для сохранения в БД; AVIF лежит рядом (avifSiblingKey)
    */
   async uploadImage(
     keyBase: string,
@@ -85,21 +93,29 @@ export class S3StorageService implements OnModuleInit {
       throw new BadRequestException('Файл не является корректным изображением');
     }
 
-    const key = `${keyBase}.${optimized.ext}`;
+    const stem = `${keyBase}${OPTIMIZED_SUFFIX}`;
+    const avifKey = `${stem}.${optimized.avif.ext}`;
+    const key = `${stem}.${optimized.fallback.ext}`;
+    // AVIF первым: запасная копия в БД появляется, только когда AVIF уже на месте
+    await this.putImmutable(avifKey, optimized.avif);
+    await this.putImmutable(key, optimized.fallback);
+    this.logger.log(
+      `Загружено в S3: ${stem} (${kb(body.length)} → avif ${kb(optimized.avif.buffer.length)} / ${optimized.fallback.ext} ${kb(optimized.fallback.buffer.length)}, ${optimized.width}x${optimized.height})`,
+    );
+    return key;
+  }
+
+  private async putImmutable(key: string, image: EncodedImage): Promise<void> {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
-        Body: optimized.buffer,
-        ContentType: optimized.contentType,
+        Body: image.buffer,
+        ContentType: image.contentType,
         // Ключи уникальны (timestamp в имени) — файл по ключу не меняется
         CacheControl: 'public, max-age=31536000, immutable',
       }),
     );
-    this.logger.log(
-      `Загружено в S3: ${key} (${kb(body.length)} → ${kb(optimized.buffer.length)}, ${optimized.width}x${optimized.height})`,
-    );
-    return key;
   }
 
   /**
@@ -140,12 +156,19 @@ export class S3StorageService implements OnModuleInit {
    * Удалить объект из S3. Отсутствующий объект — не ошибка.
    * Принимает либо голый key ("banners/foo.jpg"), либо полный URL —
    * отсекает префикс bucket'а и `/uploads/` (унаследованные записи).
+   * Вместе со сжатым фото удаляется и его AVIF-копия.
    */
   async delete(keyOrUrl: string | null | undefined): Promise<void> {
     if (!keyOrUrl) return;
     const key = this.normalizeKey(keyOrUrl);
     if (!key) return;
 
+    const avifKey = avifSiblingKey(key);
+    if (avifKey) await this.deleteKey(avifKey);
+    await this.deleteKey(key);
+  }
+
+  private async deleteKey(key: string): Promise<void> {
     try {
       await this.client.send(
         new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),

@@ -118,7 +118,7 @@ Content-Type: `multipart/form-data`. Любые поля опциональны.
 
 ## Хранение файлов
 
-Баннеры хранятся в Yandex Object Storage в каталоге `banners/` (например, `desktop-1234567890.webp`, `mobile-1234567890.webp`). При загрузке изображения автоматически сжимаются в WebP: десктопный баннер до 2560 px, мобильный до 1440 px по длинной стороне. Подробнее — [docs/Admin/images.md](../Admin/images.md).
+Баннеры хранятся в Yandex Object Storage в каталоге `banners/` двумя копиями: `desktop-banner-…-opt.avif` и запасная `desktop-banner-…-opt.jpg` (то же для mobile). В `desktopImageUrl` / `mobileImageUrl` — ссылка на запасную копию; AVIF лежит по тому же адресу с расширением `.avif`, и браузер должен получать его первым (через `<picture>`). Десктопный баннер уменьшается до 2560 px, мобильный до 1440 px по длинной стороне. Подробнее — [docs/Admin/images.md](../Admin/images.md).
 
 В ответах API поля `desktopImageUrl` / `mobileImageUrl` уже содержат полный публичный URL.
 
