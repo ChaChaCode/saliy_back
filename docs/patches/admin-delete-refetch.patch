@@ -1,0 +1,89 @@
+diff --git a/src/api/queryClient.ts b/src/api/queryClient.ts
+index e8f8f09..6a390cf 100644
+--- a/src/api/queryClient.ts
++++ b/src/api/queryClient.ts
+@@ -1,9 +1,20 @@
+-import { MutationCache, QueryClient } from '@tanstack/react-query'
++import { MutationCache, QueryClient, type QueryKey } from '@tanstack/react-query'
++
++const startsWith = (key: QueryKey, prefix: readonly unknown[]) =>
++	prefix.every((part, i) => JSON.stringify(key[i]) === JSON.stringify(part))
+ 
+ export const queryClient = new QueryClient({
+ 	mutationCache: new MutationCache({
+-		onSuccess: async () => {
+-			await queryClient.invalidateQueries()
++		// После любой успешной мутации перечитываем данные. Удалённый объект
++		// (meta.removes — ключ его запроса) не перечитываем: он ответит 404 и
++		// страница покажет «Не удалось загрузить» перед переходом к списку.
++		onSuccess: async (_data, _variables, _onMutateResult, mutation) => {
++			const removes = mutation.meta?.removes as readonly unknown[] | undefined
++			await queryClient.invalidateQueries(
++				removes
++					? { predicate: query => !startsWith(query.queryKey, removes) }
++					: undefined
++			)
+ 		}
+ 	}),
+ 	defaultOptions: {
+diff --git a/src/components/elements/banner/BannerDetails.tsx b/src/components/elements/banner/BannerDetails.tsx
+index dfdb6b2..4daa98d 100644
+--- a/src/components/elements/banner/BannerDetails.tsx
++++ b/src/components/elements/banner/BannerDetails.tsx
+@@ -92,6 +92,7 @@ export function BannerDetails({ banner }: Props) {
+ 
+ 	const deleteMutation = useMutation({
+ 		mutationFn: () => bannersService.delete(banner.id),
++		meta: { removes: ['banner', banner.id] },
+ 		onSuccess: () => {
+ 			toast.success('Баннер удалён')
+ 			queryClient.invalidateQueries({ queryKey: ['banners'] })
+diff --git a/src/components/elements/category/CategoryDetails.tsx b/src/components/elements/category/CategoryDetails.tsx
+index acdc985..552a31d 100644
+--- a/src/components/elements/category/CategoryDetails.tsx
++++ b/src/components/elements/category/CategoryDetails.tsx
+@@ -85,6 +85,7 @@ export function CategoryDetails({ category }: Props) {
+ 
+ 	const deleteMutation = useMutation({
+ 		mutationFn: () => categoriesService.delete(category.id),
++		meta: { removes: ['category', category.id] },
+ 		onSuccess: () => {
+ 			toast.success('Категория удалена')
+ 			queryClient.invalidateQueries({ queryKey: ['categories'] })
+diff --git a/src/components/elements/product/ProductDetails.tsx b/src/components/elements/product/ProductDetails.tsx
+index 8230cf1..f22e415 100644
+--- a/src/components/elements/product/ProductDetails.tsx
++++ b/src/components/elements/product/ProductDetails.tsx
+@@ -146,6 +146,8 @@ export function ProductDetails({ product }: Props) {
+ 
+ 	const deleteMutation = useMutation({
+ 		mutationFn: () => productsService.delete(product.id),
++		// Если товар только скрыт (есть заказы) — ниже перечитываем его явно.
++		meta: { removes: ['product', product.id] },
+ 		onSuccess: data => {
+ 			setConfirmOpen(false)
+ 			toast.success(data.message)
+diff --git a/src/components/elements/promocode/PromoCodeDetails.tsx b/src/components/elements/promocode/PromoCodeDetails.tsx
+index 6cca057..a3ee1f8 100644
+--- a/src/components/elements/promocode/PromoCodeDetails.tsx
++++ b/src/components/elements/promocode/PromoCodeDetails.tsx
+@@ -113,6 +113,7 @@ export function PromoCodeDetails({ promoCode, products = [] }: Props) {
+ 
+ 	const deleteMutation = useMutation({
+ 		mutationFn: () => promoCodesService.delete(promoCode.id),
++		meta: { removes: ['promoCode', promoCode.id] },
+ 		onSuccess: () => {
+ 			toast.success('Промокод удалён')
+ 			queryClient.invalidateQueries({ queryKey: ['promoCodes'] })
+diff --git a/src/components/elements/user/UserDetails.tsx b/src/components/elements/user/UserDetails.tsx
+index b512506..03e1b94 100644
+--- a/src/components/elements/user/UserDetails.tsx
++++ b/src/components/elements/user/UserDetails.tsx
+@@ -49,6 +49,7 @@ export function UserDetailsView({ user }: Props) {
+ 
+ 	const deleteMutation = useMutation({
+ 		mutationFn: () => usersService.delete(user.id),
++		meta: { removes: ['user', user.id] },
+ 		onSuccess: () => {
+ 			toast.success('Пользователь удалён')
+ 			queryClient.invalidateQueries({ queryKey: ['users'] })
