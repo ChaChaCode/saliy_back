@@ -28,7 +28,6 @@
 | `name` | string | Название категории |
 | `slug` | string | URL-friendly идентификатор (уникальный) |
 | `type` | CategoryType | Тип категории |
-| `description` | string \| null | Описание категории |
 | `isActive` | boolean | Активна ли категория |
 | `productsCount` | number | Количество товаров в категории |
 | `createdAt` | string | Дата создания |
@@ -69,10 +68,11 @@ Content-Type: `application/json`.
 | `name` | string | Да | - | Название категории |
 | `slug` | string | Да | - | URL-friendly идентификатор (уникальный) |
 | `type` | CategoryType | Нет | `OTHER` | Тип категории |
-| `description` | string | Нет | - | Описание |
 | `isActive` | boolean | Нет | `true` | Активность |
 
 Ответ: созданный объект Category.
+
+Поля описания у категории нет. Неизвестные поля запрос отклоняет с ответом `400` (например, `property description should not exist`).
 
 ---
 
@@ -93,7 +93,6 @@ Content-Type: `application/json`.
 | `name` | string | Название |
 | `slug` | string | URL-friendly идентификатор |
 | `type` | CategoryType | Тип категории |
-| `description` | string | Описание |
 | `isActive` | boolean | Активность |
 
 Ответ: обновлённый объект Category.

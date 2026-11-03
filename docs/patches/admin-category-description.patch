@@ -1,0 +1,151 @@
+diff --git a/src/components/elements/category/CategoryCreate.tsx b/src/components/elements/category/CategoryCreate.tsx
+index 9cbca09..44f4446 100644
+--- a/src/components/elements/category/CategoryCreate.tsx
++++ b/src/components/elements/category/CategoryCreate.tsx
+@@ -1,9 +1,9 @@
+ import { Button } from '@/components/ui/Button'
+ import { Input } from '@/components/ui/Input'
+ import { Select } from '@/components/ui/Select'
+-import { Textarea } from '@/components/ui/Textarea'
+ import { categoriesService } from '@/services/categories.service'
+ import type { CategoryType } from '@/types/category'
++import { apiErrorMessage } from '@/utils/apiError'
+ import { useMutation, useQueryClient } from '@tanstack/react-query'
+ import { useState } from 'react'
+ import toast from 'react-hot-toast'
+@@ -24,24 +24,19 @@ export function CategoryCreate() {
+ 	const [name, setName] = useState('')
+ 	const [slug, setSlug] = useState('')
+ 	const [type, setType] = useState<CategoryType>('OTHER')
+-	const [description, setDescription] = useState('')
+ 
+ 	const canSubmit = name.trim() !== '' && slug.trim() !== ''
+ 
+ 	const createMutation = useMutation({
+ 		mutationFn: () =>
+-			categoriesService.create({
+-				name,
+-				slug,
+-				type,
+-				...(description ? { description } : {})
+-			}),
++			categoriesService.create({ name, slug, type }),
+ 		onSuccess: data => {
+ 			toast.success('Категория создана')
+ 			queryClient.invalidateQueries({ queryKey: ['categories'] })
+ 			navigate(`/categories/${data.id}`)
+ 		},
+-		onError: () => toast.error('Не удалось создать категорию')
++		onError: e =>
++			toast.error(apiErrorMessage(e, 'Не удалось создать категорию'))
+ 	})
+ 
+ 	return (
+@@ -75,16 +70,6 @@ export function CategoryCreate() {
+ 					/>
+ 				</div>
+ 
+-				<div className="flex flex-col gap-4">
+-					<label className="text-[16px] pl-8 leading-5.25 font-medium">
+-						Описание
+-					</label>
+-					<Textarea
+-						value={description}
+-						onChange={e => setDescription(e.target.value)}
+-					/>
+-				</div>
+-
+ 				<Button
+ 					loading={createMutation.isPending}
+ 					loadingText="Создание..."
+diff --git a/src/components/elements/category/CategoryDetails.tsx b/src/components/elements/category/CategoryDetails.tsx
+index 552a31d..e1bb000 100644
+--- a/src/components/elements/category/CategoryDetails.tsx
++++ b/src/components/elements/category/CategoryDetails.tsx
+@@ -1,9 +1,9 @@
+ import { Button } from '@/components/ui/Button'
+ import { Input } from '@/components/ui/Input'
+ import { Select } from '@/components/ui/Select'
+-import { Textarea } from '@/components/ui/Textarea'
+ import { categoriesService } from '@/services/categories.service'
+ import type { Category, CategoryType } from '@/types/category'
++import { apiErrorMessage } from '@/utils/apiError'
+ import { useMutation, useQueryClient } from '@tanstack/react-query'
+ import { useMemo, useState } from 'react'
+ import toast from 'react-hot-toast'
+@@ -31,7 +31,6 @@ function getInitial(c: Category) {
+ 		name: c.name,
+ 		slug: c.slug,
+ 		type: c.type,
+-		description: c.description || '',
+ 		isActive: String(c.isActive)
+ 	}
+ }
+@@ -46,21 +45,18 @@ export function CategoryDetails({ category }: Props) {
+ 	const [name, setName] = useState(initial.name)
+ 	const [slug, setSlug] = useState(initial.slug)
+ 	const [type, setType] = useState<CategoryType>(initial.type)
+-	const [description, setDescription] = useState(initial.description)
+ 	const [isActive, setIsActive] = useState(initial.isActive)
+ 
+ 	const hasChanges =
+ 		name !== initial.name ||
+ 		slug !== initial.slug ||
+ 		type !== initial.type ||
+-		description !== initial.description ||
+ 		isActive !== initial.isActive
+ 
+ 	const resetForm = () => {
+ 		setName(initial.name)
+ 		setSlug(initial.slug)
+ 		setType(initial.type)
+-		setDescription(initial.description)
+ 		setIsActive(initial.isActive)
+ 	}
+ 
+@@ -70,7 +66,6 @@ export function CategoryDetails({ category }: Props) {
+ 				name,
+ 				slug,
+ 				type,
+-				description,
+ 				isActive: isActive === 'true'
+ 			}),
+ 		onSuccess: () => {
+@@ -80,7 +75,7 @@ export function CategoryDetails({ category }: Props) {
+ 				queryClient.invalidateQueries({ queryKey: ['categories'] })
+ 			}, 350)
+ 		},
+-		onError: () => toast.error('Не удалось сохранить')
++		onError: e => toast.error(apiErrorMessage(e, 'Не удалось сохранить'))
+ 	})
+ 
+ 	const deleteMutation = useMutation({
+@@ -118,16 +113,6 @@ export function CategoryDetails({ category }: Props) {
+ 							onChange={e => setSlug(e.target.value)}
+ 						/>
+ 					</div>
+-
+-					<div className="flex flex-col gap-4">
+-						<label className="text-[16px] pl-8 leading-5.25 font-medium">
+-							Описание
+-						</label>
+-						<Textarea
+-							value={description}
+-							onChange={e => setDescription(e.target.value)}
+-						/>
+-					</div>
+ 				</div>
+ 
+ 				<div className="flex flex-col gap-8 w-80 shrink-0 sticky top-32 self-start">
+diff --git a/src/types/category.ts b/src/types/category.ts
+index 4006385..c132798 100644
+--- a/src/types/category.ts
++++ b/src/types/category.ts
+@@ -5,7 +5,6 @@ export type Category = {
+ 	name: string
+ 	slug: string
+ 	type: CategoryType
+-	description: string | null
+ 	isActive: boolean
+ 	productsCount: number
+ 	createdAt: string
