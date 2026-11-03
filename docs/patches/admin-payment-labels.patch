@@ -1,0 +1,66 @@
+diff --git a/src/components/elements/order/OrderPaymentActions.tsx b/src/components/elements/order/OrderPaymentActions.tsx
+index 9a16965..bfeb1b8 100644
+--- a/src/components/elements/order/OrderPaymentActions.tsx
++++ b/src/components/elements/order/OrderPaymentActions.tsx
+@@ -6,11 +6,10 @@ import type { Order, PaymentMethod } from '@/types/order'
+ import { useState } from 'react'
+ import toast from 'react-hot-toast'
+ 
+-// Способы оплаты для ручного выбора менеджером.
++// Способы оплаты для ручного выбора менеджером. Точка и Яндекс Пэй отключены
++// на backend; у старых заказов текущий способ добавляется в список отдельно.
+ const PAYMENT_OPTIONS: { value: string; label: string }[] = [
+-	{ value: 'SBP_TOCHKA', label: 'СБП (Точка)' },
+-	{ value: 'YANDEX_PAY', label: 'Яндекс Пэй' },
+-	{ value: 'CARD_ONLINE', label: 'Карта онлайн' },
++	{ value: 'CARD_ONLINE', label: 'Т-Банк (карта)' },
+ 	{ value: 'CARD_MANUAL', label: 'Карта (вручную)' },
+ 	{ value: 'BANK_TRANSFER', label: 'Оплата по реквизитам' },
+ 	{ value: 'CRYPTO', label: 'Криптовалюта' },
+@@ -24,9 +23,21 @@ export function OrderPaymentActions({ order }: { order: Order }) {
+ 	const updatePayment = useUpdatePayment(order.orderNumber)
+ 
+ 	const [method, setMethod] = useState<string>(
+-		order.paymentMethod ?? 'SBP_TOCHKA'
++		order.paymentMethod ?? 'CARD_ONLINE'
+ 	)
+ 
++	const options =
++		order.paymentMethod &&
++		!PAYMENT_OPTIONS.some((o) => o.value === order.paymentMethod)
++			? [
++					{
++						value: order.paymentMethod,
++						label: paymentMethodLabel(order.paymentMethod)
++					},
++					...PAYMENT_OPTIONS
++				]
++			: PAYMENT_OPTIONS
++
+ 	const methodChanged = method !== order.paymentMethod
+ 
+ 	const handleMarkPaid = () => {
+@@ -66,7 +77,7 @@ export function OrderPaymentActions({ order }: { order: Order }) {
+ 
+ 			<Select
+ 				label="Способ оплаты"
+-				options={PAYMENT_OPTIONS}
++				options={options}
+ 				value={method}
+ 				onChange={setMethod}
+ 			/>
+diff --git a/src/constants/orderStatus.ts b/src/constants/orderStatus.ts
+index 030c7a3..4666939 100644
+--- a/src/constants/orderStatus.ts
++++ b/src/constants/orderStatus.ts
+@@ -34,8 +34,9 @@ const DELIVERY_TYPE_LABELS: Record<string, string> = {
+ const PAYMENT_METHOD_LABELS: Record<string, string> = {
+ 	SBP_TOCHKA: 'ТОЧКА БАНК',
+ 	YANDEX_PAY: 'Яндекс Пэй',
+-	CARD_ONLINE: 'Карта онлайн',
++	CARD_ONLINE: 'Т-Банк (карта)',
+ 	CARD_MANUAL: 'Карта (вручную)',
++	BANK_TRANSFER: 'Оплата по реквизитам',
+ 	CRYPTO: 'Криптовалюта',
+ 	PAYPAL: 'PayPal'
+ }
