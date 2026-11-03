@@ -26,3 +26,32 @@ index ff4300a..aeb9d50 100644
  export default async function Home() {
  	const [banners, data] = await Promise.all([
  		bannersService.getActive().catch(() => []),
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 112a7fc..f177d90 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -127,10 +127,7 @@ async function request<T>(
+ 		headers: await buildHeaders(body, opts?.auth ?? false, opts?.headers),
+ 		body: body !== undefined ? JSON.stringify(body) : undefined,
+ 		signal: opts?.signal,
+-		...(isServer &&
+-			(opts?.revalidate !== undefined
+-				? { next: { revalidate: opts.revalidate } }
+-				: { cache: 'no-store' as const }))
++		cache: 'no-store'
+ 	})
+ 
+ 	if (
+diff --git a/src/providers/QueryProvider.tsx b/src/providers/QueryProvider.tsx
+index 15cc5ec..1bf3c97 100644
+--- a/src/providers/QueryProvider.tsx
++++ b/src/providers/QueryProvider.tsx
+@@ -10,7 +10,7 @@ export default function QueryProvider({ children }: { children: ReactNode }) {
+ 			new QueryClient({
+ 				defaultOptions: {
+ 					queries: {
+-						staleTime: 5 * 60 * 1000,
++						staleTime: 0,
+ 						retry: 1
+ 					}
+ 				}

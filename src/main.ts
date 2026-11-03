@@ -32,12 +32,7 @@ async function bootstrap() {
   );
 
   // Gzip-сжатие ответов API (JSON). Статику фронта/админки сжимает nginx.
-  app.use(
-    compression({
-      filter: (req, res) =>
-        req.path !== '/api/storefront/changes' && compression.filter(req, res),
-    }),
-  );
+  app.use(compression());
 
   // API data must be fresh after writes; static assets keep their own policy.
   app.use('/api', (_req, res, next) => {
