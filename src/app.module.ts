@@ -6,6 +6,10 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
+import { AuthModule as BetterAuthModule } from '@thallesp/nestjs-better-auth';
+import { createBetterAuth } from './auth/better-auth';
+import { EmailService } from './common/email/email.service';
 import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './common/email/email.module';
 import { DeliveryModule } from './delivery/delivery.module';
@@ -41,6 +45,19 @@ import { HeaderBannerModule } from './header-banner/header-banner.module';
     ]),
     PrismaModule,
     EmailModule,
+    // Better Auth: вход покупателей по коду из письма на /api/session/*.
+    // Глобальная проверка входа выключена: публичные маршруты (каталог,
+    // гостевая корзина, оформление заказа, webhook) остаются открытыми.
+    BetterAuthModule.forRootAsync({
+      imports: [PrismaModule, EmailModule],
+      inject: [PrismaService, EmailService],
+      useFactory: (prisma: PrismaService, email: EmailService) => ({
+        auth: createBetterAuth(prisma, email),
+        disableGlobalAuthGuard: true,
+        // CORS для всего API уже настраивает main.ts.
+        disableTrustedOriginsCors: true,
+      }),
+    }),
     AuthModule,
     DeliveryModule,
     ProductsModule,

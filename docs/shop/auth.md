@@ -1,5 +1,7 @@
 # API авторизации
 
+> **Переход на Better Auth.** Вход по коду переносится на `/api/session/*` — см. [better-auth.md](./better-auth.md). Эндпоинты `send-code`, `verify-code`, `refresh` и `logout` ниже работают до завершения перехода витрины; `me`, `profile`, `delivery-location` и `avatar` остаются и принимают обе формы входа.
+
 Авторизация по email с 4-значным кодом подтверждения. Базовый адрес API: `https://saliyclothes.com/api`.
 
 ---

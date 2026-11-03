@@ -30,3 +30,8 @@ export function getAccessSecret(): string {
 export function getAdminSecret(): string {
   return requireSecret('JWT_ADMIN_SECRET');
 }
+
+/** Секрет Better Auth: подпись кук сессии покупателей. */
+export function getBetterAuthSecret(): string {
+  return requireSecret('BETTER_AUTH_SECRET');
+}

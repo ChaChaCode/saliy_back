@@ -169,7 +169,8 @@ export class AuthService {
 
     if (!user) {
       user = await this.prisma.user.create({
-        data: { email },
+        // Почта подтверждена кодом — поле нужно Better Auth.
+        data: { email, emailVerified: true },
       });
     }
 

@@ -1,11 +1,13 @@
 // Модели для авторизации
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  email         String   @unique
+  // Better Auth: почта подтверждена. У всех, кто входил по коду, — true.
+  emailVerified Boolean  @default(false) @map("email_verified")
+  name          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Персональная информация
   firstName  String? @map("first_name")
@@ -15,7 +17,7 @@ model User {
   avatarUrl  String? @map("avatar_url") // URL аватара пользователя
 
   // Дата рождения (можно обновлять раз в год)
-  birthdate          DateTime? @map("birthdate")           // Дата рождения
+  birthdate          DateTime? @map("birthdate") // Дата рождения
   birthdateUpdatedAt DateTime? @map("birthdate_updated_at") // Дата последнего обновления даты рождения
 
   // Контакт для связи (соц. сеть)
@@ -42,10 +44,12 @@ model User {
 
   // Почтовая доставка (если deliveryType = POST)
   deliveryCountryCode String? @map("delivery_country_code") // Код страны (US, PL, RU, etc)
-  fullAddress         String? @map("full_address")          // Полный адрес одной строкой
+  fullAddress         String? @map("full_address") // Полный адрес одной строкой
 
   refreshTokens     RefreshToken[]
   verificationCodes VerificationCode[]
+  authSessions      Session[]
+  authAccounts      Account[]
   orders            Order[]
   cartItems         CartItem[]
   promoCodeUsages   PromoCodeUsage[]
@@ -78,4 +82,58 @@ model RefreshToken {
   userId String
 
   @@index([userId])
+}
+
+// ==================== Better Auth ====================
+// Вход покупателей по коду из письма (плагин Email OTP). Таблицы с префиксом
+// auth_, чтобы не путать со старыми RefreshToken и VerificationCode, которые
+// удаляются после перехода витрины.
+
+model Session {
+  id        String   @id
+  expiresAt DateTime @map("expires_at")
+  token     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+// Нужна Better Auth для схемы; при входе по коду записи не создаются.
+model Account {
+  id                    String    @id
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("auth_accounts")
+}
+
+// Коды из писем (хранятся хэшированными) и прочие одноразовые значения.
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("auth_verifications")
 }

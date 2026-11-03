@@ -9,7 +9,11 @@ import compression from 'compression';
 import { S3UrlInterceptor, LoggingInterceptor } from './common/interceptors';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Разбор тела запроса выключен: Better Auth читает его сам, а для остальных
+  // маршрутов JSON и urlencoded подключает обратно модуль Better Auth.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
 
   // За nginx (терминирует TLS). Без trust proxy req.secure/HSTS вычисляются
   // неверно, а req.ip берёт адрес nginx (127.0.0.1) вместо реального клиента.
