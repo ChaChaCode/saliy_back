@@ -998,9 +998,14 @@ export class DeliveryService {
       `/orders/${identifier}`,
     );
 
-    // CDEK может вернуть статусы в `entity.statuses` (массив) — берём последний
-    const statuses = cdekOrder?.entity?.statuses || [];
-    const latest = statuses[statuses.length - 1];
+    // CDEK возвращает историю в `entity.statuses` от новых к старым, но порядок
+    // не документирован — берём статус с самой поздней датой, а не по позиции.
+    const statuses: any[] = cdekOrder?.entity?.statuses || [];
+    const latest = statuses.reduce<any>(
+      (acc, s) =>
+        !acc || Date.parse(s?.date_time) > Date.parse(acc?.date_time) ? s : acc,
+      undefined,
+    );
     const cdekStatusCode: string | undefined = latest?.code;
     const cdekStatusName =
       (cdekStatusCode && this.cdekStatusNames[cdekStatusCode]) ||
