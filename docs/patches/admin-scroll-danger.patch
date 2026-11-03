@@ -1,0 +1,189 @@
+diff --git a/src/components/elements/banner/BannerDetails.tsx b/src/components/elements/banner/BannerDetails.tsx
+index efcc94b..dfdb6b2 100644
+--- a/src/components/elements/banner/BannerDetails.tsx
++++ b/src/components/elements/banner/BannerDetails.tsx
+@@ -230,7 +230,8 @@ export function BannerDetails({ banner }: Props) {
+ 							loading={deleteMutation.isPending}
+ 							loadingText="Удаление..."
+ 							onClick={() => deleteMutation.mutate()}
+-							className="w-full bg-danger/10 text-danger hover:bg-danger/20"
++							variant="danger"
++							className="w-full"
+ 						>
+ 							Удалить баннер
+ 						</Button>
+diff --git a/src/components/elements/category/CategoryDetails.tsx b/src/components/elements/category/CategoryDetails.tsx
+index 35fa91b..acdc985 100644
+--- a/src/components/elements/category/CategoryDetails.tsx
++++ b/src/components/elements/category/CategoryDetails.tsx
+@@ -149,7 +149,8 @@ export function CategoryDetails({ category }: Props) {
+ 							loading={deleteMutation.isPending}
+ 							loadingText="Удаление..."
+ 							onClick={() => deleteMutation.mutate()}
+-							className="w-full bg-danger/10 text-danger hover:bg-danger/20"
++							variant="danger"
++							className="w-full"
+ 						>
+ 							Удалить категорию
+ 						</Button>
+diff --git a/src/components/elements/order/OrderCdekActions.tsx b/src/components/elements/order/OrderCdekActions.tsx
+index facb642..12375f4 100644
+--- a/src/components/elements/order/OrderCdekActions.tsx
++++ b/src/components/elements/order/OrderCdekActions.tsx
+@@ -93,7 +93,7 @@ export function OrderCdekActions({ order }: { order: Order }) {
+ 						</Button>
+ 						<Button
+ 							onClick={() => setRecreateOpen(true)}
+-							className="bg-danger/10 text-danger! hover:bg-danger/20"
++							variant="danger"
+ 						>
+ 							Пересоздать накладную
+ 						</Button>
+diff --git a/src/components/elements/product/ProductDetails.tsx b/src/components/elements/product/ProductDetails.tsx
+index 8b3ef8e..b51a498 100644
+--- a/src/components/elements/product/ProductDetails.tsx
++++ b/src/components/elements/product/ProductDetails.tsx
+@@ -380,7 +380,8 @@ export function ProductDetails({ product }: Props) {
+ 					<div className="mt-auto pt-8">
+ 						<Button
+ 							onClick={() => setConfirmOpen(true)}
+-							className="w-full bg-danger/10 text-danger hover:bg-danger/20"
++							variant="danger"
++							className="w-full"
+ 						>
+ 							Удалить товар
+ 						</Button>
+diff --git a/src/components/elements/promocode/PromoCodeDetails.tsx b/src/components/elements/promocode/PromoCodeDetails.tsx
+index d231114..6cca057 100644
+--- a/src/components/elements/promocode/PromoCodeDetails.tsx
++++ b/src/components/elements/promocode/PromoCodeDetails.tsx
+@@ -273,7 +273,8 @@ export function PromoCodeDetails({ promoCode, products = [] }: Props) {
+ 							loading={deleteMutation.isPending}
+ 							loadingText="Удаление..."
+ 							onClick={() => deleteMutation.mutate()}
+-							className="w-full bg-danger/10 text-danger hover:bg-danger/20"
++							variant="danger"
++							className="w-full"
+ 						>
+ 							Удалить промокод
+ 						</Button>
+diff --git a/src/components/elements/user/UserDetails.tsx b/src/components/elements/user/UserDetails.tsx
+index 7891b5f..b512506 100644
+--- a/src/components/elements/user/UserDetails.tsx
++++ b/src/components/elements/user/UserDetails.tsx
+@@ -103,7 +103,8 @@ export function UserDetailsView({ user }: Props) {
+ 				loading={deleteMutation.isPending}
+ 				loadingText="Удаление..."
+ 				onClick={handleDelete}
+-				className="w-full bg-danger/10 text-danger hover:bg-danger/20"
++				variant="danger"
++				className="w-full"
+ 			>
+ 				Удалить пользователя
+ 			</Button>
+diff --git a/src/components/ui/Button.tsx b/src/components/ui/Button.tsx
+index 5fafed4..8227c77 100644
+--- a/src/components/ui/Button.tsx
++++ b/src/components/ui/Button.tsx
+@@ -1,13 +1,21 @@
+ import type { ButtonHTMLAttributes } from 'react'
+ 
+ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+-	variant?: 'primary'
++	variant?: 'primary' | 'danger'
+ 	loading?: boolean
+ 	loadingText?: string
+ }
+ 
++// Цвета варианта не дублируются в className: при конфликте утилит Tailwind
++// побеждает порядок в CSS, а не в атрибуте, и текст мог остаться белым.
++const VARIANT_CLASSES = {
++	primary: 'bg-black text-white',
++	danger: 'bg-danger text-white hover:bg-danger/85'
++}
++
+ export function Button({
+ 	className = '',
++	variant = 'primary',
+ 	children,
+ 	loading,
+ 	loadingText = 'Загрузка',
+@@ -16,7 +24,7 @@ export function Button({
+ 	return (
+ 		<button
+ 			className={`
+-        bg-black text-white font-medium rounded-full px-6 py-3.5
++        ${VARIANT_CLASSES[variant]} font-medium rounded-full px-6 py-3.5
+         transition-all duration-150 cursor-pointer
+         disabled:cursor-not-allowed disabled:bg-foreground/5 disabled:text-secondary
+         relative overflow-hidden
+diff --git a/src/components/ui/Dialog.tsx b/src/components/ui/Dialog.tsx
+index e698c78..9a9e997 100644
+--- a/src/components/ui/Dialog.tsx
++++ b/src/components/ui/Dialog.tsx
+@@ -74,9 +74,7 @@ export function Dialog({
+ 					<Button
+ 						loading={loading}
+ 						onClick={onConfirm}
+-						className={
+-							danger ? 'bg-danger/10 text-danger hover:bg-danger/20' : ''
+-						}
++						variant={danger ? 'danger' : 'primary'}
+ 					>
+ 						{confirmText}
+ 					</Button>
+diff --git a/src/hooks/useInfiniteScroll.ts b/src/hooks/useInfiniteScroll.ts
+index d2240d2..c4339ca 100644
+--- a/src/hooks/useInfiniteScroll.ts
++++ b/src/hooks/useInfiniteScroll.ts
+@@ -1,38 +1,35 @@
+-import { useEffect, useRef } from 'react'
++import { useEffect, useRef, useState } from 'react'
+ 
+ /**
+- * Возвращает ref для элемента-стража внизу списка. Когда страж попадает во
+- * вьюпорт — вызывает onLoadMore. IntersectionObserver создаётся один раз;
+- * актуальный колбэк держим в ref, чтобы не пересоздавать наблюдатель на каждый
+- * ререндер (см. правило event-handler-refs).
++ * Возвращает callback-ref для элемента-стража внизу списка. Когда страж
++ * попадает во вьюпорт — вызывает onLoadMore. Наблюдатель пересоздаётся, когда
++ * страж появляется в DOM (при первой загрузке вместо списка стоит лоадер) и
++ * когда снова разрешена подгрузка: свежий наблюдатель сразу сообщает текущую
++ * видимость, поэтому видимый страж подгружает следующую страницу без скролла.
++ * Актуальный колбэк держим в ref (см. правило event-handler-refs).
+  */
+ export function useInfiniteScroll(
+ 	onLoadMore: () => void,
+ 	enabled: boolean
+ ) {
+-	const sentinelRef = useRef<HTMLDivElement>(null)
++	const [el, setEl] = useState<HTMLDivElement | null>(null)
+ 	const onLoadMoreRef = useRef(onLoadMore)
+-	const enabledRef = useRef(enabled)
+ 
+ 	useEffect(() => {
+ 		onLoadMoreRef.current = onLoadMore
+-		enabledRef.current = enabled
+ 	})
+ 
+ 	useEffect(() => {
+-		const el = sentinelRef.current
+-		if (!el) return
++		if (!el || !enabled) return
+ 		const observer = new IntersectionObserver(
+ 			entries => {
+-				if (entries[0]?.isIntersecting && enabledRef.current) {
+-					onLoadMoreRef.current()
+-				}
++				if (entries[0]?.isIntersecting) onLoadMoreRef.current()
+ 			},
+ 			{ rootMargin: '200px' }
+ 		)
+ 		observer.observe(el)
+ 		return () => observer.disconnect()
+-	}, [])
++	}, [el, enabled])
+ 
+-	return sentinelRef
++	return setEl
+ }
