@@ -76,6 +76,8 @@ describe('CampaignsService.notifyAboutProduct', () => {
     expect(data.targetType).toBe('NEWSLETTER');
     expect(data.html).toContain('https://shop.test/product/jacket-x');
     expect(data.html).toContain('https://cdn.test/products/a-opt.jpg');
+    expect(data.html).toContain('https://cdn.test/email/saliy-logo-v1.png');
+    expect(data.html).not.toContain('<svg');
     expect(data.html).not.toContain('<b>');
     expect(data.html).toContain('&#60;b&#62;');
   });

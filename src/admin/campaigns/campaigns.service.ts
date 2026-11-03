@@ -21,6 +21,11 @@ interface CreateCampaignDto {
 }
 
 const BATCH_SIZE = 20;
+
+// Логотип для писем: PNG на белом фоне в хранилище (SVG почтовые клиенты
+// вырезают). Исходник — assets/email/saliy-logo.svg; при замене загрузить
+// новую версию под новым ключом, чтобы не мешал кэш почтовиков.
+const EMAIL_LOGO_KEY = 'email/saliy-logo-v1.png';
 const BATCH_DELAY_MS = 1000;
 
 interface Recipient {
@@ -223,7 +228,7 @@ export class CampaignsService {
 
     const finalPrice = Math.round(product.price * (1 - product.discount / 100));
     const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
-    // Название и цена — Manrope 300 (тонкое), трекинг -0.01em; при скидке новая
+    // Название — Manrope 400, цена — 300 (тонкое), трекинг -0.01em; при скидке новая
     // цена, затем зачёркнутая старая. Gmail веб-шрифты не грузит — там системный
     // гротеск с тонким начертанием (Segoe UI Light, Roboto Light, SF).
     const priceHtml =
@@ -235,13 +240,13 @@ export class CampaignsService {
       : '';
 
     return `
-      <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300&amp;display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400&amp;display=swap" rel="stylesheet" />
       <div style="max-width: 480px; margin: 0 auto; font-family: Arial, sans-serif; color: #121212; background: #ffffff;">
-        <div style="text-align: center; padding: 24px 0; font-size: 18px; font-weight: bold; letter-spacing: 4px;">SALIY CLOTHES</div>
+        <div style="text-align: center; padding: 24px 0;"><img src="${esc(this.s3.keyToUrl(EMAIL_LOGO_KEY))}" alt="SALIY" width="100" height="41" style="display: inline-block; width: 100px; height: auto; border: 0;" /></div>
         ${imageUrl ? `<a href="${esc(url)}"><img src="${esc(imageUrl)}" alt="${esc(product.name)}" width="480" style="display: block; width: 100%; height: auto; border: 0;" /></a>` : ''}
         <div style="padding: 24px 16px; text-align: center;">
           <div style="font-size: 12px; letter-spacing: 2px; color: #888; text-transform: uppercase;">Новинка</div>
-          <h1 style="margin: 8px 0 12px; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 22px; font-weight: 300; letter-spacing: -0.01em; text-transform: uppercase;">${esc(product.name)}</h1>
+          <h1 style="margin: 8px 0 12px; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 22px; font-weight: 400; letter-spacing: -0.01em; text-transform: uppercase;">${esc(product.name)}</h1>
           <div style="margin: 0 0 20px; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 22px; font-weight: 300; letter-spacing: -0.01em; line-height: 1.5; text-transform: uppercase;">${priceHtml}</div>
           ${description}
           <a href="${esc(url)}" style="display: inline-block; background: #000000; color: #ffffff; padding: 14px 32px; text-decoration: none; font-size: 13px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">Смотреть</a>
