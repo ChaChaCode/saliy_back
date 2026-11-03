@@ -224,7 +224,8 @@ export class CampaignsService {
     const finalPrice = Math.round(product.price * (1 - product.discount / 100));
     const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`;
     // Как на витрине: Manrope 500, трекинг -0.01em; при скидке новая цена,
-    // затем зачёркнутая старая. Где веб-шрифты не грузятся (Gmail) — Arial.
+    // затем зачёркнутая старая. Gmail веб-шрифты не грузит — там системный
+    // гротеск с начертанием 500 (у Arial его нет, цена выходила тоньше).
     const priceHtml =
       product.discount > 0
         ? `${rub(finalPrice)} <span style="text-decoration: line-through; color: #a0a0a0;">${rub(product.price)}</span>`
@@ -241,7 +242,7 @@ export class CampaignsService {
         <div style="padding: 24px 16px; text-align: center;">
           <div style="font-size: 12px; letter-spacing: 2px; color: #888; text-transform: uppercase;">Новинка</div>
           <h1 style="margin: 8px 0 12px; font-size: 22px; font-weight: 600; text-transform: uppercase;">${esc(product.name)}</h1>
-          <div style="margin: 0 0 20px; font-family: 'Manrope', Arial, sans-serif; font-size: 22px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.5; text-transform: uppercase;">${priceHtml}</div>
+          <div style="margin: 0 0 20px; font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 22px; font-weight: 500; letter-spacing: -0.01em; line-height: 1.5; text-transform: uppercase;">${priceHtml}</div>
           ${description}
           <a href="${esc(url)}" style="display: inline-block; background: #000000; color: #ffffff; padding: 14px 32px; text-decoration: none; font-size: 13px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase;">Смотреть</a>
         </div>

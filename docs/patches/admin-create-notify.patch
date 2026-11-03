@@ -1,0 +1,78 @@
+diff --git a/src/components/elements/product/ProductCreate.tsx b/src/components/elements/product/ProductCreate.tsx
+index d6570dc..11ce6ee 100644
+--- a/src/components/elements/product/ProductCreate.tsx
++++ b/src/components/elements/product/ProductCreate.tsx
+@@ -4,8 +4,10 @@ import { Select } from '@/components/ui/Select'
+ import { Textarea } from '@/components/ui/Textarea'
+ import { CARD_STATUS } from '@/constants/cardStatus'
+ import { useCategories } from '@/hooks/useCategories'
++import { campaignsService } from '@/services/campaigns.service'
+ import { productsService } from '@/services/products.service'
+ import type { CardStatus, GenderType } from '@/types/product'
++import { apiErrorMessage } from '@/utils/apiError'
+ import { useMutation, useQueryClient } from '@tanstack/react-query'
+ import { useState } from 'react'
+ import toast from 'react-hot-toast'
+@@ -46,6 +48,8 @@ export function ProductCreate() {
+ 	const [gender, setGender] = useState<GenderType | ''>('')
+ 	const [cardStatus, setCardStatus] = useState<CardStatus>('NONE')
+ 	const [isActive, setIsActive] = useState('true')
++	// По умолчанию выключено, чтобы тестовые товары не уходили подписчикам.
++	const [notifySubscribers, setNotifySubscribers] = useState(false)
+ 	const [activeSizes, setActiveSizes] = useState<string[]>([])
+ 	const [stock, setStock] = useState<Record<string, number>>({})
+ 	const [categoryIds, setCategoryIds] = useState<string[]>([])
+@@ -93,9 +97,19 @@ export function ProductCreate() {
+ 			newFiles.forEach(file => formData.append('images', file))
+ 			return productsService.create(formData)
+ 		},
+-		onSuccess: product => {
++		onSuccess: async product => {
+ 			toast.success('Товар создан')
+ 			queryClient.invalidateQueries({ queryKey: ['products'] })
++			// Товар уже создан: ошибка рассылки его не отменяет, её можно
++			// повторить кнопкой «Уведомить подписчиков» на странице товара.
++			if (notifySubscribers && isActive === 'true') {
++				try {
++					const r = await campaignsService.notifyAboutProduct(product.id)
++					toast.success(`Письмо отправляется: ${r.totalRecipients} получателей`)
++				} catch (e) {
++					toast.error(apiErrorMessage(e, 'Не удалось отправить рассылку'))
++				}
++			}
+ 			navigate(`/products/${product.id}`)
+ 		},
+ 		onError: () => toast.error('Не удалось создать товар')
+@@ -249,6 +263,32 @@ export function ProductCreate() {
+ 							onMultiChange={setCategoryIds}
+ 						/>
+ 					)}
++
++					<label
++						className={`flex items-start gap-3 px-8 select-none ${
++							isActive === 'true'
++								? 'cursor-pointer'
++								: 'opacity-50 cursor-not-allowed'
++						}`}
++					>
++						<input
++							type="checkbox"
++							className="mt-0.5 size-5 shrink-0 accent-black cursor-[inherit]"
++							checked={notifySubscribers && isActive === 'true'}
++							disabled={isActive !== 'true'}
++							onChange={e => setNotifySubscribers(e.target.checked)}
++						/>
++						<span className="flex flex-col gap-1">
++							<span className="text-[16px] leading-5.25 font-medium">
++								Разослать подписчикам
++							</span>
++							<span className="text-[13px] text-secondary">
++								{isActive === 'true'
++									? 'Письмо о новинке уйдёт сразу после создания'
++									: 'Доступно только для активного товара'}
++							</span>
++						</span>
++					</label>
+ 				</div>
+ 			</div>
+ 
