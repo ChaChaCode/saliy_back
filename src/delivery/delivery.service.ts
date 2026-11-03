@@ -139,6 +139,8 @@ export class DeliveryService {
    * Получить список всех стран с поддержкой типов доставки
    * Россия и Беларусь отображаются первыми
    */
+  // deliveryTypes совпадает с GET /orders/delivery-options: почта (STANDARD)
+  // доступна в любой стране, самовывоз СДЭК — дополнительно в RU и BY.
   getCountries(lang: string = 'ru') {
     const allCodes = Object.keys(countries.getAlpha2Codes());
     const cdekCountries = ['RU', 'BY'];
@@ -151,7 +153,9 @@ export class DeliveryService {
       return {
         code,
         name,
-        deliveryTypes: isCdekSupported ? ['CDEK_PICKUP'] : ['STANDARD'],
+        deliveryTypes: isCdekSupported
+          ? ['CDEK_PICKUP', 'STANDARD']
+          : ['STANDARD'],
       };
     });
 
@@ -184,7 +188,9 @@ export class DeliveryService {
     return {
       code: countryCode,
       name,
-      deliveryTypes: isCdekSupported ? ['CDEK_PICKUP'] : ['STANDARD'],
+      deliveryTypes: isCdekSupported
+        ? ['CDEK_PICKUP', 'STANDARD']
+        : ['STANDARD'],
     };
   }
 

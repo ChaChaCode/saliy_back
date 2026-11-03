@@ -42,7 +42,7 @@ Query-параметры:
 |------|-----|----------|
 | code | string | Код страны (RU, BY, PL, …) |
 | name | string | Название страны |
-| deliveryTypes | string[] | Доступные типы доставки: `CDEK_PICKUP` и/или `STANDARD` |
+| deliveryTypes | string[] | Доступные типы доставки: для RU и BY — `CDEK_PICKUP` и `STANDARD`, для остальных стран — `STANDARD`. Совпадает с `deliveryTypes` из `GET /api/orders/delivery-options` (до 3 ноября 2026 для RU и BY здесь был только `CDEK_PICKUP`) |
 
 ---
 

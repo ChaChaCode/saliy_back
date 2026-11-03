@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   UseGuards,
   Req,
+  HttpCode,
 } from '@nestjs/common';
 import { CartService } from './cart.service';
 import {
@@ -90,6 +91,7 @@ export class CartController {
    * Может использоваться и гостями, и авторизованными
    */
   @Post('validate')
+  @HttpCode(200)
   async validateCart(@Body() dto: ValidateCartDto) {
     return this.cartService.validateCart(dto.items);
   }

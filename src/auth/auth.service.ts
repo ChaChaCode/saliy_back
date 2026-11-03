@@ -333,15 +333,18 @@ export class AuthService {
   }
 
   async updateProfile(userId: string, data: any) {
-    // Если обновляется дата рождения - проверяем ограничение
-    if (data.birthdate) {
+    // Дата рождения меняется не чаще раза в год. Очистка (null) тоже считается
+    // изменением — иначе правило обходится: очистить и сразу указать новую.
+    if (data.birthdate !== undefined) {
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
         select: { birthdate: true, birthdateUpdatedAt: true },
       });
 
-      // Если дата рождения уже установлена, проверяем можно ли обновить
-      if (user?.birthdate && user?.birthdateUpdatedAt) {
+      if (data.birthdate === null && !user?.birthdate) {
+        // Уже пусто — менять нечего, отметку об изменении не ставим.
+        delete data.birthdate;
+      } else if (user?.birthdateUpdatedAt) {
         const now = new Date();
         const lastUpdate = new Date(user.birthdateUpdatedAt);
         const oneYearAgo = new Date(
@@ -357,7 +360,11 @@ export class AuthService {
           );
         }
       }
+    }
 
+    if (data.birthdate === null) {
+      data.birthdateUpdatedAt = new Date();
+    } else if (data.birthdate) {
       // Преобразуем строку даты из формата DD.MM.YYYY в Date.
       // Используем Date.UTC, чтобы не зависеть от TZ сервера — в БД всегда
       // попадает чистая дата YYYY-MM-DD без сдвигов на полдня.

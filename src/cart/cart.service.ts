@@ -66,9 +66,7 @@ export class CartService {
       if (availableQuantity === 0) {
         throw new BadRequestException('Товар закончился');
       }
-      throw new BadRequestException(
-        `Доступно только ${availableQuantity} шт`,
-      );
+      throw new BadRequestException(`Доступно только ${availableQuantity} шт`);
     }
 
     // Проверяем, есть ли уже такой товар в корзине
@@ -159,9 +157,7 @@ export class CartService {
       if (availableQuantity === 0) {
         throw new BadRequestException('Товар закончился');
       }
-      throw new BadRequestException(
-        `Доступно только ${availableQuantity} шт`,
-      );
+      throw new BadRequestException(`Доступно только ${availableQuantity} шт`);
     }
 
     // Обновляем количество
@@ -219,7 +215,11 @@ export class CartService {
       `Корзина очищена: пользователь ${userId}, удалено элементов: ${result.count}`,
     );
 
-    return { success: true, message: 'Корзина очищена', deletedCount: result.count };
+    return {
+      success: true,
+      message: 'Корзина очищена',
+      deletedCount: result.count,
+    };
   }
 
   // ==================== ВАЛИДАЦИЯ КОРЗИНЫ ====================
@@ -232,21 +232,37 @@ export class CartService {
     const validatedItems: any[] = [];
     let subtotal = 0;
 
+    // Один запрос на всю корзину вместо запроса на каждую позицию.
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: [...new Set(items.map((i) => i.productId))] },
+        deletedAt: null,
+      },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+
     for (const item of items) {
-      const product = await this.prisma.product.findFirst({
-        where: { id: item.productId, deletedAt: null },
-      });
+      const product = byId.get(item.productId);
 
-      if (!product) {
-        throw new NotFoundException(
-          `Товар с ID ${item.productId} не найден`,
-        );
-      }
-
-      if (!product.isActive) {
-        throw new BadRequestException(
-          `Товар "${product.name}" недоступен для заказа`,
-        );
+      // Удалённый или выключенный товар не роняет проверку всей корзины:
+      // позиция приходит недоступной и не входит в сумму.
+      if (!product || !product.isActive) {
+        validatedItems.push({
+          productId: item.productId,
+          productName: product?.name ?? '',
+          productSlug: product?.slug ?? '',
+          size: item.size,
+          quantity: item.quantity,
+          price: product?.price ?? 0,
+          discount: product?.discount ?? 0,
+          finalPrice: 0,
+          totalPrice: 0,
+          inStock: false,
+          availableQuantity: 0,
+          isAvailable: false,
+          imageUrl: product ? pickMainImage(product.images)?.url || '' : '',
+        });
+        continue;
       }
 
       // Проверяем наличие на складе
@@ -277,6 +293,7 @@ export class CartService {
         totalPrice,
         inStock,
         availableQuantity,
+        isAvailable: true,
         imageUrl,
       });
     }

@@ -147,12 +147,15 @@
 | finalPrice | number | Цена за единицу с учётом скидки |
 | totalPrice | number | Стоимость позиции (finalPrice × quantity) |
 | inStock | boolean | Достаточно ли товара на складе |
+| isAvailable | boolean | Товар существует и включён; `false` — удалён или скрыт в админке |
 | availableQuantity | number | Доступное количество для заказа |
 | imageUrl | string | URL изображения товара |
 
 Важно:
 - Цены всегда берутся из БД, а не от клиента.
 - `inStock` показывает, достаточно ли товара на складе.
+- Удалённый или скрытый товар не приводит к ошибке всей корзины: ответ `200`, позиция приходит с `isAvailable: false`, `inStock: false`, `availableQuantity: 0`, `finalPrice` и `totalPrice` равны 0 и в `subtotal`/`total` не входят. Для удалённого товара `productName`, `productSlug` и `imageUrl` пустые. Такие позиции нужно показать недоступными и не пускать к оформлению.
+- Позиция с недостаточным остатком (`inStock: false` при `isAvailable: true`) в сумме учитывается: её можно уменьшить до `availableQuantity`.
 - `availableQuantity` — доступное количество для заказа.
 
 ---
