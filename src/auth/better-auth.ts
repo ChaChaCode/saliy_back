@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { emailOTP } from 'better-auth/plugins';
@@ -100,7 +101,9 @@ export function createBetterAuth(
       // nginx ставит X-Real-IP из адреса подключения; X-Forwarded-For клиент
       // может подделать и обойти ограничение частоты.
       ipAddress: { ipAddressHeaders: ['x-real-ip'] },
-      database: { generateId: 'uuid' },
+      // id генерирует Better Auth: у таблиц auth_* нет значения по умолчанию в БД
+      // ('uuid' здесь означал бы «пусть сгенерирует база» — и вставка падает).
+      database: { generateId: () => randomUUID() },
     },
 
     databaseHooks: {

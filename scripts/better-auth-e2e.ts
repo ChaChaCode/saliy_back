@@ -47,7 +47,6 @@ const fakePrisma = {
   },
 };
 const db = { user: [], session: [], account: [], verification: [] };
-const auth = createBetterAuth(fakePrisma, fakeEmail, memoryAdapter(db));
 
 const fakeAuthService = {
   validateUser: async (id: string) => ({ id, email: 'buyer@test.local', firstName: 'Тест' }),
@@ -65,6 +64,10 @@ class TestController {
   optional(@Req() req: any) {
     return { user: req.user ?? null };
   }
+  @Get('public')
+  publicRoute() {
+    return { ok: true };
+  }
   @Post('echo')
   echo(@Body() body: any) {
     return { body };
@@ -74,10 +77,13 @@ class TestController {
 @Module({
   imports: [
     PassportModule,
-    BetterAuthModule.forRoot({
-      auth,
+    // Та же форма настройки, что в app.module.ts (forRootAsync).
+    BetterAuthModule.forRootAsync({
       disableGlobalAuthGuard: true,
-      disableTrustedOriginsCors: true,
+      useFactory: () => ({
+        auth: createBetterAuth(fakePrisma, fakeEmail, memoryAdapter(db)),
+        disableTrustedOriginsCors: true,
+      }),
     }),
   ],
   controllers: [TestController],
@@ -88,7 +94,7 @@ class TestModule {}
 const results: [string, boolean, string?][] = [];
 const check = (name: string, ok: boolean, info = '') => results.push([name, ok, info]);
 const cookieHeader = (res: any) =>
-  ((res.headers['set-cookie'] as string[]) || []).map((c) => c.split(';')[0]).join('; ');
+  ((res.headers['set-cookie'] as unknown as string[]) || []).map((c) => c.split(';')[0]).join('; ');
 
 (async () => {
   const app = await NestFactory.create(TestModule, { bodyParser: false, logger: ['error'] });
@@ -97,6 +103,10 @@ const cookieHeader = (res: any) =>
   const http = app.getHttpServer();
   const origin = 'http://localhost:3000';
   const email = 'buyer@test.local';
+
+  // 0. Публичный маршрут без входа открыт (глобальная проверка выключена)
+  let r0 = await request(http).get('/api/t/public');
+  check('публичный маршрут без входа → 200', r0.status === 200, String(r0.status));
 
   // 1. Отправка кода
   let r = await request(http)
@@ -118,7 +128,7 @@ const cookieHeader = (res: any) =>
     .send({ email, otp: code });
   check('вход по коду → 200', r.status === 200, `${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
   const cookies = cookieHeader(r);
-  const setCookie = ((r.headers['set-cookie'] as string[]) || []).join(' | ');
+  const setCookie = ((r.headers['set-cookie'] as unknown as string[]) || []).join(' | ');
   check('кука сессии httpOnly + Secure', /HttpOnly/i.test(setCookie) && /Secure/i.test(setCookie), setCookie.slice(0, 160));
   const rawToken: string = r.body?.token ?? '';
   const cookieName = cookies.split('=')[0];

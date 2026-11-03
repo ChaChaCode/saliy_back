@@ -49,11 +49,14 @@ import { HeaderBannerModule } from './header-banner/header-banner.module';
     // Глобальная проверка входа выключена: публичные маршруты (каталог,
     // гостевая корзина, оформление заказа, webhook) остаются открытыми.
     BetterAuthModule.forRootAsync({
+      // Должно быть здесь, а не в useFactory: пакет читает этот флаг при
+      // сборке модуля. Внутри фабрики он игнорируется, и все маршруты API
+      // начинают требовать вход (так и случилось при первой выкладке).
+      disableGlobalAuthGuard: true,
       imports: [PrismaModule, EmailModule],
       inject: [PrismaService, EmailService],
       useFactory: (prisma: PrismaService, email: EmailService) => ({
         auth: createBetterAuth(prisma, email),
-        disableGlobalAuthGuard: true,
         // CORS для всего API уже настраивает main.ts.
         disableTrustedOriginsCors: true,
       }),
