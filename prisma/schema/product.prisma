@@ -52,6 +52,8 @@ model Product {
   // Удалённые товары не показываются на витрине и в обычных списках админки,
   // но сохраняются для истории (старые заказы, архив).
   deletedAt   DateTime?     @map("deleted_at")
+  // Когда подписчикам отправлено письмо о товаре (null — не отправлялось)
+  newsletterSentAt DateTime? @map("newsletter_sent_at")
 
   // Связи
   categories  ProductCategory[]

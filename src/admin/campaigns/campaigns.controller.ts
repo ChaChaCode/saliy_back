@@ -7,6 +7,7 @@ import {
   Body,
   Query,
   Req,
+  ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
 import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
@@ -42,6 +43,15 @@ export class CampaignsController {
   @Post()
   create(@Body() dto: CreateCampaignDto, @Req() req: any) {
     return this.campaignsService.create(dto, req.admin?.id);
+  }
+
+  /** Письмо подписчикам о товаре — один раз на товар (повтор → 409). */
+  @Post('product/:productId')
+  notifyAboutProduct(
+    @Param('productId', ParseIntPipe) productId: number,
+    @Req() req: any,
+  ) {
+    return this.campaignsService.notifyAboutProduct(productId, req.admin?.id);
   }
 
   @Post(':id/send')
