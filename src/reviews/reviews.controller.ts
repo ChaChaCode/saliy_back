@@ -27,7 +27,7 @@ import {
   REVIEW_MAX_TEXT,
   REVIEW_MAX_IMAGES,
 } from './reviews.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CustomerAuthGuard } from '../auth/guards/customer-auth.guard';
 
 class CreateReviewDto {
   @Type(() => Number)
@@ -62,7 +62,7 @@ export class ReviewsController {
    * POST /api/reviews
    */
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   @UseInterceptors(
     FileFieldsInterceptor(
       [{ name: 'images', maxCount: REVIEW_MAX_IMAGES }],
@@ -93,7 +93,7 @@ export class ReviewsController {
    * GET /api/reviews/can-review/:productId
    */
   @Get('can-review/:productId')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   canReview(
     @Param('productId', ParseIntPipe) productId: number,
     @Req() req: any,

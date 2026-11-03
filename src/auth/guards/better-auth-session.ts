@@ -5,10 +5,8 @@ import { fromNodeHeaders } from 'better-auth/node';
 import { AuthService } from '../auth.service';
 
 /**
- * Пока витрина переходит на Better Auth, защищённые маршруты принимают и
- * сессию Better Auth, и прежний JWT в куке. Если есть действующая сессия
- * Better Auth — кладёт в req.user тот же профиль, что и при входе по JWT,
- * и возвращает true. Иначе false: дальше проверяется JWT.
+ * Если есть действующая сессия Better Auth — кладёт в req.user полный профиль
+ * покупателя (тот же, что отдаёт /api/auth/me) и возвращает true, иначе false.
  */
 export async function attachBetterAuthUser(
   context: ExecutionContext,

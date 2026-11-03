@@ -20,7 +20,7 @@ import {
 } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
 import { NewsletterService } from './newsletter.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CustomerAuthGuard } from '../auth/guards/customer-auth.guard';
 
 class SubscribeDto {
   @IsEmail({}, { message: 'Некорректный email' })
@@ -47,7 +47,7 @@ export class NewsletterController {
    * Throttle: 5 попыток в минуту с одного IP — защита от спама.
    */
   @Post('subscribe')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(200)
   subscribe(@Body() dto: SubscribeDto, @Req() request: any) {

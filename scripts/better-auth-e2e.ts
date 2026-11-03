@@ -3,7 +3,6 @@
    Запуск: npx ts-node --transpile-only -P tsconfig.json scripts/better-auth-e2e.ts
    (Jest не подходит: Better Auth поставляется только как ES-модули). */
 process.env.BETTER_AUTH_SECRET = 'e2e-secret-e2e-secret-e2e-secret-0123';
-process.env.JWT_ACCESS_SECRET = 'e2e-access-e2e-access-e2e-access-0123';
 process.env.CORS_ORIGINS = 'http://localhost:3000';
 process.env.FRONTEND_URL = 'http://localhost:3000';
 
@@ -18,16 +17,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { PassportModule } from '@nestjs/passport';
 import request from 'supertest';
 import { AuthModule as BetterAuthModule } from '@thallesp/nestjs-better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 
 const SRC = '../src';
 const { createBetterAuth } = require(`${SRC}/auth/better-auth`);
-const { JwtAuthGuard } = require(`${SRC}/auth/guards/jwt-auth.guard`);
-const { OptionalJwtAuthGuard } = require(`${SRC}/auth/guards/optional-jwt-auth.guard`);
-const { JwtStrategy } = require(`${SRC}/auth/strategies/jwt.strategy`);
+const { CustomerAuthGuard } = require(`${SRC}/auth/guards/customer-auth.guard`);
+const { OptionalCustomerAuthGuard } = require(`${SRC}/auth/guards/optional-customer-auth.guard`);
 const { AuthService } = require(`${SRC}/auth/auth.service`);
 
 const sentCodes: { email: string; code: string }[] = [];
@@ -55,12 +52,12 @@ const fakeAuthService = {
 @Controller('t')
 class TestController {
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   me(@Req() req: any) {
     return req.user;
   }
   @Get('optional')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalCustomerAuthGuard)
   optional(@Req() req: any) {
     return { user: req.user ?? null };
   }
@@ -76,7 +73,6 @@ class TestController {
 
 @Module({
   imports: [
-    PassportModule,
     // Та же форма настройки, что в app.module.ts (forRootAsync).
     BetterAuthModule.forRootAsync({
       disableGlobalAuthGuard: true,
@@ -87,7 +83,7 @@ class TestController {
     }),
   ],
   controllers: [TestController],
-  providers: [{ provide: AuthService, useValue: fakeAuthService }, JwtStrategy],
+  providers: [{ provide: AuthService, useValue: fakeAuthService }],
 })
 class TestModule {}
 
@@ -144,13 +140,13 @@ const cookieHeader = (res: any) =>
 
   // 4. Наш guard принимает сессию Better Auth
   r = await request(http).get('/api/t/me').set('Cookie', cookies);
-  check('JwtAuthGuard + сессия → 200, полный профиль', r.status === 200 && r.body.firstName === 'Тест', `${r.status} ${JSON.stringify(r.body)}`);
+  check('CustomerAuthGuard + сессия → 200, полный профиль', r.status === 200 && r.body.firstName === 'Тест', `${r.status} ${JSON.stringify(r.body)}`);
   r = await request(http).get('/api/t/me');
-  check('JwtAuthGuard без входа → 401', r.status === 401, String(r.status));
+  check('CustomerAuthGuard без входа → 401', r.status === 401, String(r.status));
   r = await request(http).get('/api/t/optional');
-  check('OptionalJwtAuthGuard без входа → 200, user пустой', r.status === 200 && !r.body.user, JSON.stringify(r.body));
+  check('OptionalCustomerAuthGuard без входа → 200, user пустой', r.status === 200 && !r.body.user, JSON.stringify(r.body));
   r = await request(http).get('/api/t/optional').set('Cookie', cookies);
-  check('OptionalJwtAuthGuard с сессией → user', r.body.user?.firstName === 'Тест');
+  check('OptionalCustomerAuthGuard с сессией → user', r.body.user?.firstName === 'Тест');
 
   // 5. Разбор тела у обычных маршрутов после bodyParser:false
   r = await request(http).post('/api/t/echo').send({ a: 1, s: 'тест' });

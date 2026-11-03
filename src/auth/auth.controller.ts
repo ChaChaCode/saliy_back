@@ -2,10 +2,7 @@ import {
   Controller,
   Post,
   Body,
-  Res,
   Req,
-  HttpCode,
-  HttpStatus,
   UseGuards,
   Get,
   Put,
@@ -13,131 +10,28 @@ import {
   UploadedFile,
   UseInterceptors,
   BadRequestException,
-  UnauthorizedException,
   ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Response, Request } from 'express';
 import { AuthService } from './auth.service';
-import { SendCodeDto } from './dto/send-code.dto';
-import { VerifyCodeDto } from './dto/verify-code.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { authCookieOptions } from '../common/utils/cookie.util';
-import { Throttle } from '@nestjs/throttler';
+import { CustomerAuthGuard } from './guards/customer-auth.guard';
 
+// Вход и выход — Better Auth (/api/session/*, см. src/auth/better-auth.ts).
+// Здесь профиль покупателя: данные, адрес доставки, аватар.
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Жёсткий лимит на отправку кода: защита от email-бомбинга и перебора.
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
-  @Post('send-code')
-  @HttpCode(HttpStatus.OK)
-  async sendCode(@Body() sendCodeDto: SendCodeDto) {
-    await this.authService.sendVerificationCode(sendCodeDto.email);
-    return {
-      message: 'Код отправлен на email',
-    };
-  }
-
-  // Жёсткий лимит на проверку кода: защита от перебора 6-значного кода.
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
-  @Post('verify-code')
-  @HttpCode(HttpStatus.OK)
-  async verifyCode(
-    @Body() verifyCodeDto: VerifyCodeDto,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const { accessToken, refreshToken } = await this.authService.verifyCode(
-      verifyCodeDto.email,
-      verifyCodeDto.code,
-    );
-
-    this.setAuthCookies(response, accessToken, refreshToken);
-
-    return { message: 'Успешная авторизация' };
-  }
-
-  @Post('refresh')
-  @HttpCode(HttpStatus.OK)
-  async refresh(
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const refreshToken = request.cookies?.refreshToken;
-
-    if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token не найден');
-    }
-
-    const { accessToken, refreshToken: newRefreshToken } =
-      await this.authService.refreshTokens(refreshToken);
-
-    this.setAuthCookies(response, accessToken, newRefreshToken);
-
-    return { message: 'Токен обновлен' };
-  }
-
-  @Post('logout')
-  @HttpCode(HttpStatus.OK)
-  async logout(
-    @Req() request: Request,
-    @Res({ passthrough: true }) response: Response,
-  ) {
-    const refreshToken = request.cookies?.refreshToken;
-
-    if (refreshToken) {
-      await this.authService.logout(refreshToken);
-    }
-
-    // Удаляем обе куки (настройки должны совпадать с установкой)
-    const opts = this.cookieOptions();
-    response.clearCookie('accessToken', opts);
-    response.clearCookie('refreshToken', opts);
-
-    return {
-      message: 'Выход выполнен',
-    };
-  }
-
-  /**
-   * Общие опции для auth-кук. SameSite управляется через COOKIE_SAMESITE
-   * (lax по умолчанию; none — для cross-site фронта, напр. Vercel).
-   */
-  private cookieOptions() {
-    return authCookieOptions();
-  }
-
-  /**
-   * Ставит access (15 мин — короткоживущий) и refresh (7 дней) в httpOnly куки.
-   * В тело ответа токены не попадают: JavaScript страницы не должен их видеть.
-   */
-  private setAuthCookies(
-    response: Response,
-    accessToken: string,
-    refreshToken: string,
-  ) {
-    const opts = this.cookieOptions();
-    response.cookie('accessToken', accessToken, {
-      ...opts,
-      maxAge: 15 * 60 * 1000, // 15 минут
-    });
-    response.cookie('refreshToken', refreshToken, {
-      ...opts,
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 дней
-    });
-  }
-
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async getProfile(@Req() request: any) {
     return request.user;
   }
 
   @Put('profile')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async updateProfile(
     @Req() request: any,
     @Body(ValidationPipe) dto: UpdateProfileDto,
@@ -146,7 +40,7 @@ export class AuthController {
   }
 
   @Put('delivery-location')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async updateDeliveryLocation(
     @Req() request: any,
     @Body(ValidationPipe) dto: UpdateDeliveryLocationDto,
@@ -159,7 +53,7 @@ export class AuthController {
    * POST /api/auth/avatar  (multipart, field: "avatar")
    */
   @Post('avatar')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   @UseInterceptors(
     FileInterceptor('avatar', {
       limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
@@ -189,7 +83,7 @@ export class AuthController {
    * DELETE /api/auth/avatar
    */
   @Delete('avatar')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async removeAvatar(@Req() request: any) {
     return this.authService.removeAvatar(request.user.id);
   }

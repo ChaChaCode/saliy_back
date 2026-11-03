@@ -18,7 +18,7 @@ import {
   ValidateCartDto,
   MergeCartDto,
 } from './cart.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CustomerAuthGuard } from '../auth/guards/customer-auth.guard';
 
 @Controller('cart')
 export class CartController {
@@ -31,7 +31,7 @@ export class CartController {
    * GET /api/cart
    */
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async getCart(@Req() req: any) {
     return this.cartService.getCart(req.user.id);
   }
@@ -41,7 +41,7 @@ export class CartController {
    * POST /api/cart/items
    */
   @Post('items')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async addToCart(@Req() req: any, @Body() dto: AddToCartDto) {
     return this.cartService.addToCart(req.user.id, dto);
   }
@@ -51,7 +51,7 @@ export class CartController {
    * PATCH /api/cart/items/:id
    */
   @Patch('items/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async updateCartItem(
     @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
@@ -65,7 +65,7 @@ export class CartController {
    * DELETE /api/cart/items/:id
    */
   @Delete('items/:id')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async removeFromCart(
     @Req() req: any,
     @Param('id', ParseIntPipe) id: number,
@@ -78,7 +78,7 @@ export class CartController {
    * DELETE /api/cart
    */
   @Delete()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async clearCart(@Req() req: any) {
     return this.cartService.clearCart(req.user.id);
   }
@@ -104,7 +104,7 @@ export class CartController {
    * Используется при входе пользователя
    */
   @Post('merge')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async mergeCart(@Req() req: any, @Body() dto: MergeCartDto) {
     return this.cartService.mergeCart(req.user.id, dto.items);
   }

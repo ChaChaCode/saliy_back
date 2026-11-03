@@ -71,12 +71,12 @@
 
 ### 1. Авторизация
 
-Двухшаговая авторизация по email-коду:
+Двухшаговая авторизация по email-коду через Better Auth (подробно — [better-auth.md](./better-auth.md)):
 
-1. **POST** `/api/auth/send-code` — отправить код на email (тело: `email`).
-2. **POST** `/api/auth/verify-code` — подтвердить код (тело: `email`, `code`).
+1. **POST** `/api/session/email-otp/send-verification-otp` — отправить код на email (тело: `email`, `type: sign-in`).
+2. **POST** `/api/session/sign-in/email-otp` — войти по коду (тело: `email`, `otp`).
 
-После успешного `verify-code` сервер устанавливает токены в httpOnly cookie (`accessToken`, `refreshToken`). Браузер отправляет их автоматически при последующих запросах — вручную добавлять заголовок не нужно. Заголовок `Authorization` не принимается.
+После входа сервер ставит httpOnly-куку сессии. Браузер отправляет её автоматически — вручную добавлять заголовок не нужно. Заголовок `Authorization` не принимается.
 
 ### 2. Получить товары
 
@@ -92,7 +92,7 @@
 
 ### Авторизация
 
-Токен доступа хранится в httpOnly cookie `accessToken` и отправляется браузером автоматически при каждом запросе к API. Заголовок `Authorization` не принимается: токен не должен попадать в JavaScript страницы.
+Сессия покупателя хранится в httpOnly-куке Better Auth и отправляется браузером автоматически при каждом запросе к API. Заголовок `Authorization` не принимается: токен не должен попадать в JavaScript страницы.
 
 ### Пагинация
 
@@ -148,8 +148,7 @@
 ## Безопасность
 
 - HTTPS обязателен
-- Access Token: 15 минут, httpOnly cookie `accessToken`
-- Refresh Token: 7 дней, httpOnly cookie `refreshToken`
+- Сессия покупателя: 7 дней с продлением, подписанная httpOnly + Secure кука (Better Auth)
 - SQL-инъекции предотвращены через Prisma ORM
 - Rate limiting на критичных операциях
 - Валидация всех входящих данных

@@ -45,9 +45,6 @@ model User {
   // Почтовая доставка (если deliveryType = POST)
   deliveryCountryCode String? @map("delivery_country_code") // Код страны (US, PL, RU, etc)
   fullAddress         String? @map("full_address") // Полный адрес одной строкой
-
-  refreshTokens     RefreshToken[]
-  verificationCodes VerificationCode[]
   authSessions      Session[]
   authAccounts      Account[]
   orders            Order[]
@@ -55,39 +52,10 @@ model User {
   promoCodeUsages   PromoCodeUsage[]
 }
 
-model VerificationCode {
-  id        String   @id @default(uuid())
-  code      String
-  email     String
-  expiresAt DateTime
-  verified  Boolean  @default(false)
-  // Кол-во неудачных попыток ввода этого кода. При достижении лимита код
-  // инвалидируется — защита от перебора 6-значного кода.
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now())
-
-  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String?
-
-  @@index([email, verified])
-}
-
-model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  @@index([userId])
-}
-
 // ==================== Better Auth ====================
 // Вход покупателей по коду из письма (плагин Email OTP). Таблицы с префиксом
-// auth_, чтобы не путать со старыми RefreshToken и VerificationCode, которые
-// удаляются после перехода витрины.
+// auth_. Прежние таблицы входа RefreshToken и VerificationCode
+// удалены 04.11.2026 после перехода витрины.
 
 model Session {
   id        String   @id

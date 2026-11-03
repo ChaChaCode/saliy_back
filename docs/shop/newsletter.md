@@ -22,7 +22,7 @@
 
 **Content-Type:** `application/json`
 
-**Авторизация:** требуется (httpOnly cookie `accessToken`).
+**Авторизация:** требуется (сессия Better Auth в httpOnly-куке).
 
 **Rate limit:** 5 запросов в минуту с одного IP — защита от спама.
 

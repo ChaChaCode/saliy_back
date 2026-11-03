@@ -16,13 +16,7 @@ function setup(user: {
       update: jest.fn().mockImplementation(({ data }) => data),
     },
   };
-  const service = new AuthService(
-    prisma as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-  );
+  const service = new AuthService(prisma as any, {} as any, {} as any);
   return { service, prisma };
 }
 

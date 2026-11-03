@@ -1,17 +1,12 @@
 import {
   Injectable,
-  UnauthorizedException,
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
-import { EmailService } from '../common/email/email.service';
 import { DeliveryService } from '../delivery/delivery.service';
 import { UpdateDeliveryLocationDto } from './dto/update-delivery-location.dto';
 import { S3StorageService } from '../common/storage/s3-storage.service';
-import { getAccessSecret } from '../common/utils/jwt-secrets';
-import * as crypto from 'crypto';
 
 /**
  * Дата рождения хранится в UTC midnight. Возвращаем фронту строку DD.MM.YYYY,
@@ -27,235 +22,19 @@ export function formatBirthdate(date: Date | null | undefined): string | null {
   return `${dd}.${mm}.${yyyy}`;
 }
 
-/** SHA-256 от refresh-токена: токен — 64 случайных байта, соль не нужна. */
-function hashRefreshToken(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
-
-/**
- * Значения для поиска токена в БД: хэш и, временно, сам токен — записи,
- * созданные до хранения хэшей (3 ноября 2026). Через 7 дней все такие
- * записи истекут, и открытый вариант можно убрать.
- */
-function refreshTokenLookup(token: string): string[] {
-  return [hashRefreshToken(token), token];
-}
-
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
     private prisma: PrismaService,
-    private jwtService: JwtService,
-    private emailService: EmailService,
     private deliveryService: DeliveryService,
     private s3: S3StorageService,
   ) {}
 
-  // Максимум неудачных попыток ввода кода на email до его инвалидации.
-  // Это и есть основная защита от перебора: даже 4-значный код (9000 вариантов)
-  // не подобрать за 10 попыток, пока он живёт (10 минут).
-  private static readonly MAX_CODE_ATTEMPTS = 10;
-
-  private generateCode(): string {
-    // 4-значный код (1000–9999), но через криптостойкий crypto.randomInt
-    // вместо предсказуемого Math.random(). Перебор закрыт лимитом попыток.
-    return crypto.randomInt(1000, 10000).toString();
-  }
-
   /** Подмешать birthdateFormatted к user-объекту перед отдачей. */
   private withFormattedBirthdate<T extends { birthdate?: Date | null }>(user: T): T & { birthdateFormatted: string | null } {
     return { ...user, birthdateFormatted: formatBirthdate(user?.birthdate) };
-  }
-
-  async sendVerificationCode(email: string): Promise<void> {
-    // Проверяем последний отправленный код для этого email
-    const lastCode = await this.prisma.verificationCode.findFirst({
-      where: { email },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    // Если код был отправлен менее минуты назад, возвращаем ошибку
-    if (lastCode) {
-      const timeSinceLastCode = Date.now() - lastCode.createdAt.getTime();
-      const oneMinute = 60 * 1000; // 1 минута в миллисекундах
-
-      if (timeSinceLastCode < oneMinute) {
-        const secondsLeft = Math.ceil((oneMinute - timeSinceLastCode) / 1000);
-        throw new BadRequestException(
-          `Код уже был отправлен. Повторная отправка возможна через ${secondsLeft} секунд`,
-        );
-      }
-    }
-
-    // Генерируем 6-значный код
-    const code = this.generateCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
-
-    // Инвалидируем старые коды
-    await this.prisma.verificationCode.updateMany({
-      where: { email, verified: false },
-      data: { verified: true },
-    });
-
-    // Создаем новый код
-    await this.prisma.verificationCode.create({
-      data: {
-        code,
-        email,
-        expiresAt,
-      },
-    });
-
-    // Отправляем код на email
-    await this.emailService.sendVerificationCode(email, code);
-  }
-
-  async verifyCode(
-    email: string,
-    code: string,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
-    // Берём последний активный код для этого email (не сам код из запроса —
-    // сравнение делаем ниже, чтобы считать неудачные попытки).
-    const active = await this.prisma.verificationCode.findFirst({
-      where: {
-        email,
-        verified: false,
-        expiresAt: { gte: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!active) {
-      throw new UnauthorizedException('Неверный или истекший код');
-    }
-
-    // Слишком много неудачных попыток → инвалидируем код (защита от перебора).
-    if (active.attempts >= AuthService.MAX_CODE_ATTEMPTS) {
-      await this.prisma.verificationCode.update({
-        where: { id: active.id },
-        data: { verified: true },
-      });
-      throw new UnauthorizedException(
-        'Превышено число попыток. Запросите новый код.',
-      );
-    }
-
-    // Неверный код → атомарно инкрементим счётчик попыток и отказываем.
-    if (active.code !== code) {
-      await this.prisma.verificationCode.update({
-        where: { id: active.id },
-        data: { attempts: { increment: 1 } },
-      });
-      throw new UnauthorizedException('Неверный или истекший код');
-    }
-
-    // Код верный → атомарно помечаем использованным. updateMany с условием
-    // verified:false гарантирует, что параллельные запросы не пройдут дважды
-    // (закрывает race condition — код одноразовый).
-    const used = await this.prisma.verificationCode.updateMany({
-      where: { id: active.id, verified: false },
-      data: { verified: true },
-    });
-    if (used.count === 0) {
-      throw new UnauthorizedException('Неверный или истекший код');
-    }
-
-    // Находим или создаем пользователя
-    let user = await this.prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (!user) {
-      user = await this.prisma.user.create({
-        // Почта подтверждена кодом — поле нужно Better Auth.
-        data: { email, emailVerified: true },
-      });
-    }
-
-    // Привязываем гостевые заказы, оформленные на эту (теперь подтверждённую)
-    // почту, к пользователю — чтобы они появились в его «Моих заказах».
-    // Email подтверждён кодом, поэтому привязка безопасна.
-    try {
-      const linked = await this.prisma.order.updateMany({
-        where: { email, userId: null },
-        data: { userId: user.id },
-      });
-      if (linked.count > 0) {
-        this.logger.log(
-          `Привязано гостевых заказов к пользователю ${user.id} (${email}): ${linked.count}`,
-        );
-      }
-    } catch (error: any) {
-      this.logger.error(
-        `Не удалось привязать гостевые заказы для ${email}: ${error.message}`,
-      );
-      // Не падаем — вход важнее
-    }
-
-    // Генерируем токены
-    return this.generateTokens(user.id, user.email);
-  }
-
-  private async generateTokens(
-    userId: string,
-    email: string,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
-    const payload = { sub: userId, email };
-
-    // Access token на 15 минут
-    const accessToken = this.jwtService.sign(payload, {
-      secret: getAccessSecret(),
-      expiresIn: '15m',
-    });
-
-    // Refresh token на 7 дней
-    const refreshToken = crypto.randomBytes(64).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    // В БД — только хэш: утечка дампа не даёт войти под покупателем.
-    await this.prisma.refreshToken.create({
-      data: {
-        token: hashRefreshToken(refreshToken),
-        userId,
-        expiresAt,
-      },
-    });
-
-    return { accessToken, refreshToken };
-  }
-
-  async refreshTokens(
-    refreshToken: string,
-  ): Promise<{ accessToken: string; refreshToken: string }> {
-    const tokenData = await this.prisma.refreshToken.findFirst({
-      where: { token: { in: refreshTokenLookup(refreshToken) } },
-      include: { user: true },
-    });
-
-    if (!tokenData || tokenData.expiresAt < new Date()) {
-      throw new UnauthorizedException('Недействительный refresh token');
-    }
-
-    // Удаляем старый refresh token атомарно: из двух параллельных запросов
-    // с одним токеном новую пару получит только один, второй — 401, не 500.
-    const { count } = await this.prisma.refreshToken.deleteMany({
-      where: { id: tokenData.id },
-    });
-    if (count === 0) {
-      throw new UnauthorizedException('Недействительный refresh token');
-    }
-
-    // Генерируем новые токены
-    return this.generateTokens(tokenData.user.id, tokenData.user.email);
-  }
-
-  async logout(refreshToken: string): Promise<void> {
-    // Удаляем refresh token из БД
-    await this.prisma.refreshToken.deleteMany({
-      where: { token: { in: refreshTokenLookup(refreshToken) } },
-    });
   }
 
   async validateUser(userId: string) {

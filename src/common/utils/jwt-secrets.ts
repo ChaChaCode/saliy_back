@@ -23,10 +23,6 @@ function requireSecret(name: string): string {
   return value;
 }
 
-export function getAccessSecret(): string {
-  return requireSecret('JWT_ACCESS_SECRET');
-}
-
 export function getAdminSecret(): string {
   return requireSecret('JWT_ADMIN_SECRET');
 }

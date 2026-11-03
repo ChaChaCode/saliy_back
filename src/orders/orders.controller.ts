@@ -10,8 +10,8 @@ import {
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './orders.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
+import { CustomerAuthGuard } from '../auth/guards/customer-auth.guard';
+import { OptionalCustomerAuthGuard } from '../auth/guards/optional-customer-auth.guard';
 
 @Controller('orders')
 export class OrdersController {
@@ -59,7 +59,7 @@ export class OrdersController {
    * Доступно и гостям, и авторизованным
    */
   @Post()
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalCustomerAuthGuard)
   async createOrder(@Req() req: any, @Body() dto: CreateOrderDto) {
     const userId = req.user?.id; // Если авторизован - привязываем к пользователю
     return this.ordersService.createOrder(dto, userId);
@@ -75,7 +75,7 @@ export class OrdersController {
    * Иначе перебором предсказуемых номеров заказа сливались бы ПДн всех клиентов.
    */
   @Get(':orderNumber')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(OptionalCustomerAuthGuard)
   async getOrderByNumber(
     @Param('orderNumber') orderNumber: string,
     @Req() req: any,
@@ -93,7 +93,7 @@ export class OrdersController {
    * Только для авторизованных
    */
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(CustomerAuthGuard)
   async getUserOrders(@Req() req: any) {
     return this.ordersService.getUserOrders(req.user.id, req.user.email);
   }
