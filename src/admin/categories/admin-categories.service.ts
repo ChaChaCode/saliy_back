@@ -90,7 +90,10 @@ export class AdminCategoriesService {
     const category = await this.prisma.category.findUnique({
       where: { id },
       include: {
-        _count: { select: { products: true } },
+        // Удалённые (архивные) товары не мешают: их связи уйдут каскадом.
+        _count: {
+          select: { products: { where: { product: { deletedAt: null } } } },
+        },
       },
     });
     if (!category) {
