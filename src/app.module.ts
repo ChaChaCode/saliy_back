@@ -23,6 +23,7 @@ import { StorageModule } from './common/storage/storage.module';
 import { PaymentModule } from './payment/payment.module';
 import { BackupModule } from './backup/backup.module';
 import { HeaderBannerModule } from './header-banner/header-banner.module';
+import { StorefrontSyncModule } from './storefront-sync/storefront-sync.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { HeaderBannerModule } from './header-banner/header-banner.module';
     PaymentModule,
     BackupModule,
     HeaderBannerModule,
+    StorefrontSyncModule,
   ],
   controllers: [AppController],
   providers: [

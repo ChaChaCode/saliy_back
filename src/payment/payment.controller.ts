@@ -1,229 +1,55 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Query,
   Body,
-  Logger,
-  Res,
-  Req,
+  Controller,
+  ForbiddenException,
   HttpCode,
   Inject,
+  Logger,
+  Post,
+  Res,
   forwardRef,
+  BadRequestException,
 } from '@nestjs/common';
-import type { Response, Request } from 'express';
-import { Throttle } from '@nestjs/throttler';
-import { AlfaPayService } from './alfa-pay.service';
-import { YandexPayService } from './yandex-pay.service';
-import { TochkaPayService } from './tochka-pay.service';
+import type { Response } from 'express';
 import { OrdersService } from '../orders/orders.service';
+import { TbankPayService } from './tbank-pay.service';
 
 @Controller('payment')
 export class PaymentController {
   private readonly logger = new Logger(PaymentController.name);
-
   constructor(
-    private readonly alfaPayService: AlfaPayService,
-    private readonly yandexPayService: YandexPayService,
-    private readonly tochkaPayService: TochkaPayService,
+    private readonly tbank: TbankPayService,
     @Inject(forwardRef(() => OrdersService))
-    private readonly ordersService: OrdersService,
+    private readonly orders: OrdersService,
   ) {}
-
-  /**
-   * Callback от Alfa Bank — вызывается банком GET-запросом после изменения статуса платежа.
-   * Query-параметры: mdOrder, orderNumber, operation, status, checksum
-   * Подпись не проверяем (требует отдельного ключа) — подтверждаем статус обратным запросом.
-   *
-   * GET /api/payment/alfa/callback
-   */
-  @Get('alfa/callback')
-  async handleAlfaCallback(
-    @Query('mdOrder') mdOrder: string,
-    @Query('orderNumber') orderNumber: string,
-    @Query('operation') operation: string,
-    @Query('status') status: string,
-    @Res() res: Response,
-  ) {
-    this.logger.log(
-      `Alfa callback: orderNumber=${orderNumber}, mdOrder=${mdOrder}, operation=${operation}, status=${status}`,
-    );
-
-    if (orderNumber || mdOrder) {
-      try {
-        const { mappedStatus } = await this.alfaPayService.getOrderStatus({
-          orderId: mdOrder,
-          orderNumber,
-        });
-        if (orderNumber) {
-          await this.ordersService.updatePaymentStatus(orderNumber, mappedStatus);
-        }
-      } catch (error: any) {
-        this.logger.error(`Ошибка обработки Alfa callback: ${error.message}`);
-      }
-    }
-
-    res.status(200).send('OK');
-  }
-
-  /**
-   * Проверить статус платежа вручную (на случай если callback потерялся)
-   * POST /api/payment/alfa/check-status
-   * body: { orderNumber: string }
-   */
-  @Post('alfa/check-status')
+  @Post('tbank/webhook')
   @HttpCode(200)
-  async checkAlfaPaymentStatus(@Body() body: { orderNumber: string }) {
-    const { orderStatus, mappedStatus } = await this.alfaPayService.getOrderStatus({
-      orderNumber: body.orderNumber,
-    });
-    await this.ordersService.updatePaymentStatus(body.orderNumber, mappedStatus);
-    return { orderNumber: body.orderNumber, orderStatus, status: mappedStatus };
-  }
-
-  /**
-   * Webhook от Яндекс Пэй — приходит как application/octet-stream с JWT внутри.
-   * Подпись (ES256) пока не проверяем — вместо этого pull-ом подтверждаем статус через API.
-   *
-   * POST /api/payment/yandex/webhook
-   */
-  // Жёсткий rate-limit: webhook без подписи, защита от флуда фейками к API банка.
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
-  @Post('yandex/webhook')
-  @HttpCode(200)
-  async handleYandexPayWebhook(@Req() req: Request) {
-    const rawBody: any = (req as any).body;
-    let payload: any = null;
-
-    try {
-      // Multer/express по умолчанию парсит JSON. Если пришёл application/octet-stream — будет Buffer/строка.
-      if (Buffer.isBuffer(rawBody)) {
-        payload = this.decodeJwtPayload(rawBody.toString('utf8'));
-      } else if (typeof rawBody === 'string') {
-        payload = this.decodeJwtPayload(rawBody);
-      } else if (rawBody?.event) {
-        // Уже JSON (если когда-то Yandex начнёт слать в открытом виде)
-        payload = rawBody;
-      } else {
-        this.logger.warn(`Yandex webhook: неподдерживаемый формат тела`);
-        return { status: 'success' };
+  async webhook(@Body() body: Record<string, unknown>, @Res() res: Response) {
+    if (!body || !this.tbank.verifyNotification(body)) {
+      // Только имена и типы полей: значения (Pan, Token) в лог не пишем.
+      if (body && typeof body === 'object') {
+        const shape = Object.keys(body)
+          .sort()
+          .map((key) => {
+            const v = body[key];
+            const type =
+              v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
+            return `${key}:${type}`;
+          })
+          .join(',');
+        this.logger.warn(
+          `Т-Банк webhook: неверная подпись; Status=${String(body.Status)}, ` +
+            `TerminalKey=${String(body.TerminalKey)}, поля=${shape}`,
+        );
       }
-    } catch (error: any) {
-      this.logger.error(`Yandex webhook: не смог разобрать JWT: ${error.message}`);
-      return { status: 'success' };
+      throw new ForbiddenException('Неверная подпись');
     }
-
-    this.logger.log(`Yandex Pay webhook event: ${payload?.event}`);
-
     if (
-      payload?.event === 'ORDER_STATUS_UPDATED' ||
-      payload?.event === 'OPERATION_STATUS_UPDATED'
-    ) {
-      // orderId в payload — это наш orderNumber, который мы передавали при регистрации
-      const orderNumber: string | undefined =
-        payload?.order?.orderId || payload?.operation?.orderId;
-      if (orderNumber) {
-        try {
-          // Не доверяем телу webhook — переспрашиваем статус у API Яндекса.
-          await this.ordersService.confirmYandexByApi(orderNumber);
-        } catch (error: any) {
-          this.logger.error(`Yandex webhook: ошибка подтверждения: ${error.message}`);
-        }
-      }
-    }
-
-    return { status: 'success' };
-  }
-
-  /**
-   * Ручная синхронизация статуса заказа в Яндекс Пэй
-   * POST /api/payment/yandex/check-status
-   * body: { orderNumber: string }
-   */
-  @Post('yandex/check-status')
-  @HttpCode(200)
-  async checkYandexPayStatus(@Body() body: { orderNumber: string }) {
-    const { rawStatus, mappedStatus } = await this.yandexPayService.getOrderStatus(
-      body.orderNumber,
-    );
-    await this.ordersService.updatePaymentStatus(body.orderNumber, mappedStatus);
-    return {
-      orderNumber: body.orderNumber,
-      yandexStatus: rawStatus,
-      status: mappedStatus,
-    };
-  }
-
-  /**
-   * JWT-токен в формате header.payload.signature — берём payload (base64url) и парсим JSON.
-   * Подпись пока не проверяем (требует ES256-публичного ключа Яндекса).
-   */
-  private decodeJwtPayload(token: string): any {
-    const trimmed = token.trim();
-    const parts = trimmed.split('.');
-    if (parts.length < 2) {
-      throw new Error('not a JWT');
-    }
-    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
-    const json = Buffer.from(padded, 'base64').toString('utf8');
-    return JSON.parse(json);
-  }
-
-  /**
-   * Webhook от Tochka Pay (СБП) об изменении статуса платежа.
-   * Тело может прийти как JSON или как подписанный JWT (text/plain).
-   * orderNumber передавали в metadata при создании QR — берём оттуда.
-   * Статус оплаты: payload.status.value === 'COMPLETED'.
-   *
-   * POST /api/payment/tochka/webhook
-   */
-  // Жёсткий rate-limit: webhook без подписи, защита от флуда фейками к API банка.
-  @Throttle({ default: { limit: 20, ttl: 60000 } })
-  @Post('tochka/webhook')
-  @HttpCode(200)
-  async handleTochkaWebhook(@Req() req: Request) {
-    const rawBody: any = (req as any).body;
-    let data: any = null;
-
-    try {
-      if (Buffer.isBuffer(rawBody)) {
-        const s = rawBody.toString('utf8').trim();
-        data = s.startsWith('{') ? JSON.parse(s) : this.decodeJwtPayload(s);
-      } else if (typeof rawBody === 'string') {
-        const s = rawBody.trim();
-        data = s.startsWith('{') ? JSON.parse(s) : this.decodeJwtPayload(s);
-      } else if (rawBody && typeof rawBody === 'object') {
-        data = rawBody;
-      } else {
-        this.logger.warn('Tochka webhook: неподдерживаемый формат тела');
-        return { status: 'success' };
-      }
-    } catch (error: any) {
-      this.logger.error(`Tochka webhook: не смог разобрать тело: ${error.message}`);
-      return { status: 'success' };
-    }
-
-    this.logger.log(`Tochka webhook type: ${data?.webhookType}, status: ${data?.status}`);
-
-    // Интернет-эквайринг Точки: webhookType=acquiringInternetPayment,
-    // наш orderNumber приходит как paymentLinkId, статус — плоское поле status.
-    if (data?.webhookType !== 'acquiringInternetPayment') {
-      return { status: 'success' };
-    }
-
-    const orderNumber: string | undefined = data?.paymentLinkId;
-
-    // НЕ доверяем статусу из тела webhook (его можно подделать). Webhook — лишь
-    // триггер: переспрашиваем реальный статус у API Точки по operationId.
-    if (orderNumber) {
-      try {
-        await this.ordersService.confirmTochkaByApi(orderNumber);
-      } catch (error: any) {
-        this.logger.error(`Tochka webhook: ошибка подтверждения: ${error.message}`);
-      }
-    }
-
-    return { status: 'success' };
+      typeof body.OrderId !== 'string' ||
+      !['string', 'number'].includes(typeof body.PaymentId)
+    )
+      throw new BadRequestException('Некорректное уведомление');
+    await this.orders.confirmTbankByApi(body.OrderId, String(body.PaymentId));
+    res.status(200).type('text/plain').send('OK');
   }
 }

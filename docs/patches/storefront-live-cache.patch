@@ -1,0 +1,74 @@
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index e774455..b230ae9 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -119,10 +119,7 @@ async function request<T>(
+ 		headers: await buildHeaders(body, opts?.auth ?? false, opts?.headers),
+ 		body: body !== undefined ? JSON.stringify(body) : undefined,
+ 		signal: opts?.signal,
+-		...(isServer &&
+-			(opts?.revalidate !== undefined
+-				? { next: { revalidate: opts.revalidate } }
+-				: { cache: 'no-store' as const }))
++		cache: 'no-store'
+ 	})
+ 
+ 	if (
+diff --git a/src/providers/QueryProvider.tsx b/src/providers/QueryProvider.tsx
+index 15cc5ec..8881028 100644
+--- a/src/providers/QueryProvider.tsx
++++ b/src/providers/QueryProvider.tsx
+@@ -2,21 +2,51 @@
+ 
+ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+-import { ReactNode, useState } from 'react'
++import { useRouter } from 'next/navigation'
++import { ReactNode, useEffect, useState } from 'react'
+ 
+ export default function QueryProvider({ children }: { children: ReactNode }) {
++	const router = useRouter()
+ 	const [queryClient] = useState(
+ 		() =>
+ 			new QueryClient({
+ 				defaultOptions: {
+ 					queries: {
+-						staleTime: 5 * 60 * 1000,
++						staleTime: 0,
+ 						retry: 1
+ 					}
+ 				}
+ 			})
+ 	)
+ 
++	useEffect(() => {
++		let timer: ReturnType<typeof setTimeout> | undefined
++		let connected = false
++		const refresh = () => {
++			if (document.visibilityState !== 'visible') return
++			clearTimeout(timer)
++			timer = setTimeout(() => {
++				void queryClient.invalidateQueries()
++				router.refresh()
++			}, 150)
++		}
++		const events = new EventSource('/api/storefront/changes')
++		events.addEventListener('change', refresh)
++		events.onopen = () => {
++			// Reconnects may have missed writes while offline or during a deploy.
++			if (connected) refresh()
++			connected = true
++		}
++		window.addEventListener('focus', refresh)
++		document.addEventListener('visibilitychange', refresh)
++		return () => {
++			clearTimeout(timer)
++			events.close()
++			window.removeEventListener('focus', refresh)
++			document.removeEventListener('visibilitychange', refresh)
++		}
++	}, [queryClient, router])
++
+ 	return (
+ 		<QueryClientProvider client={queryClient}>
+ 			{children}

@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
-import { raw } from 'express';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import helmet from 'helmet';
@@ -33,7 +32,18 @@ async function bootstrap() {
   );
 
   // Gzip-сжатие ответов API (JSON). Статику фронта/админки сжимает nginx.
-  app.use(compression());
+  app.use(
+    compression({
+      filter: (req, res) =>
+        req.path !== '/api/storefront/changes' && compression.filter(req, res),
+    }),
+  );
+
+  // API data must be fresh after writes; static assets keep their own policy.
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
 
   // Включаем CORS.
   // Список разрешённых origin берётся из CORS_ORIGINS (через запятую).
@@ -70,20 +80,6 @@ async function bootstrap() {
 
   // Подключаем cookie parser
   app.use(cookieParser());
-
-  // Yandex Pay webhook приходит как application/octet-stream (JWT внутри) — нужен raw-парсер.
-  // Применяем точечно к webhook-маршруту, чтобы не сломать остальные эндпоинты.
-  app.use(
-    '/api/payment/yandex/webhook',
-    raw({ type: 'application/octet-stream', limit: '1mb' }),
-  );
-
-  // Tochka Pay webhook может прийти как text/plain (подписанный JWT) — raw-парсер.
-  // JSON-вариант парсится стандартно, его этот middleware не трогает.
-  app.use(
-    '/api/payment/tochka/webhook',
-    raw({ type: 'text/plain', limit: '1mb' }),
-  );
 
   // Раздача статических файлов (загруженные изображения)
   app.useStaticAssets(join(process.cwd(), 'uploads'), {

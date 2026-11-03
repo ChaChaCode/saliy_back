@@ -25,15 +25,16 @@ export class OrdersController {
   async getDeliveryOptions(@Query('country') countryCode: string) {
     // Почтовая доставка (STANDARD) доступна для любой страны.
     // Для России и Беларуси дополнительно доступен самовывоз из ПВЗ CDEK.
-    const isRussiaBelarus = ['RU', 'BY', 'RUS', 'BLR'].includes(countryCode?.toUpperCase());
+    const isRussiaBelarus = ['RU', 'BY', 'RUS', 'BLR'].includes(
+      countryCode?.toUpperCase(),
+    );
 
     const deliveryTypes = isRussiaBelarus
       ? ['CDEK_PICKUP', 'STANDARD']
       : ['STANDARD'];
 
-    // Доступные способы оплаты: Точка (СБП/карта) и Яндекс Сплит.
-    // Альфа (CARD_ONLINE) отключена — код сервиса остаётся, но в выбор не попадает.
-    const paymentMethods = ['SBP_TOCHKA', 'YANDEX_PAY'];
+    // Единственный способ оплаты: Т-Банк.
+    const paymentMethods = ['CARD_ONLINE'];
 
     return {
       deliveryTypes,

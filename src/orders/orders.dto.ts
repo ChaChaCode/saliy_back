@@ -1,5 +1,6 @@
 import {
   IsString,
+  IsIn,
   IsEmail,
   IsArray,
   IsInt,
@@ -56,7 +57,7 @@ export class CreateOrderDto {
   deliveryType: DeliveryType;
 
   // Метод оплаты
-  @IsEnum(PaymentMethod)
+  @IsIn([PaymentMethod.CARD_ONLINE])
   paymentMethod: PaymentMethod;
 
   // Адрес (опционально, зависит от типа доставки)

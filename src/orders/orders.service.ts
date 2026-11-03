@@ -1,3 +1,4 @@
+import { TbankPayService } from '../payment/tbank-pay.service';
 import {
   Injectable,
   BadRequestException,
@@ -13,10 +14,7 @@ import { EmailService } from '../common/email/email.service';
 import { PromoService } from '../promo/promo.service';
 import { CartService } from '../cart/cart.service';
 import { AdminSettingsService } from '../admin/settings/admin-settings.service';
-import { AlfaPayService } from '../payment/alfa-pay.service';
 import { pickMainImage } from '../common/utils/product-image.util';
-import { YandexPayService } from '../payment/yandex-pay.service';
-import { TochkaPayService } from '../payment/tochka-pay.service';
 import { DeliveryService } from '../delivery/delivery.service';
 
 @Injectable()
@@ -30,12 +28,7 @@ export class OrdersService {
     @Inject(forwardRef(() => PromoService))
     private readonly promoService: PromoService,
     private readonly settingsService: AdminSettingsService,
-    @Inject(forwardRef(() => AlfaPayService))
-    private readonly alfaPayService: AlfaPayService,
-    @Inject(forwardRef(() => YandexPayService))
-    private readonly yandexPayService: YandexPayService,
-    @Inject(forwardRef(() => TochkaPayService))
-    private readonly tochkaPayService: TochkaPayService,
+    private readonly tbankPayService: TbankPayService,
     private readonly deliveryService: DeliveryService,
   ) {}
 
@@ -44,6 +37,8 @@ export class OrdersService {
    * ВАЖНО: Валидация товаров и цен на сервере!
    */
   async createOrder(dto: CreateOrderDto, userId?: string) {
+    if (dto.paymentMethod !== PaymentMethod.CARD_ONLINE)
+      throw new BadRequestException('Доступна только оплата через Т-Банк');
     const { items, promoCode, ...orderInfo } = dto;
 
     // 🔒 ШАГ 0: ВАЛИДАЦИЯ АДРЕСА ДОСТАВКИ
@@ -78,6 +73,7 @@ export class OrdersService {
     // 🔒 ШАГ 3: ПРИМЕНЕНИЕ ПРОМОКОДА (если есть)
     let discountAmount = 0;
     let promoCodeId: number | undefined;
+    let isFreeDelivery = false;
     if (promoCode) {
       const promoResult = await this.applyPromoCode(
         promoCode,
@@ -87,14 +83,17 @@ export class OrdersService {
       );
       discountAmount = promoResult.discountAmount;
       promoCodeId = promoResult.promoCodeId;
+      isFreeDelivery = promoResult.isFreeDelivery;
     }
 
-    // 🔒 ШАГ 4: РАСЧЕТ ДОСТАВКИ
-    const deliveryPrice = await this.calculateDeliveryPrice(
-      dto.deliveryType,
-      dto.cdekCityCode,
-      validatedItems,
-    );
+    // 🔒 ШАГ 4: РАСЧЕТ ДОСТАВКИ (промокод FREE_DELIVERY обнуляет её)
+    const deliveryPrice = isFreeDelivery
+      ? 0
+      : await this.calculateDeliveryPrice(
+          dto.deliveryType,
+          dto.cdekCityCode,
+          validatedItems,
+        );
 
     // ШАГ 4.5: АДРЕС ПВЗ ДЛЯ САМОВЫВОЗА CDEK
     // У самовывоза фронт присылает только код ПВЗ (pickupPoint) — улицы/города нет.
@@ -107,8 +106,10 @@ export class OrdersService {
         );
         if (pvz) {
           orderInfo.cityName = orderInfo.cityName || pvz.city || undefined;
-          orderInfo.regionName = orderInfo.regionName || pvz.region || undefined;
-          orderInfo.postalCode = orderInfo.postalCode || pvz.postalCode || undefined;
+          orderInfo.regionName =
+            orderInfo.regionName || pvz.region || undefined;
+          orderInfo.postalCode =
+            orderInfo.postalCode || pvz.postalCode || undefined;
           orderInfo.street = orderInfo.street || pvz.addressFull || undefined;
         }
       } catch (error: any) {
@@ -122,18 +123,7 @@ export class OrdersService {
     // 🔒 ШАГ 5: ИТОГОВАЯ СУММА
     const total = subtotal - discountAmount + deliveryPrice;
 
-    // Для онлайн-оплат (Alfa, Yandex Pay) заказ создаётся в PENDING.
-    // Остальные методы (CARD_MANUAL, CRYPTO, PAYPAL) — помечаем оплаченным сразу.
-    const isAlfaOnline = dto.paymentMethod === PaymentMethod.CARD_ONLINE;
-    const isYandexPay = dto.paymentMethod === PaymentMethod.YANDEX_PAY;
-    const isTochkaSbp = dto.paymentMethod === PaymentMethod.SBP_TOCHKA;
-    const isOnlinePayment = isAlfaOnline || isYandexPay || isTochkaSbp;
-
-    // Альфа (CARD_ONLINE) отключена. Не доверяем клиенту: даже если фронт пришлёт
-    // этот метод, заказ оформить нельзя. Доступны только Точка и Яндекс Сплит.
-    if (isAlfaOnline) {
-      throw new BadRequestException('Этот способ оплаты недоступен');
-    }
+    const isOnlinePayment = true;
 
     // 🔒 ШАГ 6: СОЗДАНИЕ ЗАКАЗА В ТРАНЗАКЦИИ
     const order = await this.prisma.$transaction(async (tx) => {
@@ -186,7 +176,9 @@ export class OrdersService {
     // 🔒 ШАГ 8: ЗАПИСЬ ИСПОЛЬЗОВАНИЯ ПРОМОКОДА
     if (promoCodeId) {
       await this.promoService.usePromoCode(promoCodeId, userId, order.id);
-      this.logger.log(`Промокод записан в историю использования для заказа ${order.orderNumber}`);
+      this.logger.log(
+        `Промокод записан в историю использования для заказа ${order.orderNumber}`,
+      );
     }
 
     // 🔒 ШАГ 8.5: РЕГИСТРАЦИЯ ПЛАТЕЖА (если оплата онлайн)
@@ -197,135 +189,33 @@ export class OrdersService {
       const failUrl = `${frontendBase}/order/${order.orderNumber}?payment=fail`;
 
       try {
-        if (isAlfaOnline) {
-          const alfa = await this.alfaPayService.registerOrder({
-            orderNumber: order.orderNumber,
-            amount: total,
-            description: `Заказ ${order.orderNumber}`,
-            email: orderInfo.email,
-            returnUrl: successUrl,
-            failUrl,
-          });
-          paymentUrl = alfa.formUrl;
-          await this.prisma.order.update({
-            where: { id: order.id },
-            data: { paymentId: alfa.orderId },
-          });
-        } else if (isYandexPay) {
-          // Яндекс требует cart.total = items_sum − discounts_sum.
-          // Добавляем доставку отдельной строкой, промокод — через discount.
-          const yandexItems = validatedItems.map((item) => ({
-            productId: String(item.productId),
-            title: item.productName,
-            quantity: item.quantity,
-            unitPrice: item.finalPrice,
-          }));
-          if (deliveryPrice > 0) {
-            yandexItems.push({
-              productId: `delivery-${order.orderNumber}`,
-              title: 'Доставка',
-              quantity: 1,
-              unitPrice: deliveryPrice,
-            });
-          }
-
-          const yandex = await this.yandexPayService.registerOrder({
-            orderId: order.orderNumber,
-            amount: total,
-            description: `Заказ ${order.orderNumber}`,
-            redirectUrl: successUrl,
-            cancelUrl: failUrl,
-            cartItems: yandexItems,
-            ...(promoCode && discountAmount > 0
-              ? { discount: { code: promoCode, amount: discountAmount } }
-              : {}),
-          });
-          paymentUrl = yandex.paymentUrl;
-          if (yandex.yandexOrderId) {
-            await this.prisma.order.update({
-              where: { id: order.id },
-              data: { paymentId: yandex.yandexOrderId },
-            });
-          }
-        } else if (isTochkaSbp) {
-          const tochka = await this.tochkaPayService.registerOrder({
-            orderId: order.orderNumber,
-            amount: total,
-            description: `Заказ ${order.orderNumber}`,
-            redirectUrl: successUrl,
-            failRedirectUrl: failUrl,
-            // Ссылка живёт меньше, чем заказ до автоотмены (запас на обработку платежа).
-            ttlMinutes: this.getPaymentLinkTtlMin(),
-          });
-          paymentUrl = tochka.paymentUrl;
-          if (tochka.operationId) {
-            await this.prisma.order.update({
-              where: { id: order.id },
-              data: { paymentId: tochka.operationId },
-            });
-          }
-        }
+        const payment = await this.tbankPayService.registerOrder({
+          orderNumber: order.orderNumber,
+          amount: total,
+          successUrl,
+          failUrl,
+          ttlMinutes: this.getPaymentLinkTtlMin(),
+        });
+        paymentUrl = payment.paymentUrl;
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { paymentId: payment.paymentId },
+        });
       } catch (error: any) {
         this.logger.error(
           `Регистрация платежа (${dto.paymentMethod}) не удалась для ${order.orderNumber}: ${error.message}`,
         );
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: {
-            status: OrderStatus.PAYMENT_FAILED,
-            cancelReason: `Ошибка регистрации платежа (${dto.paymentMethod}): ${error.message}`.slice(0, 500),
-          },
-        });
+        await this.releaseUnpaidOrder(
+          order.orderNumber,
+          OrderStatus.PAYMENT_FAILED,
+          `Ошибка регистрации платежа (${dto.paymentMethod}): ${error.message}`.slice(
+            0,
+            500,
+          ),
+        );
         throw new BadRequestException(
           'Не удалось инициализировать платёж. Попробуйте позже.',
         );
-      }
-    }
-
-    // 🔒 ШАГ 9: ОТПРАВКА EMAIL-ЧЕКА
-    // Для онлайн-оплат (Точка, Яндекс) чек НЕ отправляем сейчас — заказ ещё PENDING,
-    // иначе клиент получит «успешный» чек до фактической оплаты. Чек уйдёт из
-    // updatePaymentStatus при подтверждении оплаты (webhook со статусом PAID).
-    // Для остальных методов (CARD_MANUAL, CRYPTO, PAYPAL) отправляем сразу.
-    if (!isOnlinePayment) {
-      try {
-        await this.emailService.sendOrderConfirmation(orderInfo.email, {
-          orderNumber: order.orderNumber,
-          firstName: orderInfo.firstName,
-          lastName: orderInfo.lastName,
-          items: validatedItems.map((item) => ({
-            name: item.productName,
-            size: item.size,
-            quantity: item.quantity,
-            price: item.finalPrice,
-          })),
-          originalSubtotal,
-          subtotal,
-          discountAmount,
-          promoCode: promoCode || null,
-          deliveryPrice,
-          total,
-          paymentMethod: orderInfo.paymentMethod,
-        });
-
-        this.logger.log(`Email-чек отправлен: ${orderInfo.email}`);
-      } catch (error) {
-        this.logger.error(`Не удалось отправить email: ${error.message}`);
-        // Не падаем, заказ уже создан
-      }
-    }
-
-    // 🔒 ШАГ 10: ОЧИСТКА КОРЗИНЫ
-    // Для онлайн-оплат (Альфа, Яндекс) очистка переехала в updatePaymentStatus —
-    // корзина чистится ТОЛЬКО когда платёж подтверждён. Если клиент ушёл с формы
-    // оплаты или платёж упал — корзина остаётся, чтобы можно было повторить заказ.
-    if (userId && !isOnlinePayment) {
-      try {
-        await this.cartService.clearCart(userId);
-        this.logger.log(`Корзина очищена для пользователя ${userId}`);
-      } catch (error) {
-        this.logger.error(`Не удалось очистить корзину: ${error.message}`);
-        // Не падаем, заказ уже создан
       }
     }
 
@@ -372,6 +262,7 @@ export class OrdersService {
 
     // 🔒 ШАГ 3: ПРИМЕНЕНИЕ ПРОМОКОДА (если есть)
     let discountAmount = 0;
+    let isFreeDelivery = false;
     if (promoCode) {
       const promoResult = await this.applyPromoCode(
         promoCode,
@@ -380,20 +271,23 @@ export class OrdersService {
         undefined, // userId не передается в calculateOrder
       );
       discountAmount = promoResult.discountAmount;
+      isFreeDelivery = promoResult.isFreeDelivery;
     }
 
-    // 🔒 ШАГ 4: РАСЧЕТ ДОСТАВКИ
-    const deliveryPrice = await this.calculateDeliveryPrice(
-      deliveryType,
-      cdekCityCode,
-      validatedItems,
-    );
+    // 🔒 ШАГ 4: РАСЧЕТ ДОСТАВКИ (промокод FREE_DELIVERY обнуляет её)
+    const deliveryPrice = isFreeDelivery
+      ? 0
+      : await this.calculateDeliveryPrice(
+          deliveryType,
+          cdekCityCode,
+          validatedItems,
+        );
 
     // 🔒 ШАГ 5: ИТОГОВАЯ СУММА
     const total = subtotal - discountAmount + deliveryPrice;
 
     return {
-      items: validatedItems.map(item => ({
+      items: validatedItems.map((item) => ({
         productId: item.productId,
         productName: item.productName,
         productSlug: item.productSlug,
@@ -457,7 +351,9 @@ export class OrdersService {
     let street = dto.street;
     if (dto.deliveryType === 'CDEK_PICKUP' && dto.pickupPoint) {
       try {
-        const pvz = await this.deliveryService.getCdekPickupPointByCode(dto.pickupPoint);
+        const pvz = await this.deliveryService.getCdekPickupPointByCode(
+          dto.pickupPoint,
+        );
         if (pvz) {
           cityName = cityName || pvz.city || undefined;
           regionName = regionName || pvz.region || undefined;
@@ -465,7 +361,9 @@ export class OrdersService {
           street = street || pvz.addressFull || undefined;
         }
       } catch (e: any) {
-        this.logger.error(`Ручной заказ: не подтянул ПВЗ ${dto.pickupPoint}: ${e.message}`);
+        this.logger.error(
+          `Ручной заказ: не подтянул ПВЗ ${dto.pickupPoint}: ${e.message}`,
+        );
       }
     }
 
@@ -519,7 +417,9 @@ export class OrdersService {
       return newOrder;
     });
 
-    this.logger.log(`Ручной заказ создан: ${order.orderNumber}, сумма ${total} RUB`);
+    this.logger.log(
+      `Ручной заказ создан: ${order.orderNumber}, сумма ${total} RUB`,
+    );
 
     // Если менеджер сразу отметил оплату — подтверждаем (чек, накладная CDEK).
     if (dto.paid) {
@@ -536,7 +436,9 @@ export class OrdersService {
    * 🔒 ВАЛИДАЦИЯ ТОВАРОВ ПЕРЕД ЗАКАЗОМ
    * Проверяет наличие, активность и остатки на складе
    */
-  private async validateOrderItems(items: { productId: number; size: string; quantity: number }[]) {
+  private async validateOrderItems(
+    items: { productId: number; size: string; quantity: number }[],
+  ) {
     const validatedItems: any[] = [];
 
     for (const item of items) {
@@ -546,9 +448,7 @@ export class OrdersService {
       });
 
       if (!product) {
-        throw new BadRequestException(
-          `Товар с ID ${item.productId} не найден`,
-        );
+        throw new BadRequestException(`Товар с ID ${item.productId} не найден`);
       }
 
       if (!product.isActive) {
@@ -642,7 +542,11 @@ export class OrdersService {
     subtotal: number,
     validatedItems: any[],
     userId?: string,
-  ): Promise<{ discountAmount: number; promoCodeId?: number }> {
+  ): Promise<{
+    discountAmount: number;
+    promoCodeId?: number;
+    isFreeDelivery: boolean;
+  }> {
     // Валидируем промокод
     const result = await this.promoService.validatePromoCode(
       {
@@ -658,16 +562,17 @@ export class OrdersService {
     );
 
     if (!result.isValid) {
-      throw new BadRequestException(result.message || 'Промокод недействителен');
+      throw new BadRequestException(
+        result.message || 'Промокод недействителен',
+      );
     }
 
-    this.logger.log(
-      `Промокод ${code} применен: скидка ${result.discount} ₽`,
-    );
+    this.logger.log(`Промокод ${code} применен: скидка ${result.discount} ₽`);
 
     return {
       discountAmount: result.discount,
       promoCodeId: result.promoCode?.id,
+      isFreeDelivery: result.isFreeDelivery === true,
     };
   }
 
@@ -802,7 +707,9 @@ export class OrdersService {
     // Форматируем данные
     const formattedItems = order.items.map((item) => {
       const imageUrl = pickMainImage(item.product?.images);
-      const finalPrice = Math.floor(item.price - (item.price * item.discount) / 100);
+      const finalPrice = Math.floor(
+        item.price - (item.price * item.discount) / 100,
+      );
 
       return {
         id: item.id,
@@ -821,7 +728,8 @@ export class OrdersService {
     });
 
     const originalSubtotal = formattedItems.reduce(
-      (sum, item) => sum + item.price * item.quantity, 0,
+      (sum, item) => sum + item.price * item.quantity,
+      0,
     );
 
     // Владелец заказа: авторизованный пользователь, чей userId или email
@@ -837,9 +745,10 @@ export class OrdersService {
       ...order,
       items: formattedItems,
       originalSubtotal,
-      promoCode: order.promoCodeUsages.length > 0
-        ? order.promoCodeUsages[0].promoCode
-        : null,
+      promoCode:
+        order.promoCodeUsages.length > 0
+          ? order.promoCodeUsages[0].promoCode
+          : null,
     };
 
     if (isOwner) {
@@ -872,9 +781,7 @@ export class OrdersService {
     // чтобы гостевые заказы на эту же почту были видны сразу, даже если
     // привязка по userId ещё не выполнилась. Привязка при входе — подстраховка.
     const orders = await this.prisma.order.findMany({
-      where: email
-        ? { OR: [{ userId }, { email }] }
-        : { userId },
+      where: email ? { OR: [{ userId }, { email }] } : { userId },
       include: {
         items: {
           include: {
@@ -905,7 +812,9 @@ export class OrdersService {
     return orders.map((order) => {
       const formattedItems = order.items.map((item) => {
         const imageUrl = pickMainImage(item.product?.images);
-        const finalPrice = Math.floor(item.price - (item.price * item.discount) / 100);
+        const finalPrice = Math.floor(
+          item.price - (item.price * item.discount) / 100,
+        );
 
         return {
           id: item.id,
@@ -924,23 +833,25 @@ export class OrdersService {
       });
 
       const originalSubtotal = formattedItems.reduce(
-        (sum, item) => sum + item.price * item.quantity, 0,
+        (sum, item) => sum + item.price * item.quantity,
+        0,
       );
 
       return {
         ...order,
         items: formattedItems,
         originalSubtotal,
-        promoCode: order.promoCodeUsages.length > 0
-          ? order.promoCodeUsages[0].promoCode
-          : null,
+        promoCode:
+          order.promoCodeUsages.length > 0
+            ? order.promoCodeUsages[0].promoCode
+            : null,
       };
     });
   }
 
   /**
    * Обновить статус оплаты заказа.
-   * На вход — внутренний статус платежа (из AlfaPayService.getOrderStatus):
+   * На вход — внутренний статус платежа (из TbankPayService.getState):
    * PENDING | PAID | FAILED | CANCELED | REFUNDED.
    */
   async updatePaymentStatus(
@@ -993,7 +904,10 @@ export class OrdersService {
 
       // Мы — победитель перехода. Если заказ был отменён автоотменой (оплата пришла
       // после неё) — воскрешаем: пере-списываем товар, который вернули при отмене.
-      if (previous?.status === OrderStatus.CANCELLED) {
+      if (
+        previous?.status === OrderStatus.CANCELLED ||
+        previous?.status === OrderStatus.PAYMENT_FAILED
+      ) {
         this.logger.warn(
           `Оплата пришла после автоотмены заказа ${orderNumber} — воскрешаю и пере-списываю товар`,
         );
@@ -1001,7 +915,12 @@ export class OrdersService {
           await this.prisma.$transaction(async (tx) => {
             for (const item of previous.items) {
               if (item.productId == null) continue;
-              await this.decreaseStock(tx, item.productId, item.size ?? '', item.quantity);
+              await this.decreaseStock(
+                tx,
+                item.productId,
+                item.size ?? '',
+                item.quantity,
+              );
             }
           });
         } catch (error: any) {
@@ -1023,18 +942,41 @@ export class OrdersService {
       try {
         await this.sendPaidOrderReceipt(orderNumber);
       } catch (error: any) {
-        this.logger.error(`Не удалось отправить чек (${orderNumber}): ${error.message}`);
+        this.logger.error(
+          `Не удалось отправить чек (${orderNumber}): ${error.message}`,
+        );
       }
       try {
         await this.createCdekInvoiceForOrder(orderNumber);
       } catch (error: any) {
-        this.logger.error(`Не удалось создать накладную CDEK (${orderNumber}): ${error.message}`);
+        this.logger.error(
+          `Не удалось создать накладную CDEK (${orderNumber}): ${error.message}`,
+        );
       }
 
       return this.prisma.order.findUnique({ where: { orderNumber } });
     }
 
-    // Неуспешные/промежуточные статусы (FAILED/CANCELED/PENDING/REFUNDED) — обычный апдейт.
+    // Отказ или отмена неоплаченного заказа: покупатель оформит новый заказ
+    // («Оплатить снова» ведёт в checkout), поэтому бронь товара снимаем сразу.
+    if (
+      (paymentStatus === 'FAILED' || paymentStatus === 'CANCELED') &&
+      cancelReason !== undefined
+    ) {
+      const released = await this.releaseUnpaidOrder(
+        orderNumber,
+        orderStatus,
+        cancelReason,
+      );
+      this.logger.log(
+        released
+          ? `Статус заказа обновлен: ${orderNumber}, status=${orderStatus}, товар возвращён на склад`
+          : `Заказ ${orderNumber} уже не в ожидании оплаты — статус ${paymentStatus} пропущен`,
+      );
+      return this.prisma.order.findUnique({ where: { orderNumber } });
+    }
+
+    // Промежуточные статусы и возврат (PENDING/REFUNDED) — обычный апдейт.
     const order = await this.prisma.order.update({
       where: { orderNumber },
       data: {
@@ -1055,59 +997,33 @@ export class OrdersService {
     return order;
   }
 
-  /**
-   * Подтвердить оплату Точки, ПЕРЕСПРОСИВ статус через API (не доверяя телу webhook).
-   * Webhook лишь триггер — реальный статус берём у Точки по operationId (order.paymentId).
-   * Так поддельный webhook не сможет пометить заказ оплаченным.
-   */
-  async confirmTochkaByApi(orderNumber: string): Promise<void> {
+  async confirmTbankByApi(
+    orderNumber: string,
+    paymentId?: string,
+  ): Promise<void> {
     const order = await this.prisma.order.findUnique({
       where: { orderNumber },
-      select: { paymentId: true, isPaid: true },
     });
-    if (!order) {
-      this.logger.warn(`Tochka confirm: заказ ${orderNumber} не найден`);
-      return;
-    }
-    if (order.isPaid) return; // уже оплачен — идемпотентность
-    if (!order.paymentId) {
-      this.logger.warn(
-        `Tochka confirm: у ${orderNumber} нет operationId — пропуск (не доверяем телу webhook)`,
-      );
-      return;
-    }
-    const { rawStatus, mappedStatus } =
-      await this.tochkaPayService.getOperationStatus(order.paymentId);
-    if (mappedStatus !== 'PENDING') {
-      await this.updatePaymentStatus(orderNumber, mappedStatus, rawStatus);
-      this.logger.log(
-        `Tochka confirm (API): ${orderNumber} → ${mappedStatus} (${rawStatus})`,
-      );
-    }
-  }
-
-  /**
-   * Подтвердить оплату Яндекса, ПЕРЕСПРОСИВ статус через API (не доверяя телу webhook).
-   * getOrderStatus принимает наш orderNumber.
-   */
-  async confirmYandexByApi(orderNumber: string): Promise<void> {
-    const order = await this.prisma.order.findUnique({
-      where: { orderNumber },
-      select: { isPaid: true },
-    });
-    if (!order) {
-      this.logger.warn(`Yandex confirm: заказ ${orderNumber} не найден`);
-      return;
-    }
-    if (order.isPaid) return; // уже оплачен — идемпотентность
-    const { rawStatus, mappedStatus } =
-      await this.yandexPayService.getOrderStatus(orderNumber);
-    if (mappedStatus !== 'PENDING') {
-      await this.updatePaymentStatus(orderNumber, mappedStatus, rawStatus ?? undefined);
-      this.logger.log(
-        `Yandex confirm (API): ${orderNumber} → ${mappedStatus} (${rawStatus})`,
-      );
-    }
+    if (
+      !order ||
+      order.paymentMethod !== PaymentMethod.CARD_ONLINE ||
+      !order.paymentId ||
+      (paymentId !== undefined && order.paymentId !== paymentId)
+    )
+      throw new BadRequestException('Платёж не найден');
+    const state = await this.tbankPayService.getState(order.paymentId);
+    if (
+      String(state.PaymentId) !== order.paymentId ||
+      state.OrderId !== orderNumber ||
+      state.Amount !== Math.round(order.total * 100)
+    )
+      throw new BadRequestException('Реквизиты платежа не совпадают');
+    const mappedStatus = this.tbankPayService.mapStatus(state.Status);
+    if (
+      mappedStatus !== 'PENDING' &&
+      (!order.isPaid || mappedStatus === 'REFUNDED')
+    )
+      await this.updatePaymentStatus(orderNumber, mappedStatus, state.Status);
   }
 
   /**
@@ -1200,91 +1116,24 @@ export class OrdersService {
     return Number.isFinite(v) && v > 0 ? v : 15;
   }
 
-  /**
-   * Polling-фолбэк для оплат Точки, пока не настроен webhook.
-   * Раз в минуту опрашиваем статус неоплаченных заказов Точки через getOperationStatus
-   * (право на чтение платежей у токена есть). При оплате подтверждаем заказ —
-   * как это сделал бы webhook. Запускается до автоотмены, чтобы успеть поймать оплату.
-   * Отключается переменной TOCHKA_POLLING_ENABLED=false (когда заработает webhook).
-   */
-  @Cron(CronExpression.EVERY_MINUTE, { name: 'poll-tochka-payments' })
-  async pollTochkaPayments(): Promise<void> {
-    if (process.env.TOCHKA_POLLING_ENABLED === 'false') {
-      return;
-    }
-    // Берём только заказы Точки в PENDING с известным operationId (paymentId).
-    const timeoutMin = this.getPendingTimeoutMin();
-    const cutoff = new Date(Date.now() - timeoutMin * 60 * 1000);
-
+  @Cron(CronExpression.EVERY_MINUTE, { name: 'poll-tbank-payments' })
+  async pollTbankPayments(): Promise<void> {
+    if (process.env.TBANK_POLLING_ENABLED === 'false') return;
     const pending = await this.prisma.order.findMany({
       where: {
         status: OrderStatus.PENDING,
         isPaid: false,
-        paymentMethod: PaymentMethod.SBP_TOCHKA,
+        paymentMethod: PaymentMethod.CARD_ONLINE,
         paymentId: { not: null },
-        createdAt: { gte: cutoff }, // ещё не протухшие — протухшие отменит cancelExpiredOrders
-      },
-      select: { orderNumber: true, paymentId: true },
-    });
-
-    for (const order of pending) {
-      if (!order.paymentId) continue;
-      try {
-        const { mappedStatus } = await this.tochkaPayService.getOperationStatus(
-          order.paymentId,
-        );
-        if (mappedStatus !== 'PENDING') {
-          await this.updatePaymentStatus(order.orderNumber, mappedStatus);
-          this.logger.log(
-            `Tochka polling: заказ ${order.orderNumber} → ${mappedStatus}`,
-          );
-        }
-      } catch (error: any) {
-        this.logger.error(
-          `Tochka polling: ошибка статуса ${order.orderNumber}: ${error.message}`,
-        );
-      }
-    }
-  }
-
-  /**
-   * Polling-фолбэк для оплат Яндекс Пэй/Сплит (на случай если webhook не дошёл).
-   * Раз в минуту опрашиваем статус неоплаченных заказов Яндекса через getOrderStatus
-   * (принимает наш orderNumber). При оплате (CAPTURED→PAID) подтверждаем заказ.
-   * Отключается переменной YANDEX_POLLING_ENABLED=false.
-   */
-  @Cron(CronExpression.EVERY_MINUTE, { name: 'poll-yandex-payments' })
-  async pollYandexPayments(): Promise<void> {
-    if (process.env.YANDEX_POLLING_ENABLED === 'false') {
-      return;
-    }
-    const timeoutMin = this.getPendingTimeoutMin();
-    const cutoff = new Date(Date.now() - timeoutMin * 60 * 1000);
-
-    const pending = await this.prisma.order.findMany({
-      where: {
-        status: OrderStatus.PENDING,
-        isPaid: false,
-        paymentMethod: PaymentMethod.YANDEX_PAY,
-        createdAt: { gte: cutoff }, // протухшие отменит cancelExpiredOrders
       },
       select: { orderNumber: true },
     });
-
     for (const order of pending) {
       try {
-        const { mappedStatus } = await this.yandexPayService.getOrderStatus(
-          order.orderNumber,
-        );
-        if (mappedStatus !== 'PENDING') {
-          await this.updatePaymentStatus(order.orderNumber, mappedStatus);
-          this.logger.log(
-            `Yandex polling: заказ ${order.orderNumber} → ${mappedStatus}`,
-          );
-        }
-      } catch (error: any) {
-        this.logger.error(
-          `Yandex polling: ошибка статуса ${order.orderNumber}: ${error.message}`,
+        await this.confirmTbankByApi(order.orderNumber);
+      } catch {
+        this.logger.warn(
+          'Не удалось проверить платёж Т-Банка: ' + order.orderNumber,
         );
       }
     }
@@ -1308,7 +1157,7 @@ export class OrdersService {
           ],
         },
       },
-      include: { items: true },
+      select: { orderNumber: true },
     });
 
     if (expired.length === 0) {
@@ -1317,32 +1166,11 @@ export class OrdersService {
 
     for (const order of expired) {
       try {
-        const cancelled = await this.prisma.$transaction(async (tx) => {
-          // Атомарно отменяем ТОЛЬКО если заказ всё ещё PENDING и не оплачен.
-          // Закрывает гонку: между выборкой и этим моментом могла прийти оплата —
-          // тогда updateMany затронет 0 строк, и сток мы НЕ возвращаем.
-          const res = await tx.order.updateMany({
-            where: { id: order.id, status: OrderStatus.PENDING, isPaid: false },
-            data: {
-              status: OrderStatus.CANCELLED,
-              cancelReason: `Не оплачен в течение ${timeoutMin} мин — автоотмена`,
-            },
-          });
-          if (res.count === 0) {
-            return false; // заказ уже изменился (оплачен) — не трогаем сток
-          }
-          // Возвращаем товар на склад и откатываем счётчик продаж
-          for (const item of order.items) {
-            if (item.productId == null) continue;
-            await this.restoreStock(
-              tx,
-              item.productId,
-              item.size ?? '',
-              item.quantity,
-            );
-          }
-          return true;
-        });
+        const cancelled = await this.releaseUnpaidOrder(
+          order.orderNumber,
+          OrderStatus.CANCELLED,
+          `Не оплачен в течение ${timeoutMin} мин — автоотмена`,
+        );
         if (!cancelled) {
           this.logger.log(
             `Заказ ${order.orderNumber} НЕ отменён — оплата пришла во время обработки`,
@@ -1358,6 +1186,38 @@ export class OrdersService {
         );
       }
     }
+  }
+
+  /**
+   * Перевести неоплаченный PENDING-заказ в неуспешный статус и вернуть товар на склад.
+   * Атомарно: если заказ уже не PENDING (оплачен, отменён, уже отклонён) — ничего
+   * не меняет и возвращает false, так что сток не возвращается дважды.
+   */
+  private async releaseUnpaidOrder(
+    orderNumber: string,
+    status: OrderStatus,
+    cancelReason: string,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const res = await tx.order.updateMany({
+        where: { orderNumber, status: OrderStatus.PENDING, isPaid: false },
+        data: { status, cancelReason },
+      });
+      if (res.count === 0) return false;
+      const items = await tx.orderItem.findMany({
+        where: { order: { orderNumber } },
+      });
+      for (const item of items) {
+        if (item.productId == null) continue;
+        await this.restoreStock(
+          tx,
+          item.productId,
+          item.size ?? '',
+          item.quantity,
+        );
+      }
+      return true;
+    });
   }
 
   /**
@@ -1434,6 +1294,8 @@ export class OrdersService {
       paymentMethod: order.paymentMethod,
     });
 
-    this.logger.log(`Email-чек об оплате отправлен: ${order.email} (${orderNumber})`);
+    this.logger.log(
+      `Email-чек об оплате отправлен: ${order.email} (${orderNumber})`,
+    );
   }
 }

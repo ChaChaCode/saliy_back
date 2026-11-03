@@ -1,0 +1,24 @@
+diff --git a/src/api/queryClient.ts b/src/api/queryClient.ts
+index b7d0c05..e8f8f09 100644
+--- a/src/api/queryClient.ts
++++ b/src/api/queryClient.ts
+@@ -1,11 +1,16 @@
+-import { QueryClient } from '@tanstack/react-query'
++import { MutationCache, QueryClient } from '@tanstack/react-query'
+ 
+ export const queryClient = new QueryClient({
++	mutationCache: new MutationCache({
++		onSuccess: async () => {
++			await queryClient.invalidateQueries()
++		}
++	}),
+ 	defaultOptions: {
+ 		queries: {
+-			staleTime: 60 * 1000,
++			staleTime: 0,
+ 			retry: 1,
+-			refetchOnWindowFocus: false
++			refetchOnWindowFocus: true
+ 		}
+ 	}
+ })

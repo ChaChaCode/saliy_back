@@ -113,7 +113,7 @@ export class EmailService {
     const paymentMethodNames: Record<string, string> = {
       SBP_TOCHKA: 'СБП (БАНК ТОЧКА)',
       YANDEX_PAY: 'ЯНДЕКС СПЛИТ',
-      CARD_ONLINE: 'АЛЬФА-БАНК',
+      CARD_ONLINE: 'Т-БАНК',
       CARD_MANUAL: 'ОПЛАТА КАРТОЙ ЧЕРЕЗ МЕНЕДЖЕРА',
       CRYPTO: 'КРИПТОВАЛЮТА',
       PAYPAL: 'PAYPAL',
