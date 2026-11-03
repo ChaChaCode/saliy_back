@@ -105,12 +105,10 @@ export class AdminAuthController {
   }
 
   /**
-   * Извлечь токен из cookie или из заголовка
+   * Извлечь токен из httpOnly cookie (заголовок Authorization не принимается)
    */
   private extractToken(request: any): string {
-    const cookieToken = request.cookies?.adminToken;
-    if (cookieToken) return cookieToken;
-    return this.extractTokenFromHeader(request);
+    return request.cookies?.adminToken || '';
   }
 
   /**
@@ -124,13 +122,5 @@ export class AdminAuthController {
       request.connection?.remoteAddress ||
       'unknown'
     );
-  }
-
-  /**
-   * Извлечь токен из заголовка
-   */
-  private extractTokenFromHeader(request: any): string {
-    const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    return type === 'Bearer' ? token : '';
   }
 }

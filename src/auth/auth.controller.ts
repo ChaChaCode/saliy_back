@@ -57,10 +57,7 @@ export class AuthController {
 
     this.setAuthCookies(response, accessToken, refreshToken);
 
-    return {
-      accessToken,
-      message: 'Успешная авторизация',
-    };
+    return { message: 'Успешная авторизация' };
   }
 
   @Post('refresh')
@@ -80,10 +77,7 @@ export class AuthController {
 
     this.setAuthCookies(response, accessToken, newRefreshToken);
 
-    return {
-      accessToken,
-      message: 'Токен обновлен',
-    };
+    return { message: 'Токен обновлен' };
   }
 
   @Post('logout')
@@ -118,8 +112,7 @@ export class AuthController {
 
   /**
    * Ставит access (15 мин — короткоживущий) и refresh (7 дней) в httpOnly куки.
-   * Access также возвращается в теле ответа для обратной совместимости со
-   * старым фронтом, читающим его из JSON; новый фронт может полагаться на куку.
+   * В тело ответа токены не попадают: JavaScript страницы не должен их видеть.
    */
   private setAuthCookies(
     response: Response,

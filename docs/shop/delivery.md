@@ -8,7 +8,7 @@
 
 ## Авторизация
 
-Клиентские эндпоинты доставки (countries, regions, cities, pickup-points, prices) публичны и авторизации не требуют. Сохранение адреса в профиле выполняется через `/api/auth/delivery-location` — там токен берётся из httpOnly cookie `accessToken` автоматически (заголовок Authorization тоже принимается для обратной совместимости).
+Клиентские эндпоинты доставки (countries, regions, cities, pickup-points, prices) публичны и авторизации не требуют. Сохранение адреса в профиле выполняется через `/api/auth/delivery-location` — там токен берётся из httpOnly cookie `accessToken` автоматически.
 
 ---
 

@@ -14,12 +14,9 @@ const cookieExtractor = (req: Request): string | null => {
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private authService: AuthService) {
     super({
-      // Сначала пробуем cookie (httpOnly, безопасно), затем Authorization-заголовок
-      // (обратная совместимость со старым фронтом, пока он не переведён на cookie).
-      jwtFromRequest: ExtractJwt.fromExtractors([
-        cookieExtractor,
-        ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ]),
+      // Только httpOnly cookie: заголовок Authorization не принимается, чтобы
+      // токен не приходилось держать в JavaScript.
+      jwtFromRequest: ExtractJwt.fromExtractors([cookieExtractor]),
       ignoreExpiration: false,
       secretOrKey: getAccessSecret(),
     });

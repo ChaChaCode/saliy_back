@@ -4,6 +4,7 @@ import {
   ExecutionContext,
   CallHandler,
   Logger,
+  HttpException,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
@@ -40,9 +41,13 @@ export class LoggingInterceptor implements NestInterceptor {
         },
         error: (error) => {
           const responseTime = Date.now() - now;
-          this.logger.error(
-            `${method} ${url} ERROR +${responseTime}ms - ${error.message}`,
-          );
+          // 4xx — ошибка запроса (гость без сессии, неверные данные), а не сбой
+          // сервера: пишем предупреждением, чтобы в ERROR оставались только 5xx.
+          const status =
+            error instanceof HttpException ? error.getStatus() : 500;
+          const line = `${method} ${url} ${status} +${responseTime}ms - ${error.message}`;
+          if (status < 500) this.logger.warn(line);
+          else this.logger.error(line);
         },
       }),
     );

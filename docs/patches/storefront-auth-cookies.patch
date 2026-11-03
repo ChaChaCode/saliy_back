@@ -1,0 +1,144 @@
+diff --git a/src/context/AuthContext.tsx b/src/context/AuthContext.tsx
+index 766e256..80bbc6e 100644
+--- a/src/context/AuthContext.tsx
++++ b/src/context/AuthContext.tsx
+@@ -1,6 +1,5 @@
+ 'use client'
+ 
+-import { setAccessToken } from '@/lib/api'
+ import { authService } from '@/services/auth'
+ import type { User } from '@/types/api'
+ import { useQueryClient } from '@tanstack/react-query'
+@@ -74,12 +73,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
+ 	useEffect(() => {
+ 		const loadUser = async () => {
+ 			try {
+-				const { accessToken } = await authService.refresh()
+-				setAccessToken(accessToken)
++				await authService.refresh()
+ 				const user = await authService.me()
+ 				dispatch('LOGIN', user)
+ 			} catch {
+-				setAccessToken(null)
++				// Нет сессии (гость или истёкший refresh) — остаёмся неавторизованными.
+ 			} finally {
+ 				dispatch('STOP_LOADING')
+ 			}
+@@ -88,7 +86,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
+ 		loadUser()
+ 
+ 		const handleForceLogout = () => {
+-			setAccessToken(null)
+ 			dispatch('LOGOUT')
+ 
+ 			queryClient.clear()
+diff --git a/src/hooks/useAuth.ts b/src/hooks/useAuth.ts
+index 15972f7..1c05473 100644
+--- a/src/hooks/useAuth.ts
++++ b/src/hooks/useAuth.ts
+@@ -1,7 +1,7 @@
+ 'use client'
+ 
+ import { useAuthDispatch, useAuthState } from '@/context/AuthContext'
+-import { ApiRequestError, setAccessToken } from '@/lib/api'
++import { ApiRequestError } from '@/lib/api'
+ import { cartKeys, serverCartOptions } from '@/queries/cart'
+ import { authService } from '@/services/auth'
+ import { cartService } from '@/services/cart'
+@@ -43,8 +43,7 @@ export function useVerifyCode() {
+ 	}) => {
+ 		setIsPending(true)
+ 		try {
+-			const data = await authService.verifyCode(email, code)
+-			setAccessToken(data.accessToken)
++			await authService.verifyCode(email, code)
+ 			const user = await authService.me()
+ 			dispatch('LOGIN', user)
+ 
+@@ -75,7 +74,6 @@ export function useLogout() {
+ 		try {
+ 			await authService.logout()
+ 		} finally {
+-			setAccessToken(null)
+ 			dispatch('LOGOUT')
+ 
+ 			queryClient.clear()
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index f177d90..6d85a60 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -24,15 +24,8 @@ export class ApiRequestError extends Error {
+ 	}
+ }
+ 
+-let accessToken: string | null = null
+-
+-export function setAccessToken(token: string | null) {
+-	accessToken = token
+-}
+-
+-export function getAccessToken() {
+-	return accessToken
+-}
++// Токены живут только в httpOnly-куках: браузер сам отправляет их с каждым
++// запросом (credentials: 'include'), JavaScript страницы их не видит.
+ 
+ type RequestOptions = {
+ 	params?: Record<string, string | number | boolean | undefined | null>
+@@ -69,8 +62,6 @@ async function buildHeaders(
+ 			const cookieHeader = (await cookies()).toString()
+ 			if (cookieHeader) headers.Cookie = cookieHeader
+ 		}
+-	} else if (accessToken) {
+-		headers.Authorization = `Bearer ${accessToken}`
+ 	}
+ 
+ 	return headers
+@@ -92,21 +83,19 @@ async function parseError(res: Response): Promise<unknown> {
+ 	return new ApiRequestError(res.status, res.statusText, res.statusText)
+ }
+ 
+-let isRefreshing: Promise<string | null> | null = null
++let isRefreshing: Promise<boolean> | null = null
+ 
+-async function refreshAccessToken(): Promise<string | null> {
++// Обновляет куки сессии. Успех определяется ответом /auth/refresh, а не
++// токеном в нём: новые куки backend ставит сам.
++async function refreshSession(): Promise<boolean> {
+ 	if (!isRefreshing) {
+ 		isRefreshing = request<AuthResponse>('POST', '/auth/refresh', undefined, {
+ 			_skipRefresh: true
+ 		})
+-			.then(res => {
+-				accessToken = res.accessToken
+-				return res.accessToken
+-			})
++			.then(() => true)
+ 			.catch(() => {
+-				accessToken = null
+ 				window.dispatchEvent(new Event('auth:logout'))
+-				return null
++				return false
+ 			})
+ 			.finally(() => {
+ 				isRefreshing = null
+@@ -136,8 +125,7 @@ async function request<T>(
+ 		!opts?._skipRefresh &&
+ 		!path.includes('/auth/refresh')
+ 	) {
+-		const newToken = await refreshAccessToken()
+-		if (newToken) {
++		if (await refreshSession()) {
+ 			return request<T>(method, path, body, { ...opts, _skipRefresh: true })
+ 		}
+ 	}
+diff --git a/src/types/auth.ts b/src/types/auth.ts
+index d75b537..6fa2c80 100644
+--- a/src/types/auth.ts
++++ b/src/types/auth.ts
+@@ -1,5 +1,4 @@
+ export type AuthResponse = {
+-	accessToken: string
+ 	message: string
+ }
+ 

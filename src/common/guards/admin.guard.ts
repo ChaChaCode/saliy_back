@@ -40,9 +40,8 @@ export class AdminGuard implements CanActivate {
     const ip = this.getClientIP(request);
     const userAgent = request.headers['user-agent'] || '';
 
-    // Токен из cookie (приоритет), fallback — Authorization header
+    // Токен только из httpOnly cookie, заголовок Authorization не принимается.
     const cookieToken = request.cookies?.adminToken;
-    const authHeader = request.headers['authorization'];
 
     // Проверяем постоянную блокировку
     const dbBlock = await this.checkDatabaseBlock(ip);
@@ -78,12 +77,7 @@ export class AdminGuard implements CanActivate {
     }
 
     // Извлекаем токен
-    let token: string | null = null;
-    if (cookieToken) {
-      token = cookieToken;
-    } else if (authHeader?.startsWith('Bearer ')) {
-      token = authHeader.slice(7);
-    }
+    const token: string | null = cookieToken || null;
 
     if (!token) {
       await this.recordFailedAttempt(ip, userAgent);
@@ -109,7 +103,7 @@ export class AdminGuard implements CanActivate {
   }
 
   /**
-   * Проверка JWT токена (из cookie или Bearer header)
+   * Проверка JWT токена из cookie
    */
   private async validateToken(
     request: any,

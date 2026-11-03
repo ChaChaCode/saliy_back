@@ -27,6 +27,20 @@ export function formatBirthdate(date: Date | null | undefined): string | null {
   return `${dd}.${mm}.${yyyy}`;
 }
 
+/** SHA-256 от refresh-токена: токен — 64 случайных байта, соль не нужна. */
+function hashRefreshToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Значения для поиска токена в БД: хэш и, временно, сам токен — записи,
+ * созданные до хранения хэшей (3 ноября 2026). Через 7 дней все такие
+ * записи истекут, и открытый вариант можно убрать.
+ */
+function refreshTokenLookup(token: string): string[] {
+  return [hashRefreshToken(token), token];
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -199,10 +213,10 @@ export class AuthService {
     const refreshToken = crypto.randomBytes(64).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-    // Сохраняем refresh token в БД
+    // В БД — только хэш: утечка дампа не даёт войти под покупателем.
     await this.prisma.refreshToken.create({
       data: {
-        token: refreshToken,
+        token: hashRefreshToken(refreshToken),
         userId,
         expiresAt,
       },
@@ -214,9 +228,8 @@ export class AuthService {
   async refreshTokens(
     refreshToken: string,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    // Ищем refresh token в БД
-    const tokenData = await this.prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
+    const tokenData = await this.prisma.refreshToken.findFirst({
+      where: { token: { in: refreshTokenLookup(refreshToken) } },
       include: { user: true },
     });
 
@@ -224,10 +237,14 @@ export class AuthService {
       throw new UnauthorizedException('Недействительный refresh token');
     }
 
-    // Удаляем старый refresh token
-    await this.prisma.refreshToken.delete({
+    // Удаляем старый refresh token атомарно: из двух параллельных запросов
+    // с одним токеном новую пару получит только один, второй — 401, не 500.
+    const { count } = await this.prisma.refreshToken.deleteMany({
       where: { id: tokenData.id },
     });
+    if (count === 0) {
+      throw new UnauthorizedException('Недействительный refresh token');
+    }
 
     // Генерируем новые токены
     return this.generateTokens(tokenData.user.id, tokenData.user.email);
@@ -236,7 +253,7 @@ export class AuthService {
   async logout(refreshToken: string): Promise<void> {
     // Удаляем refresh token из БД
     await this.prisma.refreshToken.deleteMany({
-      where: { token: refreshToken },
+      where: { token: { in: refreshTokenLookup(refreshToken) } },
     });
   }
 
