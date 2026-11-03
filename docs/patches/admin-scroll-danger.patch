@@ -82,7 +82,7 @@ index 7891b5f..b512506 100644
  				Удалить пользователя
  			</Button>
 diff --git a/src/components/ui/Button.tsx b/src/components/ui/Button.tsx
-index 5fafed4..8227c77 100644
+index 5fafed4..419254a 100644
 --- a/src/components/ui/Button.tsx
 +++ b/src/components/ui/Button.tsx
 @@ -1,13 +1,21 @@
@@ -99,7 +99,7 @@ index 5fafed4..8227c77 100644
 +// побеждает порядок в CSS, а не в атрибуте, и текст мог остаться белым.
 +const VARIANT_CLASSES = {
 +	primary: 'bg-black text-white',
-+	danger: 'bg-danger text-white hover:bg-danger/85'
++	danger: 'bg-danger/10 text-danger hover:bg-danger/20'
 +}
 +
  export function Button({
