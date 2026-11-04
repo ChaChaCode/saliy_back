@@ -1,0 +1,29 @@
+diff --git a/src/components/ui/CodeInput.tsx b/src/components/ui/CodeInput.tsx
+index c25a3fd..36967d1 100644
+--- a/src/components/ui/CodeInput.tsx
++++ b/src/components/ui/CodeInput.tsx
+@@ -21,6 +21,14 @@ export default function CodeInput({
+ 	}
+ 
+ 	const handleChange = (index: number, char: string) => {
++		// iOS/Android подставляют весь код из письма или SMS в первую ячейку
++		// (autoComplete="one-time-code") — раскладываем его по ячейкам.
++		if (char.length > 1) {
++			const code = char.replace(/\D/g, '').slice(0, length)
++			onChange(code)
++			inputs.current[Math.min(code.length, length - 1)]?.focus()
++			return
++		}
+ 		if (char && !/^\d$/.test(char)) return
+ 		const next = [...digits]
+ 		next[index] = char
+@@ -68,7 +76,8 @@ export default function CodeInput({
+ 					}}
+ 					type="text"
+ 					inputMode="numeric"
+-					maxLength={1}
++					autoComplete={i === 0 ? 'one-time-code' : 'off'}
++					maxLength={i === 0 ? length : 1}
+ 					value={digit}
+ 					onChange={e => handleChange(i, e.target.value)}
+ 					onKeyDown={e => handleKeyDown(i, e)}
