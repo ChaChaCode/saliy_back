@@ -65,6 +65,8 @@ export class EmailService {
     //  - есть plain-text часть (text), а не только HTML;
     //  - код — сплошное число рядом со словом «код» (без пробелов/дефисов);
     //    letter-spacing задаётся только CSS, сам текст кода не разбивается.
+    //  - в HTML код один раз: два подряд («Clothes: 3548 3548») iOS склеивает
+    //    в одну подсказку.
     const mailOptions = {
       from: process.env.EMAIL_FROM,
       to: email,
@@ -76,7 +78,7 @@ export class EmailService {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Код подтверждения</h2>
-          <p>Ваш код для входа в Saliy Clothes: <strong>${code}</strong></p>
+          <p>Ваш код для входа в Saliy Clothes:</p>
           <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
             ${code}
           </div>
