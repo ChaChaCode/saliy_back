@@ -96,9 +96,12 @@ export class S3StorageService implements OnModuleInit {
     const stem = `${keyBase}${OPTIMIZED_SUFFIX}`;
     const avifKey = `${stem}.${optimized.avif.ext}`;
     const key = `${stem}.${optimized.fallback.ext}`;
-    // AVIF первым: запасная копия в БД появляется, только когда AVIF уже на месте
-    await this.putImmutable(avifKey, optimized.avif);
-    await this.putImmutable(key, optimized.fallback);
+    // Обе копии параллельно; ключ уходит в БД только когда загружены обе,
+    // поэтому витрина не увидит фото без AVIF.
+    await Promise.all([
+      this.putImmutable(avifKey, optimized.avif),
+      this.putImmutable(key, optimized.fallback),
+    ]);
     this.logger.log(
       `Загружено в S3: ${stem} (${kb(body.length)} → avif ${kb(optimized.avif.buffer.length)} / ${optimized.fallback.ext} ${kb(optimized.fallback.buffer.length)}, ${optimized.width}x${optimized.height})`,
     );

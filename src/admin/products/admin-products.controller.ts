@@ -106,7 +106,7 @@ export class AdminProductsController {
    */
   @Post()
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'images', maxCount: 10 }], {
+    FileFieldsInterceptor([{ name: 'images', maxCount: 30 }], {
       limits: { fileSize: 10 * 1024 * 1024 },
       fileFilter: (req, file, callback) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
@@ -168,7 +168,7 @@ export class AdminProductsController {
    */
   @Patch(':id')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'images', maxCount: 10 }], {
+    FileFieldsInterceptor([{ name: 'images', maxCount: 30 }], {
       limits: {
         fileSize: 10 * 1024 * 1024, // 10MB
       },
@@ -224,11 +224,11 @@ export class AdminProductsController {
   /**
    * Добавить новые фото к существующему товару (без замены)
    * POST /admin/products/:id/images
-   * multipart/form-data: поле images[] (до 10 файлов)
+   * multipart/form-data: поле images[] (до 30 файлов)
    */
   @Post(':id/images')
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'images', maxCount: 10 }], {
+    FileFieldsInterceptor([{ name: 'images', maxCount: 30 }], {
       limits: { fileSize: 10 * 1024 * 1024 },
       fileFilter: (_req, file, callback) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
