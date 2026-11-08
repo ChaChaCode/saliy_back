@@ -16,7 +16,6 @@ import {
   changeReservedQuantity,
   lockProducts,
   purchaseAvailability,
-  waitingForPreorder,
 } from '../../common/utils/preorder.util';
 
 interface FindAllParams {
@@ -64,7 +63,6 @@ export class AdminOrdersService {
     if (
       !order.isPaid ||
       order.inventoryReleased ||
-      waitingForPreorder(order) ||
       [
         OrderStatus.CANCELLED,
         OrderStatus.REFUNDED,
@@ -203,7 +201,6 @@ export class AdminOrdersService {
       where: {
         isPaid: true,
         inventoryReleased: false,
-        items: { none: { isPreorder: true, preorderReady: false } },
         status: {
           notIn: [
             OrderStatus.CANCELLED,
@@ -387,19 +384,6 @@ export class AdminOrdersService {
         'Нельзя изменить статус отменённого заказа',
       );
     }
-    if (waitingForPreorder(order) && status !== OrderStatus.AWAITING_PREORDER) {
-      throw new BadRequestException(
-        'Сначала отметьте поступление предзаказа через preorder-ready',
-      );
-    }
-    if (
-      status === OrderStatus.AWAITING_PREORDER &&
-      (!order.isPaid || !waitingForPreorder(order))
-    ) {
-      throw new BadRequestException(
-        'Этот статус доступен только оплаченному предзаказу, ожидающему поступления',
-      );
-    }
 
     const updated = await this.prisma.order.update({
       where: { orderNumber },
@@ -408,48 +392,6 @@ export class AdminOrdersService {
 
     this.logger.log(`Статус заказа ${orderNumber} изменён на ${status}`);
 
-    return updated;
-  }
-
-  async markPreorderReady(orderNumber: string) {
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM orders WHERE order_number = ${orderNumber} FOR UPDATE`;
-      const order = await tx.order.findUnique({
-        where: { orderNumber },
-        include: { items: true },
-      });
-      if (!order) throw new NotFoundException('Заказ не найден');
-      if (
-        !order.isPaid ||
-        order.inventoryReleased ||
-        order.status !== OrderStatus.AWAITING_PREORDER ||
-        !waitingForPreorder(order)
-      ) {
-        throw new BadRequestException(
-          'Заказ не ожидает поступления оплаченного предзаказа',
-        );
-      }
-      // Товар списан из stock ещё при оформлении предзаказа — здесь только
-      // отмечаем, что он поступил и заказ можно отправлять.
-      await tx.orderItem.updateMany({
-        where: { orderId: order.id, isPreorder: true },
-        data: { preorderReady: true },
-      });
-      return tx.order.update({
-        where: { id: order.id },
-        data: { status: OrderStatus.CONFIRMED },
-        include: { items: true },
-      });
-    });
-    await this.emailService.sendRaw(updated.email, 'Предзаказ готов к отправке',
-      '<p>Ваш предзаказ готов к отправке. Магазин сообщит подробности доставки отдельно.</p>');
-    if (updated.deliveryType === 'CDEK_PICKUP') {
-      try {
-        await this.createCdekInvoice(orderNumber);
-      } catch (error: any) {
-        return { ...updated, cdekSyncError: error.message };
-      }
-    }
     return updated;
   }
 
@@ -734,9 +676,7 @@ export class AdminOrdersService {
           total,
           ...(order.isPaid
             ? {
-                status: waitingForPreorder({ items: itemsData })
-                  ? OrderStatus.AWAITING_PREORDER
-                  : OrderStatus.CONFIRMED,
+                status: OrderStatus.CONFIRMED,
               }
             : {}),
         },

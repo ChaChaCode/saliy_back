@@ -152,7 +152,7 @@ export class EmailService {
           </div>
           <div style="color: #666666; font-size: 12px;">
             РАЗМЕР: ${item.size.toUpperCase()} × ${item.quantity} ШТ @ ${item.price.toFixed(2)} ₽
-            ${item.isPreorder ? '<br>ПРЕДЗАКАЗ. О готовности к отправке сообщим отдельно. Весь заказ будет отправлен вместе после поступления.' : ''}
+            ${item.isPreorder ? '<br>ПРЕДЗАКАЗ. Срок ожидания товара — 15–25 дней. Трек-номер СДЭК придёт, когда посылка будет передана в доставку.' : ''}
           </div>
         </div>
       `,
@@ -166,7 +166,7 @@ export class EmailService {
         (item) =>
           `- ${item.name} (размер ${item.size}) × ${item.quantity} @ ${item.price.toFixed(2)} ₽ = ${(item.price * item.quantity).toFixed(2)} ₽` +
           (item.isPreorder
-            ? ' — Предзаказ. О готовности к отправке сообщим отдельно. Весь заказ отправляется вместе после поступления.'
+            ? ' — Предзаказ. Срок ожидания товара — 15–25 дней. Трек-номер СДЭК придёт, когда посылка будет передана в доставку.'
             : ''),
       )
       .join('\n');

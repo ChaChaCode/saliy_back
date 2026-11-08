@@ -177,47 +177,28 @@ describe('Preorders', () => {
     ).toBe(2);
   });
 
-  it('accepts, edits and fulfills a dateless preorder only after manager confirmation', async () => {
+  it('confirms a paid preorder right away and creates the CDEK invoice like any order', async () => {
     const t = setup();
     const order = await t.create();
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
-    await t.admin.updateOrderItems(order.orderNumber, [{ productId: 1, size: 'M', quantity: 1 }]);
-    expect(t.state().order).toMatchObject({ status: 'AWAITING_PREORDER', isPaid: true });
-    expect(t.delivery.createCdekOrder).not.toHaveBeenCalled();
-    await t.admin.markPreorderReady(order.orderNumber);
-    expect(t.state().order.status).toBe('CONFIRMED');
-    // Списано один раз при оформлении — отметка «поступил» stock не трогает.
-    expect(t.state().products[0]).toMatchObject({ stock: { M: 1 }, salesCount: 1 });
-    expect(t.email.sendRaw).toHaveBeenCalledWith('test@example.com', 'Предзаказ готов к отправке', expect.any(String));
+    expect(t.state().order).toMatchObject({ status: 'CONFIRMED', isPaid: true });
     expect(t.delivery.createCdekOrder).toHaveBeenCalledTimes(1);
+    expect(t.email.sendOrderConfirmation).toHaveBeenCalledTimes(1);
+    expect(t.state().order.items[0]).toMatchObject({ isPreorder: true });
   });
 
-  it('reserves a slot and snapshots terms, while payment waits without a CDEK invoice', async () => {
+  it('takes the unit from stock, keeps the preorder mark and pays only once', async () => {
     const t = setup();
     const order = await t.create();
-    expect(t.state().products[0]).toMatchObject({
-      stock: { M: 1 },
-      salesCount: 1,
-    });
-    expect(order.items[0]).toMatchObject({
-      isPreorder: true,
-    });
+    expect(t.state().products[0]).toMatchObject({ stock: { M: 1 }, salesCount: 1 });
+    expect(order.items[0]).toMatchObject({ isPreorder: true });
     t.state().products[0].cardStatus = 'NONE';
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
     await t.orders.updatePaymentStatus(order.orderNumber, 'PENDING');
-    expect(t.state().order).toMatchObject({
-      isPaid: true,
-      status: 'AWAITING_PREORDER',
-    });
+    expect(t.state().order).toMatchObject({ isPaid: true, status: 'CONFIRMED' });
     expect(t.email.sendOrderConfirmation).toHaveBeenCalledTimes(1);
-    expect(t.delivery.createCdekOrder).not.toHaveBeenCalled();
-    await expect(
-      t.admin.createCdekInvoice(order.orderNumber),
-    ).rejects.toThrow();
-    await expect(
-      t.admin.updateStatus(order.orderNumber, 'SHIPPED'),
-    ).rejects.toThrow();
+    expect(t.delivery.createCdekOrder).toHaveBeenCalledTimes(1);
   });
 
   it('returns the unit to stock exactly once on timeout', async () => {
@@ -299,33 +280,17 @@ describe('Preorders', () => {
     });
   });
 
-  it('waits for the manager to confirm arrival, then ships the whole mixed order once', async () => {
+  it('ships a mixed preorder + regular order together with one invoice', async () => {
     const t = setup();
     const order = await t.create([
       { productId: 1, size: 'M', quantity: 1 },
       { productId: 2, size: 'M', quantity: 1 },
     ]);
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
+    expect(t.state().order.status).toBe('CONFIRMED');
+    expect(t.state().products[0].stock.M).toBe(1);
     expect(t.state().products[1].stock.M).toBe(2);
-    expect(t.state().order.status).toBe('AWAITING_PREORDER');
-    expect(t.state().order.items[0].preorderReady).toBe(false);
-    expect(t.delivery.createCdekOrder).not.toHaveBeenCalled();
-    await t.admin.markPreorderReady(order.orderNumber);
-    expect(t.state().products[0]).toMatchObject({
-      stock: { M: 1 },
-      salesCount: 1,
-    });
-    expect(t.state().order).toMatchObject({
-      status: 'CONFIRMED',
-      items: [
-        expect.objectContaining({ preorderReady: true }),
-        expect.anything(),
-      ],
-    });
     expect(t.delivery.createCdekOrder).toHaveBeenCalledTimes(1);
-    await expect(
-      t.admin.markPreorderReady(order.orderNumber),
-    ).rejects.toThrow();
   });
 
   it('cancels or refunds an unfulfilled preorder without releasing inventory twice', async () => {
@@ -341,7 +306,7 @@ describe('Preorders', () => {
     });
   });
 
-  it('returns preorder and regular units to stock on a bank refund', async () => {
+  it('treats a bank refund of a preorder like any other order', async () => {
     const t = setup();
     const order = await t.create([
       { productId: 1, size: 'M', quantity: 1 },
@@ -350,23 +315,16 @@ describe('Preorders', () => {
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
     await t.orders.updatePaymentStatus(order.orderNumber, 'REFUNDED');
     await t.orders.updatePaymentStatus(order.orderNumber, 'REFUNDED');
-    expect(t.state().products[0].stock.M).toBe(2);
-    expect(t.state().products[1].stock.M).toBe(3);
-    expect(t.state().order).toMatchObject({
-      status: 'REFUNDED',
-      isPaid: false,
-      inventoryReleased: true,
-    });
+    expect(t.state().order).toMatchObject({ status: 'REFUNDED', isPaid: false });
   });
 
-  it('returns the unit to stock when a ready preorder is cancelled', async () => {
-    const t = setup(); const order = await t.create();
+  it('returns the unit to stock when a paid preorder is cancelled', async () => {
+    const t = setup();
+    const order = await t.create();
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
-    await t.admin.markPreorderReady(order.orderNumber);
     t.delivery.deleteCdekOrder = jest.fn();
     await t.admin.cancelOrder(order.orderNumber);
     expect(t.state().products[0]).toMatchObject({ stock: { M: 2 }, salesCount: 0 });
-    expect(t.email.sendRaw).toHaveBeenCalledTimes(2);
   });
 
   it('restores the reservation after a late payment, or records payment for manual resolution when sold out', async () => {
@@ -379,10 +337,10 @@ describe('Preorders', () => {
       expect(t.state().order).toMatchObject({
         isPaid: true,
         inventoryReleased: soldOut,
-        status: soldOut ? 'PROCESSING' : 'AWAITING_PREORDER',
+        status: soldOut ? 'PROCESSING' : 'CONFIRMED',
       });
       expect(t.state().products[0].stock.M).toBe(soldOut ? 0 : 1);
-      expect(t.delivery.createCdekOrder).not.toHaveBeenCalled();
+      expect(t.delivery.createCdekOrder).toHaveBeenCalledTimes(soldOut ? 0 : 1);
     }
   });
 

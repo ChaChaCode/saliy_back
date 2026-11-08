@@ -1,6 +1,5 @@
 import {
   purchaseAvailability,
-  waitingForPreorder,
   lockProducts,
   changeReservedQuantity,
 } from '../common/utils/preorder.util';
@@ -939,9 +938,7 @@ export class OrdersService {
           return tx.order.updateMany({
             where: { orderNumber, isPaid: false },
             data: {
-              status: waitingForPreorder(current)
-                ? OrderStatus.AWAITING_PREORDER
-                : OrderStatus.CONFIRMED,
+              status: OrderStatus.CONFIRMED,
               isPaid: true,
               cancelReason: null,
               inventoryReleased: false,
@@ -1030,30 +1027,11 @@ export class OrdersService {
       });
       if (!order) throw new BadRequestException('Заказ не найден');
       if (order.status === OrderStatus.REFUNDED) return order;
-      // Only unfulfilled preorders are released automatically on refund.
-      const release = !order.inventoryReleased && waitingForPreorder(order);
-      if (release) {
-        await lockProducts(
-          tx,
-          order.items.flatMap((item) =>
-            item.productId == null ? [] : [item.productId],
-          ),
-        );
-        for (const item of order.items) {
-          if (item.productId == null) continue;
-          await changeReservedQuantity(
-            tx,
-            { ...item, productId: item.productId, size: item.size ?? '' },
-            true,
-          );
-        }
-      }
       return tx.order.update({
         where: { orderNumber },
         data: {
           status: OrderStatus.REFUNDED,
           isPaid: false,
-          inventoryReleased: order.inventoryReleased || release,
           cancelReason: reason ?? 'Оформлен возврат средств',
         },
       });
@@ -1105,7 +1083,6 @@ export class OrdersService {
     if (
       !order.isPaid ||
       order.inventoryReleased ||
-      waitingForPreorder(order) ||
       [
         OrderStatus.CANCELLED,
         OrderStatus.REFUNDED,

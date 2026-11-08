@@ -25,10 +25,6 @@ export function purchaseAvailability(
   };
 }
 
-export const waitingForPreorder = (order: {
-  items: Array<{ isPreorder?: boolean; preorderReady?: boolean }>;
-}) => order.items.some((item) => item.isPreorder && !item.preorderReady);
-
 // Lock all products in a stable order before reading/modifying JSON counters.
 export async function lockProducts(
   tx: Prisma.TransactionClient,
