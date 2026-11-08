@@ -43,6 +43,10 @@ class SendEmailDto {
 @Controller('admin/orders')
 @UseGuards(AdminGuard)
 export class AdminOrdersController {
+  @Post(':orderNumber/preorder-ready')
+  markPreorderReady(@Param('orderNumber') orderNumber: string) {
+    return this.adminOrdersService.markPreorderReady(orderNumber);
+  }
   constructor(private readonly adminOrdersService: AdminOrdersService) {}
 
   /**

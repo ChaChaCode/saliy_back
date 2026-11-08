@@ -44,6 +44,7 @@ model Order {
 
   // Статус заказа
   status    OrderStatus @default(PENDING)
+  inventoryReleased Boolean @default(false) @map("inventory_released")
   // Причина отмены/неоплаты (таймаут, отказ платёжки, ошибка регистрации, ручная)
   cancelReason String? @map("cancel_reason")
   createdAt DateTime    @default(now()) @map("created_at")
@@ -84,6 +85,8 @@ model OrderItem {
 
   // Количество и цены
   quantity Int
+  isPreorder Boolean @default(false) @map("is_preorder")
+  preorderReady Boolean @default(false) @map("preorder_ready")
   price    Float
   discount Float   @default(0)
 

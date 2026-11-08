@@ -1,0 +1,129 @@
+--- a/src/app/catalog/[slug]/page.tsx
++++ b/src/app/catalog/[slug]/page.tsx
+@@ -19,7 +19,7 @@
+ 			openGraph: {
+ 				title: `${category.name} | SALIY CLOTHES`,
+ 				description,
+-				url: `https://saliyclothes.com/catalog/${slug}`,
++				url: `https://saliystudio.com/catalog/${slug}`,
+ 				type: 'website'
+ 			}
+ 		}
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -25,7 +25,7 @@
+ 	},
+ 	description:
+ 		'SALIY CLOTHES — магазин дизайнерской одежды. Толстовки, футболки, штаны и аксессуары с доставкой по России и за рубеж.',
+-	metadataBase: new URL('https://saliyclothes.com'),
++	metadataBase: new URL('https://saliystudio.com'),
+ 	applicationName: 'SALIY CLOTHES',
+ 	keywords: [
+ 		'SALIY',
+@@ -43,7 +43,7 @@
+ 		title: 'SALIY CLOTHES — магазин одежды',
+ 		description:
+ 			'Магазин дизайнерской одежды SALIY CLOTHES. Доставка по России и за рубеж.',
+-		url: 'https://saliyclothes.com',
++		url: 'https://saliystudio.com',
+ 		siteName: 'SALIY CLOTHES',
+ 		locale: 'ru_RU',
+ 		type: 'website'
+@@ -86,8 +86,8 @@
+ 							'@context': 'https://schema.org',
+ 							'@type': 'Organization',
+ 							name: 'SALIY CLOTHES',
+-							url: 'https://saliyclothes.com',
+-							logo: 'https://saliyclothes.com/icon.png',
++							url: 'https://saliystudio.com',
++							logo: 'https://saliystudio.com/icon.png',
+ 							email: 'luninaal12@yandex.ru',
+ 							sameAs: ['https://t.me/saliysupport']
+ 						}}
+--- a/src/app/offer/page.tsx
++++ b/src/app/offer/page.tsx
+@@ -21,7 +21,7 @@
+ 							Настоящий документ является официальным предложением (публичной
+ 							офертой) {SELLER.name} (ИНН {SELLER.inn}, ОГРНИП {SELLER.ogrnip}) (далее —
+ 							Продавец) заключить договор купли-продажи
+-							товаров, представленных на сайте saliyclothes.com (далее —
++							товаров, представленных на сайте saliystudio.com (далее —
+ 							Интернет-магазин).
+ 						</p>
+ 						<p className="mt-2">
+--- a/src/app/privacy/page.tsx
++++ b/src/app/privacy/page.tsx
+@@ -21,7 +21,7 @@
+ 							1.1. Настоящая Политика конфиденциальности и обработки
+ 							персональных данных (далее — Политика) действует в отношении всех
+ 							персональных данных, которые {SELLER.name} (ИНН {SELLER.inn}, ОГРНИП {SELLER.ogrnip}) (далее — Оператор) может получить от Пользователя во
+-							время использования сайта saliyclothes.com (далее — Сайт).
++							время использования сайта saliystudio.com (далее — Сайт).
+ 						</p>
+ 						<p className="mt-2">
+ 							1.2. Оператор обеспечивает защиту обрабатываемых персональных
+@@ -283,10 +283,10 @@
+ 						<p className="mt-2">
+ 							10.2. Действующая редакция всегда доступна по адресу:{' '}
+ 							<a
+-								href="https://saliyclothes.com/privacy"
++								href="https://saliystudio.com/privacy"
+ 								className="underline"
+ 							>
+-								saliyclothes.com/privacy
++								saliystudio.com/privacy
+ 							</a>
+ 						</p>
+ 					</section>
+--- a/src/app/product/[slug]/page.tsx
++++ b/src/app/product/[slug]/page.tsx
+@@ -29,7 +29,7 @@
+ 			openGraph: {
+ 				title: product.name,
+ 				description,
+-				url: `https://saliyclothes.com/product/${slug}`,
++				url: `https://saliystudio.com/product/${slug}`,
+ 				siteName: 'SALIY CLOTHES',
+ 				...(imageUrl && { images: [{ url: imageUrl, alt: product.name }] }),
+ 				type: 'website'
+@@ -89,7 +89,7 @@
+ 		brand: { '@type': 'Brand', name: 'SALIY CLOTHES' },
+ 		offers: {
+ 			'@type': 'Offer',
+-			url: `https://saliyclothes.com/product/${product.slug}`,
++			url: `https://saliystudio.com/product/${product.slug}`,
+ 			priceCurrency: 'RUB',
+ 			price: finalPrice ?? product.price,
+ 			availability: inStock
+--- a/src/app/robots.ts
++++ b/src/app/robots.ts
+@@ -7,6 +7,6 @@
+ 			allow: '/',
+ 			disallow: ['/profile', '/profile/', '/auth', '/cart', '/order/']
+ 		},
+-		sitemap: 'https://saliyclothes.com/sitemap.xml'
++		sitemap: 'https://saliystudio.com/sitemap.xml'
+ 	}
+ }
+--- a/src/app/sitemap.ts
++++ b/src/app/sitemap.ts
+@@ -2,7 +2,7 @@
+ import { productsService } from '@/services/products'
+ import type { MetadataRoute } from 'next'
+ 
+-const BASE = 'https://saliyclothes.com'
++const BASE = 'https://saliystudio.com'
+ 
+ export const revalidate = 3600
+ 
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -7,7 +7,7 @@
+ // и не должна попадать в клиентский бандл, чтобы не светить внутренний адрес
+ // бэкенда. На проде сюда пишется прямой localhost-адрес API: тогда SSR ходит напрямую,
+ // минуя DNS, nginx и TLS, вместо крюка через внешний домен на ту же машину.
+-const SERVER_BASE_URL = process.env.API_URL ?? 'https://saliyclothes.com/api'
++const SERVER_BASE_URL = process.env.API_URL ?? 'https://saliystudio.com/api'
+ 
+ // В браузере всегда относительный /api — тот же origin, что и сайт, поэтому
+ // httpOnly-куки уходят автоматически без CORS.

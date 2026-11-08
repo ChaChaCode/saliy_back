@@ -1,0 +1,136 @@
+--- a/src/components/elements/product/ProductCreate.tsx
++++ b/src/components/elements/product/ProductCreate.tsx
+@@ -44,6 +44,7 @@
+ 	const [slug, setSlug] = useState('')
+ 	const [description, setDescription] = useState('')
+ 	const [price, setPrice] = useState('')
++	const [oldPrice, setOldPrice] = useState('')
+ 	const [color, setColor] = useState('')
+ 	const [gender, setGender] = useState<GenderType | ''>('')
+ 	const [cardStatus, setCardStatus] = useState<CardStatus>('NONE')
+@@ -82,11 +83,17 @@
+ 
+ 	const createMutation = useMutation({
+ 		mutationFn: () => {
++			if (!Number.isFinite(Number(price)) || price.trim() === '' || Number(price) < 0)
++				throw new Error('Укажите актуальную цену не меньше нуля')
++			if (oldPrice.trim() !== '' && (!Number.isFinite(Number(oldPrice)) || Number(oldPrice) <= Number(price)))
++				throw new Error('Старая цена должна быть больше актуальной')
+ 			setUploadedCount(0)
+ 			const formData = new FormData()
+ 			formData.append('name', name)
+ 			formData.append('slug', slug)
+ 			formData.append('price', price)
++			if (oldPrice.trim() !== '') formData.append('oldPrice', oldPrice)
++			formData.append('discount', '0')
+ 			if (description) formData.append('description', description)
+ 			if (color) formData.append('color', color)
+ 			if (gender) formData.append('gender', gender)
+@@ -180,13 +187,19 @@
+ 
+ 					<div className="flex flex-col gap-4">
+ 						<label className="text-[16px] pl-8 leading-5.25 font-medium">
+-							Цена
++							Актуальная цена, ₽
+ 						</label>
+ 						<Input
+ 							numeric
+ 							value={price}
+ 							onChange={e => setPrice(e.target.value)}
+ 						/>
++					</div>
++
++					<div className="flex flex-col gap-4">
++						<label className="text-[16px] pl-8 leading-5.25 font-medium">Старая цена, ₽</label>
++						<Input numeric value={oldPrice} onChange={e => setOldPrice(e.target.value)} placeholder="Без старой цены" />
++						<p className="text-sm text-secondary pl-8">Необязательно. Будет показана зачёркнутой.</p>
+ 					</div>
+ 
+ 					<div className="flex flex-col gap-4">
+--- a/src/components/elements/product/ProductDetails.tsx
++++ b/src/components/elements/product/ProductDetails.tsx
+@@ -35,7 +35,8 @@
+ 	return {
+ 		name: product.name,
+ 		description: product.description || '',
+-		price: String(product.price),
++		price: String(Math.floor(product.price * (1 - product.discount / 100))),
++		oldPrice: product.oldPrice != null ? String(product.oldPrice) : product.discount > 0 ? String(product.price) : '',
+ 		color: product.color || '',
+ 		stock: { ...product.stock },
+ 		activeSizes: Object.keys(product.stock).filter(s => product.stock[s] > 0),
+@@ -59,6 +60,7 @@
+ 	const [name, setName] = useState(initial.name)
+ 	const [description, setDescription] = useState(initial.description)
+ 	const [price, setPrice] = useState(initial.price)
++	const [oldPrice, setOldPrice] = useState(initial.oldPrice)
+ 	const [color, setColor] = useState(initial.color)
+ 	const [stock, setStock] = useState<Record<string, number>>(initial.stock)
+ 	const [activeSizes, setActiveSizes] = useState<string[]>(initial.activeSizes)
+@@ -80,6 +82,7 @@
+ 		name !== initial.name ||
+ 		description !== initial.description ||
+ 		price !== initial.price ||
++		oldPrice !== initial.oldPrice ||
+ 		color !== initial.color ||
+ 		isActive !== initial.isActive ||
+ 		cardStatus !== initial.cardStatus ||
+@@ -93,6 +96,7 @@
+ 		setName(initial.name)
+ 		setDescription(initial.description)
+ 		setPrice(initial.price)
++		setOldPrice(initial.oldPrice)
+ 		setColor(initial.color)
+ 		setStock({ ...initial.stock })
+ 		setActiveSizes([...initial.activeSizes])
+@@ -106,6 +110,10 @@
+ 
+ 	const saveMutation = useMutation({
+ 		mutationFn: async () => {
++			if (!Number.isFinite(Number(price)) || price.trim() === '' || Number(price) < 0)
++				throw new Error('Укажите актуальную цену не меньше нуля')
++			if (oldPrice.trim() !== '' && (!Number.isFinite(Number(oldPrice)) || Number(oldPrice) <= Number(price)))
++				throw new Error('Старая цена должна быть больше актуальной')
+ 			setUploadProgress(newFiles.length ? { done: 0, total: newFiles.length } : null)
+ 			for (const url of deletedImageUrls) {
+ 				await productsService.deleteImage(product.id, url)
+@@ -132,6 +140,8 @@
+ 				name,
+ 				description,
+ 				price: Number(price),
++				oldPrice: oldPrice.trim() === '' ? null : Number(oldPrice),
++				discount: 0,
+ 				color,
+ 				stock,
+ 				isActive: isActive === 'true',
+@@ -300,13 +310,19 @@
+ 
+ 					<div className="flex flex-col gap-4">
+ 						<label className="text-[16px] pl-8 leading-5.25 font-medium">
+-							Цена
++							Актуальная цена, ₽
+ 						</label>
+ 						<Input
+ 							numeric
+ 							value={price}
+ 							onChange={e => setPrice(e.target.value)}
+ 						/>
++					</div>
++
++					<div className="flex flex-col gap-4">
++						<label className="text-[16px] pl-8 leading-5.25 font-medium">Старая цена, ₽</label>
++						<Input numeric value={oldPrice} onChange={e => setOldPrice(e.target.value)} placeholder="Без старой цены" />
++						<p className="text-sm text-secondary pl-8">Необязательно. Будет показана зачёркнутой.</p>
+ 					</div>
+ 
+ 					<div className="flex flex-col gap-4">
+--- a/src/types/product.ts
++++ b/src/types/product.ts
+@@ -34,6 +34,7 @@
+ 	color: string | null
+ 	weight: number | null
+ 	price: number
++	oldPrice?: number | null
+ 	discount: number
+ 	images: ProductImage[]
+ 	stock: Record<string, number>

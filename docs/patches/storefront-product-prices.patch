@@ -1,0 +1,150 @@
+--- a/src/types/category.ts
++++ b/src/types/category.ts
+@@ -29,6 +29,7 @@
+ 	gender: string
+ 	color: string
+ 	weight: number
++	oldPrice?: number | null
+ 	price: number
+ 	discount: number
+ 	images: CategoryProductImage[]
+--- a/src/services/cart.ts
++++ b/src/services/cart.ts
+@@ -12,6 +12,7 @@
+ 	productSlug: string
+ 	size: string
+ 	quantity: number
++	oldPrice?: number | null
+ 	price: number
+ 	discount: number
+ 	finalPrice: number
+@@ -40,7 +41,8 @@
+ 		id: number
+ 		name: string
+ 		slug: string
+-		price: number
++		oldPrice?: number | null
++	price: number
+ 		discount: number
+ 		images: { url: string; isPreview: boolean; previewOrder: number }[]
+ 	}
+--- a/src/app/product/[slug]/page.tsx
++++ b/src/app/product/[slug]/page.tsx
+@@ -73,7 +73,7 @@
+ 	const firstImage = allImages[0]
+ 	const restImages = allImages.slice(1)
+ 	const finalPrice =
+-		product.discount > 0
++		product.oldPrice != null ? product.price : product.discount > 0
+ 			? Math.round(product.price * (1 - product.discount / 100))
+ 			: null
+ 
+--- a/src/app/product/[slug]/page.tsx
++++ b/src/app/product/[slug]/page.tsx
+@@ -119,7 +119,7 @@
+ 					productId={product.id}
+ 					name={product.name}
+ 					slug={product.slug}
+-					price={product.price}
++					price={product.oldPrice ?? product.price}
+ 					finalPrice={finalPrice}
+ 					stock={product.stock}
+ 					description={product.description}
+--- a/src/components/elements/product/ProductInfo.tsx
++++ b/src/components/elements/product/ProductInfo.tsx
+@@ -37,7 +37,7 @@
+       <div className="flex flex-col lg:gap-3.5 gap-2.5 2xl:gap-2.5">
+         <h1 className="text-[20px] lg:text-[24px] leading-normal 2xl:text-[32px] font-medium uppercase ">{name}</h1>
+         <div className="flex items-center gap-3">
+-          {finalPrice ? (
++          {finalPrice !== null ? (
+             <>
+               <span className="text-[20px] tracking-[-0.01em]  leading-normal lg:text-[24px] font-medium uppercase ">{finalPrice.toLocaleString('ru-RU')} ₽</span>
+               <span className="text-[20px] tracking-[-0.01em]  leading-normal lg:text-[24px] font-medium uppercase line-through text-foreground/40">{price.toLocaleString('ru-RU')} ₽</span>
+--- a/src/components/elements/home/ProductCard.tsx
++++ b/src/components/elements/home/ProductCard.tsx
+@@ -18,6 +18,8 @@
+ 	const secondImage = previewImages[1] ?? product.images[1]
+ 	const isOutOfStock = Object.values(product.stock).every(v => v === 0)
+ 	const status = product.cardStatus
++	const currentPrice = Math.floor(product.price * (1 - product.discount / 100))
++	const oldPrice = product.oldPrice ?? (product.discount > 0 ? product.price : null)
+ 
+ 	const statusLabel = isOutOfStock
+ 		? 'Sold out'
+--- a/src/components/elements/home/ProductCard.tsx
++++ b/src/components/elements/home/ProductCard.tsx
+@@ -62,7 +62,8 @@
+ 					{product.name}
+ 				</p>
+ 				<p className="2xl:text-[16px] tracking-[-0.01em] font-medium text-[14px] leading-normal text-foreground">
+-					{product.price.toLocaleString('ru-RU')} ₽
++					{currentPrice.toLocaleString('ru-RU')} ₽
++					{oldPrice != null && oldPrice > currentPrice && <span className="ml-2 line-through text-foreground/40">{oldPrice.toLocaleString('ru-RU')} ₽</span>}
+ 				</p>
+ 			</div>
+ 		</Link>
+--- a/src/components/elements/cart/CartItemCard.tsx
++++ b/src/components/elements/cart/CartItemCard.tsx
+@@ -16,6 +16,7 @@
+ 
+ interface CartItemCardProps {
+ 	item: CartItem
++	oldPrice?: number | null
+ 	price?: number
+ 	discount?: number
+ 	availableQuantity?: number
+--- a/src/components/elements/cart/CartItemCard.tsx
++++ b/src/components/elements/cart/CartItemCard.tsx
+@@ -25,6 +25,7 @@
+ export default function CartItemCard({
+ 	item,
+ 	price,
++	oldPrice,
+ 	discount,
+ 	availableQuantity
+ }: CartItemCardProps) {
+--- a/src/components/elements/cart/CartItemCard.tsx
++++ b/src/components/elements/cart/CartItemCard.tsx
+@@ -97,7 +97,7 @@
+ 							<span className="lg:text-[14px] uppercase text-[12px] leading-4 font-normal lg:leading-[19.5px] text-secondary">
+ 								{finalPrice.toLocaleString('ru-RU')} ₽
+ 							</span>
+-							{discount !== undefined && discount > 0 && price && (
++							{(oldPrice != null || (discount !== undefined && discount > 0)) && price !== undefined && (
+ 								<span className="text-[12px] line-through text-foreground/40">
+ 									{price.toLocaleString('ru-RU')} ₽
+ 								</span>
+--- a/src/components/elements/cart/CartItemCard.tsx
++++ b/src/components/elements/cart/CartItemCard.tsx
+@@ -99,7 +99,7 @@
+ 							</span>
+ 							{(oldPrice != null || (discount !== undefined && discount > 0)) && price !== undefined && (
+ 								<span className="text-[12px] line-through text-foreground/40">
+-									{price.toLocaleString('ru-RU')} ₽
++									{(oldPrice ?? price).toLocaleString('ru-RU')} ₽
+ 								</span>
+ 							)}
+ 						</div>
+--- a/src/app/cart/page.tsx
++++ b/src/app/cart/page.tsx
+@@ -40,7 +40,7 @@
+ 							key={`${item.productId}-${item.size}`}
+ 							item={item}
+ 							price={v?.price}
+-							discount={v?.discount}
++							discount={v?.discount} oldPrice={v?.oldPrice}
+ 							availableQuantity={v?.availableQuantity}
+ 						/>
+ 					)
+--- a/src/components/elements/checkout/CheckoutSummary.tsx
++++ b/src/components/elements/checkout/CheckoutSummary.tsx
+@@ -59,7 +59,7 @@
+ 							key={`${item.productId}-${item.size}`}
+ 							item={item}
+ 							price={v?.price}
+-							discount={v?.discount}
++							discount={v?.discount} oldPrice={v?.oldPrice}
+ 							availableQuantity={v?.availableQuantity}
+ 						/>
+ 					)

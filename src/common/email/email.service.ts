@@ -100,7 +100,13 @@ export class EmailService {
       orderNumber: string;
       firstName: string;
       lastName: string;
-      items: Array<{ name: string; size: string; quantity: number; price: number }>;
+      items: Array<{
+        name: string;
+        size: string;
+        quantity: number;
+        price: number;
+        isPreorder?: boolean;
+      }>;
       originalSubtotal: number;
       subtotal: number;
       discountAmount: number;
@@ -146,6 +152,7 @@ export class EmailService {
           </div>
           <div style="color: #666666; font-size: 12px;">
             РАЗМЕР: ${item.size.toUpperCase()} × ${item.quantity} ШТ @ ${item.price.toFixed(2)} ₽
+            ${item.isPreorder ? '<br>ПРЕДЗАКАЗ. О готовности к отправке сообщим отдельно. Весь заказ будет отправлен вместе после поступления.' : ''}
           </div>
         </div>
       `,
@@ -157,7 +164,10 @@ export class EmailService {
     const itemsText = orderData.items
       .map(
         (item) =>
-          `- ${item.name} (размер ${item.size}) × ${item.quantity} @ ${item.price.toFixed(2)} ₽ = ${(item.price * item.quantity).toFixed(2)} ₽`,
+          `- ${item.name} (размер ${item.size}) × ${item.quantity} @ ${item.price.toFixed(2)} ₽ = ${(item.price * item.quantity).toFixed(2)} ₽` +
+          (item.isPreorder
+            ? ' — Предзаказ. О готовности к отправке сообщим отдельно. Весь заказ отправляется вместе после поступления.'
+            : ''),
       )
       .join('\n');
     const orderText =

@@ -1,0 +1,22 @@
+--- a/src/components/elements/product/ProductCreate.tsx
++++ b/src/components/elements/product/ProductCreate.tsx
+@@ -14,7 +14,7 @@
+ import { useNavigate } from 'react-router-dom'
+ import { ProductGallery } from './ProductGallery'
+ 
+-const ALL_SIZES = ['XS', 'S', 'M', 'L', 'XL']
++const ALL_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'OS']
+ 
+ const VISIBILITY_OPTIONS = [
+ 	{ value: 'true', label: 'Активен' },
+--- a/src/components/elements/product/ProductDetails.tsx
++++ b/src/components/elements/product/ProductDetails.tsx
+@@ -18,7 +18,7 @@
+ 	product: Product
+ }
+ 
+-const ALL_SIZES = ['XS', 'S', 'M', 'L', 'XL']
++const ALL_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'OS']
+ 
+ const VISIBILITY_OPTIONS = [
+ 	{ value: 'true', label: 'Активен' },

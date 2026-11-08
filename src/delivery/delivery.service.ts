@@ -1101,6 +1101,7 @@ export class DeliveryService {
       PENDING: 0,
       PAYMENT_FAILED: 0,
       CONFIRMED: 1,
+      AWAITING_PREORDER: 99,
       PROCESSING: 2,
       SHIPPED: 3,
       DELIVERED: 4,

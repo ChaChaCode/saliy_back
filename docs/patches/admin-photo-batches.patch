@@ -1,0 +1,182 @@
+diff --git a/src/services/products.service.ts b/src/services/products.service.ts
+index 7c307ca..5d6b9b8 100644
+--- a/src/services/products.service.ts
++++ b/src/services/products.service.ts
+@@ -8,6 +8,57 @@ import type {
+ 	ProductsListResponse
+ } from '@/types/product'
+ 
++export class ProductImageUploadError extends Error {
++	product: Product
++	uploadedCount: number
++	originalError: unknown
++	constructor(product: Product, uploadedCount: number, originalError: unknown) {
++		super(`Загружено ${uploadedCount} фото. Остальные фото не удалось загрузить.`)
++		this.product = product
++		this.uploadedCount = uploadedCount
++		this.originalError = originalError
++	}
++}
++
++function imageBatches(files: File[]): File[][] {
++	const batches: File[][] = []
++	let batch: File[] = []
++	let bytes = 0
++	for (const file of files) {
++		if (!/^image\/(jpeg|jpg|png|webp)$/.test(file.type))
++			throw new Error(`«${file.name}»: поддерживаются JPG, PNG и WebP`)
++		if (file.size > 10 * 1024 * 1024)
++			throw new Error(`«${file.name}»: размер фото должен быть не больше 10 МБ`)
++		if (batch.length === 10 || bytes + file.size > 20 * 1024 * 1024) {
++			batches.push(batch)
++			batch = []
++			bytes = 0
++		}
++		batch.push(file)
++		bytes += file.size
++	}
++	if (batch.length) batches.push(batch)
++	return batches
++}
++
++async function uploadImageBatches(id: number, batches: File[][], onUploaded?: (count: number, product: Product) => void) {
++	let product: Product | undefined
++	let uploadedCount = 0
++	for (const batch of batches) {
++		const data = new FormData()
++		batch.forEach(file => data.append('images', file))
++		try {
++			product = (await api.post<{ message: string; product: Product }>(`/admin/products/${id}/images`, data)).data.product
++		} catch (error) {
++			if (product) throw new ProductImageUploadError(product, uploadedCount, error)
++			throw error
++		}
++		uploadedCount += batch.length
++		onUploaded?.(batch.length, product)
++	}
++	return product
++}
++
+ export const productsService = {
+ 	getList: (params: ProductsListParams = {}) =>
+ 		api
+@@ -17,12 +68,20 @@ export const productsService = {
+ 	getById: (id: number) =>
+ 		api.get<Product>(`/admin/products/${id}`).then(r => r.data),
+ 
+-	create: (data: FormData) =>
+-		api
+-			.post<Product>('/admin/products', data, {
+-				headers: { 'Content-Type': 'multipart/form-data' }
+-			})
+-			.then(r => r.data),
++	create: async (data: FormData) => {
++		const batches = imageBatches(data.getAll('images') as File[])
++		const first = new FormData()
++		data.forEach((value, key) => { if (key !== 'images') first.append(key, value) })
++		batches[0]?.forEach(file => first.append('images', file))
++		const product = (await api.post<Product>('/admin/products', first)).data
++		try {
++			return (await uploadImageBatches(product.id, batches.slice(1))) ?? product
++		} catch (error) {
++			if (error instanceof ProductImageUploadError)
++				throw new ProductImageUploadError(error.product, (batches[0]?.length ?? 0) + error.uploadedCount, error.originalError)
++			throw new ProductImageUploadError(product, batches[0]?.length ?? 0, error)
++		}
++	},
+ 
+ 	update: (id: number, data: Record<string, unknown>) =>
+ 		api.patch<Product>(`/admin/products/${id}`, data).then(r => r.data),
+@@ -37,16 +96,8 @@ export const productsService = {
+ 			})
+ 			.then(r => r.data),
+ 
+-	uploadImages: (id: number, files: File[]) => {
+-		const formData = new FormData()
+-		files.forEach(file => formData.append('images', file))
+-		return api
+-			.post<{
+-				message: string
+-				product: Product
+-			}>(`/admin/products/${id}/images`, formData)
+-			.then(r => r.data.product)
+-	},
++	uploadImages: (id: number, files: File[], onUploaded?: (count: number, product: Product) => void) =>
++		uploadImageBatches(id, imageBatches(files), onUploaded),
+ 
+ 	deleteImage: (id: number, imageUrl: string) =>
+ 		api
+diff --git a/src/components/elements/product/ProductDetails.tsx b/src/components/elements/product/ProductDetails.tsx
+index f22e415..5a82d9e 100644
+--- a/src/components/elements/product/ProductDetails.tsx
++++ b/src/components/elements/product/ProductDetails.tsx
+@@ -107,18 +107,23 @@ export function ProductDetails({ product }: Props) {
+ 		mutationFn: async () => {
+ 			for (const url of deletedImageUrls) {
+ 				await productsService.deleteImage(product.id, url)
++				setDeletedImageUrls(pending => pending.filter(item => item !== url))
+ 			}
+ 
+-			if (newFiles.length > 0) {
+-				await productsService.uploadImages(product.id, newFiles)
+-			}
+-
++			// Persist gallery changes before appending, so reordering cannot discard new photos.
+ 			const orderChanged =
+ 				images.map(i => i.url).join() !== initial.images.map(i => i.url).join()
+-			if (orderChanged) {
++			if (orderChanged && images.length > 0) {
+ 				await productsService.updateImagesOrder(product.id, images)
+ 			}
+ 
++			if (newFiles.length > 0) {
++				await productsService.uploadImages(product.id, newFiles, (count, updated) => {
++					setNewFiles(pending => pending.slice(count))
++					setImages(updated.images)
++				})
++			}
++
+ 			return productsService.update(product.id, {
+ 				name,
+ 				description,
+@@ -139,8 +144,8 @@ export function ProductDetails({ product }: Props) {
+ 				queryClient.invalidateQueries({ queryKey: ['products'] })
+ 			}, 350)
+ 		},
+-		onError: () => {
+-			toast.error('Не удалось сохранить')
++		onError: (error: Error) => {
++			toast.error(error.message.startsWith('Request failed') ? 'Не удалось сохранить. Уже загруженные фото сохранены; повторите загрузку оставшихся.' : error.message)
+ 		}
+ 	})
+ 
+diff --git a/src/components/elements/product/ProductCreate.tsx b/src/components/elements/product/ProductCreate.tsx
+index 11ce6ee..1fba1ba 100644
+--- a/src/components/elements/product/ProductCreate.tsx
++++ b/src/components/elements/product/ProductCreate.tsx
+@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/Textarea'
+ import { CARD_STATUS } from '@/constants/cardStatus'
+ import { useCategories } from '@/hooks/useCategories'
+ import { campaignsService } from '@/services/campaigns.service'
+-import { productsService } from '@/services/products.service'
++import { productsService, ProductImageUploadError } from '@/services/products.service'
+ import type { CardStatus, GenderType } from '@/types/product'
+ import { apiErrorMessage } from '@/utils/apiError'
+ import { useMutation, useQueryClient } from '@tanstack/react-query'
+@@ -112,7 +112,15 @@ export function ProductCreate() {
+ 			}
+ 			navigate(`/products/${product.id}`)
+ 		},
+-		onError: () => toast.error('Не удалось создать товар')
++		onError: (error: Error) => {
++			if (error instanceof ProductImageUploadError) {
++				queryClient.invalidateQueries({ queryKey: ['products'] })
++				toast.error(`Товар создан. ${error.message} Добавьте оставшиеся фото в карточке товара.`)
++				navigate(`/products/${error.product.id}`)
++				return
++			}
++			toast.error(apiErrorMessage(error, 'Не удалось создать товар'))
++		}
+ 	})
+ 
+ 	const handleRemoveNew = (index: number) => {

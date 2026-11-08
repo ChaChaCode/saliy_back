@@ -1,5 +1,7 @@
 # API админ-панели: Заказы
 
+Предзаказы: статус `AWAITING_PREORDER` и команда `POST /:orderNumber/preorder-ready` описаны в [Предзаказы](../shop/preorders.md).
+
 **Базовый URL:** `/api/admin/orders`
 
 **Авторизация:** все эндпоинты требуют авторизации администратора (`AdminGuard`). Запросы авторизуются через httpOnly cookie `adminToken`, которую браузер отправляет автоматически.
@@ -190,7 +192,7 @@ CDEK позволяет менять данные только пока посы
 |------|-----|--------------|----------|
 | `status` | OrderStatus | Да | Новый статус |
 
-Доступные статусы: `PENDING`, `PAYMENT_FAILED`, `CONFIRMED`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `CANCELLED` (для отмены используйте отдельный эндпоинт), `REFUNDED`.
+Доступные статусы: `PENDING`, `PAYMENT_FAILED`, `AWAITING_PREORDER` (оплачен, ожидает поступления), `CONFIRMED`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `CANCELLED` (для отмены используйте отдельный эндпоинт), `REFUNDED`.
 
 Ответ: обновлённый объект заказа. Ошибки: `404` — заказ не найден, `400` — попытка изменить статус отменённого заказа.
 
@@ -312,4 +314,4 @@ CDEK присылает уведомление с типом `ORDER_STATUS`, и�
 
 ## OrderStatus — жизненный цикл заказа
 
-PENDING → CONFIRMED → PROCESSING → SHIPPED → DELIVERED → (REFUNDED). Из PENDING возможен переход в PAYMENT_FAILED. Любой статус (кроме DELIVERED) может перейти в CANCELLED.
+Обычный заказ: PENDING → CONFIRMED → PROCESSING → SHIPPED → DELIVERED → (REFUNDED). Предзаказ после оплаты: PENDING → AWAITING_PREORDER → CONFIRMED (через preorder-ready), далее обычная отправка. Из PENDING возможен переход в PAYMENT_FAILED. Отмена доступна до отправки.

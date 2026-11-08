@@ -91,6 +91,12 @@ export class CreateProductDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  oldPrice?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   @Max(100)
   discount?: number;
 
@@ -98,6 +104,11 @@ export class CreateProductDto {
   @Transform(parseJsonObject)
   @IsObject()
   stock?: Record<string, number>;
+
+  @IsOptional()
+  @Transform(parseJsonObject)
+  @IsObject()
+  preorderStock?: Record<string, number>;
 
   @IsOptional()
   @Transform(toBoolean)
@@ -152,6 +163,12 @@ export class UpdateProductDto {
   @Type(() => Number)
   @IsNumber()
   @Min(0)
+  oldPrice?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
   @Max(100)
   discount?: number;
 
@@ -159,6 +176,11 @@ export class UpdateProductDto {
   @Transform(parseJsonObject)
   @IsObject()
   stock?: Record<string, number>; // {"S": 10, "M": 5, "L": 0}
+
+  @IsOptional()
+  @Transform(parseJsonObject)
+  @IsObject()
+  preorderStock?: Record<string, number>;
 
   @IsOptional()
   @Transform(toBoolean)

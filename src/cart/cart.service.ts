@@ -1,3 +1,4 @@
+import { purchaseAvailability } from '../common/utils/preorder.util';
 import {
   Injectable,
   NotFoundException,
@@ -59,8 +60,7 @@ export class CartService {
     }
 
     // Проверяем наличие на складе
-    const stock = product.stock as any;
-    const availableQuantity = stock[size] || 0;
+    const { availableQuantity } = purchaseAvailability(product, size);
 
     if (availableQuantity < quantity) {
       if (availableQuantity === 0) {
@@ -150,8 +150,13 @@ export class CartService {
     }
 
     // Проверяем наличие на складе
-    const stock = cartItem.product.stock as any;
-    const availableQuantity = stock[cartItem.size] || 0;
+    if (!cartItem.product.isActive || cartItem.product.deletedAt) {
+      throw new BadRequestException('Товар недоступен для заказа');
+    }
+    const { availableQuantity } = purchaseAvailability(
+      cartItem.product,
+      cartItem.size,
+    );
 
     if (availableQuantity < quantity) {
       if (availableQuantity === 0) {
@@ -254,9 +259,12 @@ export class CartService {
           size: item.size,
           quantity: item.quantity,
           price: product?.price ?? 0,
+          oldPrice: product?.oldPrice ?? null,
           discount: product?.discount ?? 0,
           finalPrice: 0,
           totalPrice: 0,
+          isPreorder: product?.cardStatus === 'PRE_ORDER',
+          canPurchase: false,
           inStock: false,
           availableQuantity: 0,
           isAvailable: false,
@@ -266,8 +274,8 @@ export class CartService {
       }
 
       // Проверяем наличие на складе
-      const stock = product.stock as any;
-      const availableQuantity = stock[item.size] || 0;
+      const availability = purchaseAvailability(product, item.size);
+      const { availableQuantity } = availability;
       const inStock = availableQuantity >= item.quantity;
 
       // Актуальная цена и скидка из БД
@@ -288,10 +296,13 @@ export class CartService {
         size: item.size,
         quantity: item.quantity,
         price,
+        oldPrice: product.oldPrice,
         discount,
         finalPrice,
         totalPrice,
+        ...availability,
         inStock,
+        canPurchase: inStock,
         availableQuantity,
         isAvailable: true,
         imageUrl,

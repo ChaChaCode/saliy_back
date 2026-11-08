@@ -137,12 +137,17 @@ export class ProductsController {
   ) {
     const inStock = await this.productsService.isInStock(id, size);
     const quantity = await this.productsService.getStockQuantity(id, size);
+    const availability = await this.productsService.getPurchaseAvailability(
+      id,
+      size,
+    );
 
     return {
       productId: id,
       size,
       inStock,
       quantity,
+      ...availability,
     };
   }
 

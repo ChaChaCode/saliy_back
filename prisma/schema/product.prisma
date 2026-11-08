@@ -34,11 +34,13 @@ model Product {
 
   // Цена (только RUB)
   price       Float         @default(0)     // Цена в рублях
+  oldPrice    Float?        @map("old_price") // Необязательная старая цена для отображения
   discount    Int           @default(0)     // Скидка в процентах (0-100)
 
   // JSON поля
   images      Json          @default("[]")  // [{"url": "...", "isPreview": true, "previewOrder": 1}, ...]
   stock       Json          @default("{}")  // {"S": 10, "M": 5, "L": 0}
+  preorderStock Json        @default("{}") @map("preorder_stock")
 
   // Счётчики
   isActive    Boolean       @default(true) @map("is_active")

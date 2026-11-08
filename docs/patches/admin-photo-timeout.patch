@@ -1,0 +1,239 @@
+diff --git a/src/services/products.service.ts b/src/services/products.service.ts
+index 5d6b9b8..5f61447 100644
+--- a/src/services/products.service.ts
++++ b/src/services/products.service.ts
+@@ -20,7 +20,7 @@ export class ProductImageUploadError extends Error {
+ 	}
+ }
+ 
+-function imageBatches(files: File[]): File[][] {
++function imageBatches(files: File[], maxCount = 1): File[][] {
+ 	const batches: File[][] = []
+ 	let batch: File[] = []
+ 	let bytes = 0
+@@ -29,7 +29,7 @@ function imageBatches(files: File[]): File[][] {
+ 			throw new Error(`«${file.name}»: поддерживаются JPG, PNG и WebP`)
+ 		if (file.size > 10 * 1024 * 1024)
+ 			throw new Error(`«${file.name}»: размер фото должен быть не больше 10 МБ`)
+-		if (batch.length === 10 || bytes + file.size > 20 * 1024 * 1024) {
++		if (batch.length === maxCount || bytes + file.size > 20 * 1024 * 1024) {
+ 			batches.push(batch)
+ 			batch = []
+ 			bytes = 0
+@@ -68,14 +68,15 @@ export const productsService = {
+ 	getById: (id: number) =>
+ 		api.get<Product>(`/admin/products/${id}`).then(r => r.data),
+ 
+-	create: async (data: FormData) => {
+-		const batches = imageBatches(data.getAll('images') as File[])
++	create: async (data: FormData, onUploaded?: (count: number) => void) => {
++		const batches = imageBatches(data.getAll('images') as File[], 2)
+ 		const first = new FormData()
+ 		data.forEach((value, key) => { if (key !== 'images') first.append(key, value) })
+ 		batches[0]?.forEach(file => first.append('images', file))
+ 		const product = (await api.post<Product>('/admin/products', first)).data
++		onUploaded?.(batches[0]?.length ?? 0)
+ 		try {
+-			return (await uploadImageBatches(product.id, batches.slice(1))) ?? product
++			return (await uploadImageBatches(product.id, batches.slice(1), count => onUploaded?.(count))) ?? product
+ 		} catch (error) {
+ 			if (error instanceof ProductImageUploadError)
+ 				throw new ProductImageUploadError(error.product, (batches[0]?.length ?? 0) + error.uploadedCount, error.originalError)
+@@ -84,7 +85,7 @@ export const productsService = {
+ 	},
+ 
+ 	update: (id: number, data: Record<string, unknown>) =>
+-		api.patch<Product>(`/admin/products/${id}`, data).then(r => r.data),
++		api.patch<Product>(`/admin/products/${id}`, data, { timeoutMs: 30_000 }).then(r => r.data),
+ 
+ 	getEnums: () =>
+ 		api.get<ProductEnums>('/admin/products/enums/all').then(r => r.data),
+@@ -101,7 +102,7 @@ export const productsService = {
+ 
+ 	deleteImage: (id: number, imageUrl: string) =>
+ 		api
+-			.patch(`/admin/products/${id}/delete-image`, { imageUrl })
++			.patch(`/admin/products/${id}/delete-image`, { imageUrl }, { timeoutMs: 30_000 })
+ 			.then(r => r.data),
+ 
+ 	setPreviews: (id: number, primary: string, hover: string | null) =>
+@@ -117,7 +118,7 @@ export const productsService = {
+ 			.patch<{
+ 				message: string
+ 				product: Product
+-			}>(`/admin/products/${id}/images-order`, { images })
++			}>(`/admin/products/${id}/images-order`, { images }, { timeoutMs: 30_000 })
+ 			.then(r => r.data),
+ 
+ 	delete: (id: number) =>
+diff --git a/src/components/elements/product/ProductDetails.tsx b/src/components/elements/product/ProductDetails.tsx
+index 5a82d9e..7b8558a 100644
+--- a/src/components/elements/product/ProductDetails.tsx
++++ b/src/components/elements/product/ProductDetails.tsx
+@@ -69,6 +69,7 @@ export function ProductDetails({ product }: Props) {
+ 	const [deletedImageUrls, setDeletedImageUrls] = useState<string[]>([])
+ 	const [newFiles, setNewFiles] = useState<File[]>([])
+ 	const [confirmOpen, setConfirmOpen] = useState(false)
++	const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null)
+ 
+ 	const totalStock = activeSizes.reduce(
+ 		(sum, size) => sum + (stock[size] || 0),
+@@ -105,6 +106,7 @@ export function ProductDetails({ product }: Props) {
+ 
+ 	const saveMutation = useMutation({
+ 		mutationFn: async () => {
++			setUploadProgress(newFiles.length ? { done: 0, total: newFiles.length } : null)
+ 			for (const url of deletedImageUrls) {
+ 				await productsService.deleteImage(product.id, url)
+ 				setDeletedImageUrls(pending => pending.filter(item => item !== url))
+@@ -121,8 +123,10 @@ export function ProductDetails({ product }: Props) {
+ 				await productsService.uploadImages(product.id, newFiles, (count, updated) => {
+ 					setNewFiles(pending => pending.slice(count))
+ 					setImages(updated.images)
++					setUploadProgress(progress => progress ? { ...progress, done: progress.done + count } : null)
+ 				})
+ 			}
++			setUploadProgress(null)
+ 
+ 			return productsService.update(product.id, {
+ 				name,
+@@ -146,7 +150,8 @@ export function ProductDetails({ product }: Props) {
+ 		},
+ 		onError: (error: Error) => {
+ 			toast.error(error.message.startsWith('Request failed') ? 'Не удалось сохранить. Уже загруженные фото сохранены; повторите загрузку оставшихся.' : error.message)
+-		}
++		},
++		onSettled: () => setUploadProgress(null)
+ 	})
+ 
+ 	const deleteMutation = useMutation({
+@@ -413,7 +418,7 @@ export function ProductDetails({ product }: Props) {
+ 					</button>
+ 					<Button
+ 						loading={saveMutation.isPending}
+-						loadingText="Сохранение..."
++						loadingText={uploadProgress ? `Фото ${uploadProgress.done}/${uploadProgress.total}` : 'Сохранение...'}
+ 						onClick={() => saveMutation.mutate()}
+ 					>
+ 						Сохранить изменения
+diff --git a/src/components/elements/product/ProductCreate.tsx b/src/components/elements/product/ProductCreate.tsx
+index 1fba1ba..fd76003 100644
+--- a/src/components/elements/product/ProductCreate.tsx
++++ b/src/components/elements/product/ProductCreate.tsx
+@@ -54,6 +54,7 @@ export function ProductCreate() {
+ 	const [stock, setStock] = useState<Record<string, number>>({})
+ 	const [categoryIds, setCategoryIds] = useState<string[]>([])
+ 	const [newFiles, setNewFiles] = useState<File[]>([])
++	const [uploadedCount, setUploadedCount] = useState(0)
+ 
+ 	const canSubmit =
+ 		name.trim() !== '' && slug.trim() !== '' && price.trim() !== ''
+@@ -81,6 +82,7 @@ export function ProductCreate() {
+ 
+ 	const createMutation = useMutation({
+ 		mutationFn: () => {
++			setUploadedCount(0)
+ 			const formData = new FormData()
+ 			formData.append('name', name)
+ 			formData.append('slug', slug)
+@@ -95,7 +97,7 @@ export function ProductCreate() {
+ 				formData.append('stock', JSON.stringify(stock))
+ 			categoryIds.forEach(id => formData.append('categoryIds', id))
+ 			newFiles.forEach(file => formData.append('images', file))
+-			return productsService.create(formData)
++			return productsService.create(formData, count => setUploadedCount(done => done + count))
+ 		},
+ 		onSuccess: async product => {
+ 			toast.success('Товар создан')
+@@ -311,7 +313,7 @@ export function ProductCreate() {
+ 					</button>
+ 					<Button
+ 						loading={createMutation.isPending}
+-						loadingText="Создание..."
++						loadingText={newFiles.length ? `Фото ${uploadedCount}/${newFiles.length}` : 'Создание...'}
+ 						onClick={() => createMutation.mutate()}
+ 						className={!canSubmit ? 'opacity-50 pointer-events-none' : ''}
+ 					>
+diff --git a/src/api/client.ts b/src/api/client.ts
+index 05fb25a..a6d4915 100644
+--- a/src/api/client.ts
++++ b/src/api/client.ts
+@@ -11,6 +11,7 @@ const AUTH_EXEMPT_PATHS = [
+ type QueryParams = Record<string, string | number | boolean | undefined | null>
+ 
+ type RequestOptions = {
++	timeoutMs?: number
+ 	params?: QueryParams
+ 	headers?: Record<string, string>
+ 	responseType?: 'json' | 'blob'
+@@ -57,31 +58,47 @@ async function request<T>(
+ 		headers['Content-Type'] = 'application/json'
+ 	}
+ 
+-	const response = await fetch(buildUrl(path, options.params), {
+-		method,
+-		credentials: 'include',
+-		headers,
+-		body:
+-			body === undefined ? undefined : isFormData ? body : JSON.stringify(body)
+-	})
+-
+-	if (!response.ok) {
+-		const errData = await parseBody(response, 'json').catch(() => null)
+-
+-		const isAuthEndpoint = AUTH_EXEMPT_PATHS.some(p => path.startsWith(p))
+-		if (
+-			response.status === 401 &&
+-			!isAuthEndpoint &&
+-			window.location.pathname !== '/auth'
+-		) {
+-			window.location.href = '/auth'
++	const controller = new AbortController()
++	const timeoutMs = options.timeoutMs ?? (isFormData ? 120_000 : 0)
++	const timeout = timeoutMs > 0 ? window.setTimeout(() => controller.abort(), timeoutMs) : undefined
++	try {
++		const response = await fetch(buildUrl(path, options.params), {
++			method,
++			signal: controller.signal,
++			credentials: 'include',
++			headers,
++			body:
++				body === undefined ? undefined : isFormData ? body : JSON.stringify(body)
++		})
++	
++		if (!response.ok) {
++			const errData = await parseBody(response, 'json').catch(() => null)
++	
++			const isAuthEndpoint = AUTH_EXEMPT_PATHS.some(p => path.startsWith(p))
++			if (
++				response.status === 401 &&
++				!isAuthEndpoint &&
++				window.location.pathname !== '/auth'
++			) {
++				window.location.href = '/auth'
++			}
++	
++			throw new ApiError(response.status, errData)
+ 		}
+-
+-		throw new ApiError(response.status, errData)
++	
++		const data = (await parseBody(response, options.responseType)) as T
++		return { data }
++	} catch (error) {
++		if (controller.signal.aborted) {
++			throw new Error('Сервер не ответил вовремя. Обновите карточку, чтобы проверить сохранённые фото, прежде чем повторять загрузку.')
++		}
++		if (error instanceof TypeError) {
++			throw new Error('Не удалось связаться с сервером. Проверьте соединение и обновите карточку перед повторной загрузкой.')
++		}
++		throw error
++	} finally {
++		if (timeout !== undefined) window.clearTimeout(timeout)
+ 	}
+-
+-	const data = (await parseBody(response, options.responseType)) as T
+-	return { data }
+ }
+ 
+ async function parseBody(response: Response, responseType?: 'json' | 'blob') {

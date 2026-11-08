@@ -1,4 +1,9 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SimpleCacheService } from '../../common/cache/simple-cache.service';
@@ -8,6 +13,11 @@ import * as crypto from 'crypto';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHANNEL_ID = '-1003644248789';
 const LOGIN_REQUEST_TTL = 5 * 60 * 1000; // 5 минут
+// Связь сервера с Telegram нестабильна (часть запросов обрывается), поэтому
+// отправку повторяем с таймаутом на каждую попытку.
+const TELEGRAM_SEND_ATTEMPTS = 4;
+const TELEGRAM_ATTEMPT_TIMEOUT_MS = 5000;
+const TELEGRAM_RETRY_DELAY_MS = 1000;
 
 @Injectable()
 export class AdminAuthService {
@@ -38,8 +48,22 @@ export class AdminAuthService {
       },
     });
 
-    // Отправляем сообщение в Telegram
-    await this.sendLoginRequest(loginId, verificationCode, ip, userAgent);
+    // Отправляем сообщение в Telegram. Если не дошло — запрос удаляем и
+    // сообщаем админке ошибку, иначе она бесконечно ждёт подтверждения.
+    const sent = await this.sendLoginRequest(
+      loginId,
+      verificationCode,
+      ip,
+      userAgent,
+    );
+    if (!sent) {
+      await this.prisma.adminLoginRequest
+        .delete({ where: { loginId } })
+        .catch(() => undefined);
+      throw new ServiceUnavailableException(
+        'Не удалось отправить запрос в Telegram. Попробуйте ещё раз.',
+      );
+    }
 
     this.logger.log(`Login request created: ${loginId} for IP ${ip}`);
 
@@ -217,10 +241,10 @@ export class AdminAuthService {
     verificationCode: string,
     ip: string,
     userAgent: string,
-  ) {
+  ): Promise<boolean> {
     if (!TELEGRAM_BOT_TOKEN) {
       this.logger.warn('TELEGRAM_BOT_TOKEN not set');
-      return;
+      return false;
     }
 
     const geo = await this.getGeoLocation(ip);
@@ -248,50 +272,64 @@ export class AdminAuthService {
 ⏱ Ссылка действительна 5 минут
     `.trim();
 
-    try {
-      const response = await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: TELEGRAM_CHANNEL_ID,
-            text: message,
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: '✅ Подтвердить',
-                    callback_data: `admin_approve:${loginId}`,
-                  },
-                  {
-                    text: '❌ Блок IP',
-                    callback_data: `admin_block:${ip}`,
-                  },
+    for (let attempt = 1; attempt <= TELEGRAM_SEND_ATTEMPTS; attempt++) {
+      try {
+        const response = await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+          {
+            method: 'POST',
+            signal: AbortSignal.timeout(TELEGRAM_ATTEMPT_TIMEOUT_MS),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: TELEGRAM_CHANNEL_ID,
+              text: message,
+              parse_mode: 'HTML',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: '✅ Подтвердить',
+                      callback_data: `admin_approve:${loginId}`,
+                    },
+                    {
+                      text: '❌ Блок IP',
+                      callback_data: `admin_block:${ip}`,
+                    },
+                  ],
                 ],
-              ],
-            },
-          }),
-        },
-      );
-
-      // Telegram отвечает HTTP 200 даже при ошибке API — fetch не бросает
-      // исключение, поэтому проверяем тело ответа явно, иначе сбой немой.
-      const result = (await response.json()) as {
-        ok: boolean;
-        description?: string;
-      };
-      if (!response.ok || !result.ok) {
-        throw new Error(
-          `Telegram API error: ${result.description || response.status}`,
+              },
+            }),
+          },
         );
-      }
 
-      this.logger.log(`Login request sent to Telegram for ${ip}`);
-    } catch (error) {
-      this.logger.error(`Failed to send login request: ${error.message}`);
+        // Telegram отвечает HTTP 200 даже при ошибке API — fetch не бросает
+        // исключение, поэтому проверяем тело ответа явно, иначе сбой немой.
+        const result = (await response.json()) as {
+          ok: boolean;
+          description?: string;
+        };
+        if (!response.ok || !result.ok) {
+          throw new Error(
+            `Telegram API error: ${result.description || response.status}`,
+          );
+        }
+
+        this.logger.log(
+          `Login request sent to Telegram for ${ip} (попытка ${attempt})`,
+        );
+        return true;
+      } catch (error) {
+        this.logger.warn(
+          `Telegram: попытка ${attempt}/${TELEGRAM_SEND_ATTEMPTS} не удалась: ${error.message}`,
+        );
+        if (attempt < TELEGRAM_SEND_ATTEMPTS)
+          await new Promise((r) => setTimeout(r, TELEGRAM_RETRY_DELAY_MS));
+      }
     }
+    this.logger.error(
+      `Failed to send login request for ${ip}: все попытки исчерпаны`,
+    );
+    return false;
   }
 
   /**

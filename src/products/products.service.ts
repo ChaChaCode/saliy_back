@@ -1,4 +1,8 @@
 import {
+  purchaseAvailability,
+  validatePreorderConfig,
+} from '../common/utils/preorder.util';
+import {
   Injectable,
   NotFoundException,
   BadRequestException,
@@ -23,6 +27,7 @@ export class ProductsService {
    * Создать товар
    */
   async createProduct(dto: CreateProductDto) {
+    validatePreorderConfig({ stock: {}, ...dto });
     const { categoryIds, ...productData } = dto;
 
     // Проверяем уникальность slug
@@ -113,6 +118,7 @@ export class ProductsService {
   async updateProduct(id: number, dto: UpdateProductDto) {
     // Проверяем существование
     const oldProduct = await this.getProductById(id);
+    validatePreorderConfig({ ...oldProduct, ...dto });
 
     const { categoryIds, ...productData } = dto;
 
@@ -280,8 +286,8 @@ export class ProductsService {
         if (!stock || typeof stock !== 'object') return false;
 
         // Проверяем есть ли хотя бы один размер с количеством > 0
-        return Object.values(stock).some((quantity) =>
-          typeof quantity === 'number' && quantity > 0
+        return Object.values(stock).some(
+          (quantity) => typeof quantity === 'number' && quantity > 0,
         );
       });
     }
@@ -411,6 +417,15 @@ export class ProductsService {
     const stock = product.stock as any;
 
     return stock?.[size] || 0;
+  }
+
+  async getPurchaseAvailability(productId: number, size: string) {
+    const product = await this.getProductById(productId);
+    const availability = purchaseAvailability(product, size);
+    return {
+      ...availability,
+      canPurchase: product.isActive && availability.availableQuantity > 0,
+    };
   }
 
   /**

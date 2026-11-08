@@ -1,3 +1,9 @@
+import {
+  purchaseAvailability,
+  waitingForPreorder,
+  lockProducts,
+  changeReservedQuantity,
+} from '../common/utils/preorder.util';
 import { TbankPayService } from '../payment/tbank-pay.service';
 import {
   Injectable,
@@ -153,6 +159,8 @@ export class OrdersService {
               quantity: item.quantity,
               price: item.price,
               discount: item.discount,
+              isPreorder: item.isPreorder,
+              preorderReady: item.preorderReady ?? false,
             })),
           },
         } as any,
@@ -162,9 +170,7 @@ export class OrdersService {
       });
 
       // 🔒 ШАГ 7: УМЕНЬШЕНИЕ ОСТАТКОВ НА СКЛАДЕ
-      for (const item of validatedItems) {
-        await this.decreaseStock(tx, item.productId, item.size, item.quantity);
-      }
+      await this.reserveOrderItems(tx, validatedItems);
 
       return newOrder;
     });
@@ -229,6 +235,8 @@ export class OrdersService {
         quantity: item.quantity,
         price: item.price,
         discount: item.discount,
+        isPreorder: item.isPreorder,
+        preorderReady: item.preorderReady ?? false,
         finalPrice: item.finalPrice,
         totalPrice: item.totalPrice,
         imageUrl: item.imageUrl,
@@ -296,6 +304,8 @@ export class OrdersService {
         quantity: item.quantity,
         price: item.price,
         discount: item.discount,
+        isPreorder: item.isPreorder,
+        preorderReady: item.preorderReady ?? false,
         finalPrice: item.finalPrice,
         totalPrice: item.totalPrice,
         imageUrl: item.imageUrl,
@@ -405,15 +415,15 @@ export class OrdersService {
               quantity: item.quantity,
               price: item.price,
               discount: item.discount,
+              isPreorder: item.isPreorder,
+              preorderReady: item.preorderReady ?? false,
             })),
           },
         } as any,
         include: { items: true },
       });
 
-      for (const item of validatedItems) {
-        await this.decreaseStock(tx, item.productId, item.size, item.quantity);
-      }
+      await this.reserveOrderItems(tx, validatedItems);
       return newOrder;
     });
 
@@ -439,6 +449,14 @@ export class OrdersService {
   private async validateOrderItems(
     items: { productId: number; size: string; quantity: number }[],
   ) {
+    const grouped = new Map<string, (typeof items)[number]>();
+    for (const item of items) {
+      const key = JSON.stringify([item.productId, item.size]);
+      const existing = grouped.get(key);
+      if (existing) existing.quantity += item.quantity;
+      else grouped.set(key, { ...item });
+    }
+    items = [...grouped.values()];
     const validatedItems: any[] = [];
 
     for (const item of items) {
@@ -458,8 +476,8 @@ export class OrdersService {
       }
 
       // 🔒 ПРОВЕРКА ОСТАТКОВ НА СКЛАДЕ
-      const stock = product.stock as any;
-      const availableQuantity = stock[item.size] || 0;
+      const availability = purchaseAvailability(product, item.size);
+      const { availableQuantity } = availability;
 
       if (availableQuantity < item.quantity) {
         throw new BadRequestException(
@@ -477,6 +495,7 @@ export class OrdersService {
       const imageUrl = pickMainImage(product.images);
 
       validatedItems.push({
+        ...availability,
         productId: product.id,
         productName: product.name,
         productSlug: product.slug,
@@ -498,40 +517,30 @@ export class OrdersService {
   /**
    * 🔒 УМЕНЬШЕНИЕ ОСТАТКОВ НА СКЛАДЕ
    */
-  private async decreaseStock(
-    tx: any,
-    productId: number,
-    size: string,
-    quantity: number,
-  ) {
-    const product = await tx.product.findUnique({
-      where: { id: productId },
-    });
-
-    const stock = product.stock as any;
-    const currentStock = stock[size] || 0;
-
-    if (currentStock < quantity) {
-      throw new BadRequestException(
-        `Товар закончился, доступно только ${currentStock} шт`,
-      );
-    }
-
-    // Обновляем остатки
-    const newStock = { ...stock };
-    newStock[size] = currentStock - quantity;
-
-    await tx.product.update({
-      where: { id: productId },
-      data: {
-        stock: newStock,
-        salesCount: { increment: quantity },
-      },
-    });
-
-    this.logger.log(
-      `Остатки обновлены: товар ${productId}, размер ${size}: ${currentStock} -> ${newStock[size]}`,
+  private async reserveOrderItems(tx: any, items: any[]) {
+    await lockProducts(
+      tx,
+      items.map((item) => item.productId),
     );
+    for (const item of items) {
+      const product = await tx.product.findUnique({
+        where: { id: item.productId },
+      });
+      const current = product && purchaseAvailability(product, item.size);
+      if (
+        !product ||
+        !product.isActive ||
+        product.deletedAt ||
+        current.isPreorder !== item.isPreorder ||
+        product.price !== item.price ||
+        product.discount !== item.discount
+      ) {
+        throw new BadRequestException(
+          'Условия товара изменились. Пересчитайте заказ',
+        );
+      }
+      await changeReservedQuantity(tx, item);
+    }
   }
 
   /**
@@ -721,6 +730,8 @@ export class OrdersService {
         quantity: item.quantity,
         price: item.price,
         discount: item.discount,
+        isPreorder: item.isPreorder,
+        preorderReady: item.preorderReady ?? false,
         finalPrice,
         totalPrice: finalPrice * item.quantity,
         imageUrl,
@@ -826,6 +837,8 @@ export class OrdersService {
           quantity: item.quantity,
           price: item.price,
           discount: item.discount,
+          isPreorder: item.isPreorder,
+          preorderReady: item.preorderReady ?? false,
           finalPrice,
           totalPrice: finalPrice * item.quantity,
           imageUrl,
@@ -884,7 +897,13 @@ export class OrdersService {
     // Запоминаем предыдущее состояние, чтобы понять — это ПЕРЕХОД в paid или повторный вебхук.
     const previous = await this.prisma.order.findUnique({
       where: { orderNumber },
-      select: { isPaid: true, userId: true, status: true, items: true },
+      select: {
+        isPaid: true,
+        userId: true,
+        status: true,
+        items: true,
+        inventoryReleased: true,
+      },
     });
 
     // ПЕРЕХОД В ОПЛАЧЕНО — атомарно, чтобы исключить TOCTOU-гонку webhook vs polling.
@@ -892,45 +911,64 @@ export class OrdersService {
     // ТОЛЬКО тот вызов, который реально перевёл заказ (count===1). Параллельный
     // второй вызов получит count===0 и побочки не продублирует.
     if (isPaid) {
-      const transition = await this.prisma.order.updateMany({
-        where: { orderNumber, isPaid: false },
-        data: { status: orderStatus, isPaid: true, cancelReason: null },
-      });
-
-      if (transition.count === 0) {
-        // Гонку проиграли или заказ уже оплачен — побочки не повторяем.
-        return this.prisma.order.findUnique({ where: { orderNumber } });
-      }
-
-      // Мы — победитель перехода. Если заказ был отменён автоотменой (оплата пришла
-      // после неё) — воскрешаем: пере-списываем товар, который вернули при отмене.
-      if (
-        previous?.status === OrderStatus.CANCELLED ||
-        previous?.status === OrderStatus.PAYMENT_FAILED
-      ) {
-        this.logger.warn(
-          `Оплата пришла после автоотмены заказа ${orderNumber} — воскрешаю и пере-списываю товар`,
-        );
-        try {
-          await this.prisma.$transaction(async (tx) => {
-            for (const item of previous.items) {
-              if (item.productId == null) continue;
-              await this.decreaseStock(
-                tx,
-                item.productId,
-                item.size ?? '',
-                item.quantity,
-              );
-            }
+      const transition = await this.prisma
+        .$transaction(async (tx) => {
+          await tx.$queryRaw`SELECT id FROM orders WHERE order_number = ${orderNumber} FOR UPDATE`;
+          const current = await tx.order.findUnique({
+            where: { orderNumber },
+            include: { items: true },
           });
-        } catch (error: any) {
-          this.logger.error(
-            `Не удалось пере-списать товар для воскрешённого ${orderNumber}: ${error.message}. ТРЕБУЕТСЯ РУЧНАЯ ПРОВЕРКА`,
-          );
-        }
-      }
-
-      this.logger.log(`Статус заказа обновлен: ${orderNumber}, оплачен`);
+          if (!current || current.isPaid) return { count: 0 };
+          if (current.status === OrderStatus.REFUNDED) return { count: 0 };
+          if (current.inventoryReleased) {
+            await lockProducts(
+              tx,
+              current.items.flatMap((item) =>
+                item.productId == null ? [] : [item.productId],
+              ),
+            );
+            for (const item of current.items) {
+              if (item.productId == null) continue;
+              await changeReservedQuantity(tx, {
+                ...item,
+                productId: item.productId,
+                size: item.size ?? '',
+              });
+            }
+          }
+          return tx.order.updateMany({
+            where: { orderNumber, isPaid: false },
+            data: {
+              status: waitingForPreorder(current)
+                ? OrderStatus.AWAITING_PREORDER
+                : OrderStatus.CONFIRMED,
+              isPaid: true,
+              cancelReason: null,
+              inventoryReleased: false,
+            },
+          });
+        })
+        .catch(async (error) => {
+          if (!(error instanceof BadRequestException)) throw error;
+          // A late payment is real even if the released slot has already been sold.
+          // Keep it paid for manual resolution, without creating a shipment.
+          return this.prisma.order.updateMany({
+            where: {
+              orderNumber,
+              isPaid: false,
+              inventoryReleased: true,
+              status: { not: OrderStatus.REFUNDED },
+            },
+            data: {
+              isPaid: true,
+              status: OrderStatus.PROCESSING,
+              cancelReason:
+                'Оплата после отмены: не удалось восстановить резерв. Требуется проверка менеджера',
+            },
+          });
+        });
+      if (transition.count === 0)
+        return this.prisma.order.findUnique({ where: { orderNumber } });
 
       if (previous?.userId) {
         try {
@@ -976,25 +1014,50 @@ export class OrdersService {
       return this.prisma.order.findUnique({ where: { orderNumber } });
     }
 
-    // Промежуточные статусы и возврат (PENDING/REFUNDED) — обычный апдейт.
-    const order = await this.prisma.order.update({
-      where: { orderNumber },
-      data: {
-        status: orderStatus,
-        isPaid: false,
-        ...(cancelReason !== undefined
-          ? { cancelReason }
-          : paymentStatus === 'PENDING'
-            ? { cancelReason: null }
-            : {}),
-      },
+    if (paymentStatus === 'REFUNDED')
+      return this.recordRefund(orderNumber, cancelReason);
+    // Intermediate notifications never change an existing payment state.
+    return this.prisma.order.findUnique({ where: { orderNumber } });
+  }
+
+  // Records a completed/manual refund. Bank refunds are performed in the bank account.
+  async recordRefund(orderNumber: string, reason?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM orders WHERE order_number = ${orderNumber} FOR UPDATE`;
+      const order = await tx.order.findUnique({
+        where: { orderNumber },
+        include: { items: true },
+      });
+      if (!order) throw new BadRequestException('Заказ не найден');
+      if (order.status === OrderStatus.REFUNDED) return order;
+      // Only unfulfilled preorders are released automatically on refund.
+      const release = !order.inventoryReleased && waitingForPreorder(order);
+      if (release) {
+        await lockProducts(
+          tx,
+          order.items.flatMap((item) =>
+            item.productId == null ? [] : [item.productId],
+          ),
+        );
+        for (const item of order.items) {
+          if (item.productId == null) continue;
+          await changeReservedQuantity(
+            tx,
+            { ...item, productId: item.productId, size: item.size ?? '' },
+            true,
+          );
+        }
+      }
+      return tx.order.update({
+        where: { orderNumber },
+        data: {
+          status: OrderStatus.REFUNDED,
+          isPaid: false,
+          inventoryReleased: order.inventoryReleased || release,
+          cancelReason: reason ?? 'Оформлен возврат средств',
+        },
+      });
     });
-
-    this.logger.log(
-      `Статус заказа обновлен: ${orderNumber}, status=${orderStatus}, isPaid=false`,
-    );
-
-    return order;
   }
 
   async confirmTbankByApi(
@@ -1039,7 +1102,18 @@ export class OrdersService {
     if (!order) return;
 
     // Только CDEK-доставка и только если накладная ещё не создана
-    if (order.deliveryType !== 'CDEK_PICKUP' || order.cdekUuid) {
+    if (
+      !order.isPaid ||
+      order.inventoryReleased ||
+      waitingForPreorder(order) ||
+      [
+        OrderStatus.CANCELLED,
+        OrderStatus.REFUNDED,
+        OrderStatus.PAYMENT_FAILED,
+      ].includes(order.status as any) ||
+      order.deliveryType !== 'CDEK_PICKUP' ||
+      order.cdekUuid
+    ) {
       return;
     }
     if (!order.cdekCityCode) {
@@ -1200,58 +1274,34 @@ export class OrdersService {
   ): Promise<boolean> {
     return this.prisma.$transaction(async (tx) => {
       const res = await tx.order.updateMany({
-        where: { orderNumber, status: OrderStatus.PENDING, isPaid: false },
-        data: { status, cancelReason },
+        where: {
+          orderNumber,
+          status: OrderStatus.PENDING,
+          isPaid: false,
+          inventoryReleased: false,
+        },
+        data: { status, cancelReason, inventoryReleased: true },
       });
       if (res.count === 0) return false;
       const items = await tx.orderItem.findMany({
         where: { order: { orderNumber } },
       });
+      await lockProducts(
+        tx,
+        items.flatMap((item) =>
+          item.productId == null ? [] : [item.productId],
+        ),
+      );
       for (const item of items) {
         if (item.productId == null) continue;
-        await this.restoreStock(
+        await changeReservedQuantity(
           tx,
-          item.productId,
-          item.size ?? '',
-          item.quantity,
+          { ...item, productId: item.productId, size: item.size ?? '' },
+          true,
         );
       }
       return true;
     });
-  }
-
-  /**
-   * Вернуть товар на склад (обратная операция к decreaseStock):
-   * увеличивает остаток по размеру и откатывает salesCount.
-   */
-  private async restoreStock(
-    tx: any,
-    productId: number,
-    size: string,
-    quantity: number,
-  ): Promise<void> {
-    const product = await tx.product.findUnique({ where: { id: productId } });
-    if (!product) {
-      this.logger.warn(`restoreStock: товар ${productId} не найден`);
-      return;
-    }
-
-    const stock = (product.stock as any) || {};
-    const currentStock = stock[size] || 0;
-    const newStock = { ...stock };
-    newStock[size] = currentStock + quantity;
-
-    await tx.product.update({
-      where: { id: productId },
-      data: {
-        stock: newStock,
-        salesCount: { decrement: quantity },
-      },
-    });
-
-    this.logger.log(
-      `Сток возвращён: товар ${productId}, размер ${size}: ${currentStock} -> ${newStock[size]}`,
-    );
   }
 
   /**
@@ -1281,6 +1331,7 @@ export class OrdersService {
       lastName: order.lastName,
       items: order.items.map((item) => ({
         name: item.name,
+        isPreorder: item.isPreorder,
         size: item.size ?? '',
         quantity: item.quantity,
         price: item.price,

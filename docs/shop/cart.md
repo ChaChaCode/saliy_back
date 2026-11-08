@@ -1,6 +1,6 @@
 # API корзины
 
-Базовый URL: `https://saliyclothes.com`. Все маршруты ниже указаны с глобальным префиксом `/api`.
+Базовый URL: `https://saliystudio.com`. Все маршруты ниже указаны с глобальным префиксом `/api`.
 
 ## Авторизация
 
@@ -39,7 +39,7 @@
 | quantity | number | Количество |
 | createdAt | date | Дата добавления |
 | updatedAt | date | Дата обновления |
-| product | object | Данные товара (id, name, slug, price, discount, images) |
+| product | object | Данные товара (id, name, slug, price, oldPrice, discount, images) |
 
 ---
 
@@ -143,6 +143,7 @@
 | size | string | Размер |
 | quantity | number | Количество |
 | price | number | Оригинальная цена за единицу |
+| oldPrice | number / null | Старая цена для отображения, не участвует в итогах; в старом кеше может отсутствовать |
 | discount | number | Скидка товара в процентах |
 | finalPrice | number | Цена за единицу с учётом скидки |
 | totalPrice | number | Стоимость позиции (finalPrice × quantity) |
@@ -153,6 +154,8 @@
 
 Важно:
 - Цены всегда берутся из БД, а не от клиента.
+- При новой паре `price: 7000`, `oldPrice: 10000`, `discount: 0` сервер вернёт `finalPrice: 7000`; зачеркнуть 10 000 ₽, но не прибавлять её к сумме. Для двух единиц `totalPrice: 14000`.
+- `finalPrice`, `totalPrice` и итоги брать из ответа; повторно применять `discount` к `finalPrice` нельзя. Размер `OS` передавать без переименования.
 - `inStock` показывает, достаточно ли товара на складе.
 - Удалённый или скрытый товар не приводит к ошибке всей корзины: ответ `200`, позиция приходит с `isAvailable: false`, `inStock: false`, `availableQuantity: 0`, `finalPrice` и `totalPrice` равны 0 и в `subtotal`/`total` не входят. Для удалённого товара `productName`, `productSlug` и `imageUrl` пустые. Такие позиции нужно показать недоступными и не пускать к оформлению.
 - Позиция с недостаточным остатком (`inStock: false` при `isAvailable: true`) в сумме учитывается: её можно уменьшить до `availableQuantity`.

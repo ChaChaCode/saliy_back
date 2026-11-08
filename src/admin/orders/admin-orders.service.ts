@@ -12,6 +12,12 @@ import { EmailService } from '../../common/email/email.service';
 import { DeliveryService } from '../../delivery/delivery.service';
 import { OrdersService } from '../../orders/orders.service';
 import { pickMainImage } from '../../common/utils/product-image.util';
+import {
+  changeReservedQuantity,
+  lockProducts,
+  purchaseAvailability,
+  waitingForPreorder,
+} from '../../common/utils/preorder.util';
 
 interface FindAllParams {
   status?: OrderStatus;
@@ -54,6 +60,20 @@ export class AdminOrdersService {
     });
     if (!order) {
       throw new NotFoundException(`Заказ ${orderNumber} не найден`);
+    }
+    if (
+      !order.isPaid ||
+      order.inventoryReleased ||
+      waitingForPreorder(order) ||
+      [
+        OrderStatus.CANCELLED,
+        OrderStatus.REFUNDED,
+        OrderStatus.PAYMENT_FAILED,
+      ].includes(order.status as any)
+    ) {
+      throw new BadRequestException(
+        'Заказ должен быть оплачен и все предзаказы должны быть готовы к отправке',
+      );
     }
     if (order.deliveryType !== 'CDEK_PICKUP') {
       throw new BadRequestException('У заказа не CDEK-доставка');
@@ -182,6 +202,15 @@ export class AdminOrdersService {
     const orders = await this.prisma.order.findMany({
       where: {
         isPaid: true,
+        inventoryReleased: false,
+        items: { none: { isPreorder: true, preorderReady: false } },
+        status: {
+          notIn: [
+            OrderStatus.CANCELLED,
+            OrderStatus.REFUNDED,
+            OrderStatus.PAYMENT_FAILED,
+          ],
+        },
         deliveryType: 'CDEK_PICKUP',
         cdekUuid: null,
         cdekCityCode: { not: null },
@@ -341,8 +370,12 @@ export class AdminOrdersService {
    * Изменить статус заказа
    */
   async updateStatus(orderNumber: string, status: OrderStatus) {
+    if (status === OrderStatus.CANCELLED) return this.cancelOrder(orderNumber);
+    if (status === OrderStatus.REFUNDED)
+      return this.refundOrder(orderNumber, 'Возврат администратором');
     const order = await this.prisma.order.findUnique({
       where: { orderNumber },
+      include: { items: true },
     });
 
     if (!order) {
@@ -350,7 +383,22 @@ export class AdminOrdersService {
     }
 
     if (order.status === OrderStatus.CANCELLED) {
-      throw new BadRequestException('Нельзя изменить статус отменённого заказа');
+      throw new BadRequestException(
+        'Нельзя изменить статус отменённого заказа',
+      );
+    }
+    if (waitingForPreorder(order) && status !== OrderStatus.AWAITING_PREORDER) {
+      throw new BadRequestException(
+        'Сначала отметьте поступление предзаказа через preorder-ready',
+      );
+    }
+    if (
+      status === OrderStatus.AWAITING_PREORDER &&
+      (!order.isPaid || !waitingForPreorder(order))
+    ) {
+      throw new BadRequestException(
+        'Этот статус доступен только оплаченному предзаказу, ожидающему поступления',
+      );
     }
 
     const updated = await this.prisma.order.update({
@@ -360,6 +408,70 @@ export class AdminOrdersService {
 
     this.logger.log(`Статус заказа ${orderNumber} изменён на ${status}`);
 
+    return updated;
+  }
+
+  async markPreorderReady(orderNumber: string) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM orders WHERE order_number = ${orderNumber} FOR UPDATE`;
+      const order = await tx.order.findUnique({
+        where: { orderNumber },
+        include: { items: true },
+      });
+      if (!order) throw new NotFoundException('Заказ не найден');
+      if (
+        !order.isPaid ||
+        order.inventoryReleased ||
+        order.status !== OrderStatus.AWAITING_PREORDER ||
+        !waitingForPreorder(order)
+      ) {
+        throw new BadRequestException(
+          'Заказ не ожидает поступления оплаченного предзаказа',
+        );
+      }
+      const items = order.items.filter(
+        (item) => item.isPreorder && !item.preorderReady,
+      );
+      await lockProducts(
+        tx,
+        items.flatMap((item) =>
+          item.productId == null ? [] : [item.productId],
+        ),
+      );
+      for (const item of items) {
+        if (item.productId == null)
+          throw new BadRequestException('Товар предзаказа удалён');
+        // Incoming units are allocated from physical stock; the preorder slot stays consumed.
+        await changeReservedQuantity(tx, {
+          ...item,
+          productId: item.productId,
+          size: item.size ?? '',
+          preorderReady: true,
+        });
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { salesCount: { decrement: item.quantity } },
+        });
+      }
+      await tx.orderItem.updateMany({
+        where: { orderId: order.id, isPreorder: true },
+        data: { preorderReady: true },
+      });
+      return tx.order.update({
+        where: { id: order.id },
+        data: { status: OrderStatus.CONFIRMED },
+        include: { items: true },
+      });
+    });
+    await this.emailService.sendRaw(updated.email, 'Предзаказ готов к отправке',
+      '<p>Ваш предзаказ готов к отправке. Магазин сообщит подробности доставки отдельно.</p>');
+    if (updated.deliveryType === 'CDEK_PICKUP') {
+      try {
+        await this.createCdekInvoice(orderNumber);
+      } catch (error: any) {
+        return { ...updated, cdekSyncError: error.message };
+      }
+    }
     return updated;
   }
 
@@ -385,33 +497,51 @@ export class AdminOrdersService {
     }
 
     const cancelled = await this.prisma.$transaction(async (tx) => {
-      // Возвращаем остатки на склад
-      for (const item of order.items) {
-        if (!item.productId || !item.size) continue;
-
-        const product = await tx.product.findUnique({
-          where: { id: item.productId },
-        });
-
-        if (!product) continue;
-
-        const stock = (product.stock as any) || {};
-        const currentStock = stock[item.size] || 0;
-        const newStock = { ...stock, [item.size]: currentStock + item.quantity };
-
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            stock: newStock,
-            salesCount: { decrement: item.quantity },
-          },
-        });
+      await tx.$queryRaw`SELECT id FROM orders WHERE order_number = ${orderNumber} FOR UPDATE`;
+      const current = await tx.order.findUnique({
+        where: { orderNumber },
+        include: { items: true },
+      });
+      if (
+        !current ||
+        current.inventoryReleased ||
+        [
+          OrderStatus.CANCELLED,
+          OrderStatus.PAYMENT_FAILED,
+          OrderStatus.REFUNDED,
+        ].includes(current.status as any)
+      ) {
+        throw new BadRequestException('Резерв заказа уже освобождён');
+      }
+      if (
+        current.status === OrderStatus.DELIVERED ||
+        current.status === OrderStatus.SHIPPED ||
+        this.deliveryService.isCdekShipped(current.cdekStatus)
+      ) {
+        throw new BadRequestException(
+          'Нельзя отменить отправленный или доставленный заказ',
+        );
+      }
+      await lockProducts(
+        tx,
+        current.items.flatMap((item) =>
+          item.productId == null ? [] : [item.productId],
+        ),
+      );
+      for (const item of current.items) {
+        if (item.productId == null) continue;
+        await changeReservedQuantity(
+          tx,
+          { ...item, productId: item.productId, size: item.size ?? '' },
+          true,
+        );
       }
 
       return tx.order.update({
         where: { orderNumber },
         data: {
           status: OrderStatus.CANCELLED,
+          inventoryReleased: true,
           cancelReason: reason
             ? `Отменён администратором: ${reason}`
             : 'Отменён администратором',
@@ -443,6 +573,10 @@ export class AdminOrdersService {
       }
     }
 
+    if (order.isPaid && order.items.some((item) => item.isPreorder)) {
+      await this.emailService.sendRaw(order.email, 'Предзаказ отменён',
+        '<p>Ваш предзаказ отменён. По вопросу возврата внесённой оплаты свяжитесь с магазином.</p>');
+    }
     return cancelled;
   }
 
@@ -460,6 +594,10 @@ export class AdminOrdersService {
       throw new NotFoundException(`Заказ ${orderNumber} не найден`);
     }
 
+    if (data.isPaid !== undefined) {
+      await this.updatePayment(orderNumber, { paid: data.isPaid as boolean });
+      delete data.isPaid;
+    }
     const updated = await this.prisma.order.update({
       where: { orderNumber },
       data,
@@ -503,6 +641,7 @@ export class AdminOrdersService {
     });
     if (!order) throw new NotFoundException(`Заказ ${orderNumber} не найден`);
     if (
+      order.inventoryReleased ||
       order.status === OrderStatus.CANCELLED ||
       order.status === OrderStatus.REFUNDED ||
       order.status === OrderStatus.DELIVERED
@@ -521,23 +660,43 @@ export class AdminOrdersService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      // 1. Возвращаем на склад товар по СТАРЫМ позициям
-      for (const old of order.items) {
-        if (old.productId == null || !old.size) continue;
-        const p = await tx.product.findUnique({ where: { id: old.productId } });
-        if (!p) continue;
-        const stock = (p.stock as any) || {};
-        stock[old.size] = (stock[old.size] || 0) + old.quantity;
-        await tx.product.update({
-          where: { id: old.productId },
-          data: { stock, salesCount: { decrement: old.quantity } },
-        });
+      await tx.$queryRaw`SELECT id FROM orders WHERE order_number = ${orderNumber} FOR UPDATE`;
+      const current = await tx.order.findUnique({
+        where: { orderNumber },
+        include: { items: true },
+      });
+      if (
+        !current ||
+        current.status !== order.status ||
+        current.isPaid !== order.isPaid
+      ) {
+        throw new BadRequestException('Заказ изменился. Обновите страницу');
       }
-
-      // 2. Валидируем и списываем по НОВЫМ позициям, собираем снэпшот
+      await lockProducts(tx, [
+        ...current.items.flatMap((item) =>
+          item.productId == null ? [] : [item.productId],
+        ),
+        ...newItems.map((item) => item.productId),
+      ]);
+      for (const old of current.items) {
+        if (old.productId == null) continue;
+        await changeReservedQuantity(
+          tx,
+          { ...old, productId: old.productId, size: old.size ?? '' },
+          true,
+        );
+      }
       const itemsData: Array<{
-        productId: number; name: string; sku: string | null; color: string | null;
-        size: string; quantity: number; price: number; discount: number;
+        productId: number;
+        name: string;
+        sku: string | null;
+        color: string | null;
+        size: string;
+        quantity: number;
+        price: number;
+        discount: number;
+        isPreorder: boolean;
+        preorderReady: boolean;
       }> = [];
       let subtotal = 0;
 
@@ -548,24 +707,29 @@ export class AdminOrdersService {
         if (!product) {
           throw new BadRequestException(`Товар ${it.productId} не найден`);
         }
-        const stock = (product.stock as any) || {};
-        const available = stock[it.size] || 0;
-        if (available < it.quantity) {
-          throw new BadRequestException(
-            `${product.name} (${it.size}): доступно только ${available} шт`,
-          );
-        }
-        stock[it.size] = available - it.quantity;
-        await tx.product.update({
-          where: { id: product.id },
-          data: { stock, salesCount: { increment: it.quantity } },
-        });
+        if (!product.isActive)
+          throw new BadRequestException('Товар недоступен для заказа');
+        const availability = purchaseAvailability(product, it.size);
+        const old = current.items.find(
+          (item) => item.productId === it.productId && item.size === it.size,
+        );
+        const snapshot = old?.isPreorder
+          ? {
+              isPreorder: true,
+              preorderReady: old.preorderReady,
+            }
+          : {
+              isPreorder: availability.isPreorder,
+              preorderReady: false,
+            };
+        await changeReservedQuantity(tx, { ...it, ...snapshot });
 
         const finalPrice = Math.floor(
           product.price - (product.price * product.discount) / 100,
         );
         subtotal += finalPrice * it.quantity;
         itemsData.push({
+          ...snapshot,
           productId: product.id,
           name: product.name,
           sku: String(product.id),
@@ -584,10 +748,20 @@ export class AdminOrdersService {
       });
 
       // 4. Пересчёт сумм (скидку промокода и доставку не трогаем)
-      const total = subtotal - order.discountAmount + order.deliveryTotal;
+      const total = subtotal - current.discountAmount + current.deliveryTotal;
       return tx.order.update({
         where: { id: order.id },
-        data: { subtotal, total },
+        data: {
+          subtotal,
+          total,
+          ...(order.isPaid
+            ? {
+                status: waitingForPreorder({ items: itemsData })
+                  ? OrderStatus.AWAITING_PREORDER
+                  : OrderStatus.CONFIRMED,
+              }
+            : {}),
+        },
         include: { items: true },
       });
     });
@@ -689,8 +863,30 @@ export class AdminOrdersService {
    * Возвращаем null если ни одного поля, релевантного для CDEK, не поменялось.
    */
   private buildCdekPatch(
-    before: { firstName: string; lastName: string; phone: string; email: string; cdekCityCode: number | null; street: string | null; apartment: string | null; pickupPoint: string | null; comment: string | null; deliveryType: string },
-    after: { firstName: string; lastName: string; phone: string; email: string; cdekCityCode: number | null; street: string | null; apartment: string | null; pickupPoint: string | null; comment: string | null; deliveryType: string },
+    before: {
+      firstName: string;
+      lastName: string;
+      phone: string;
+      email: string;
+      cdekCityCode: number | null;
+      street: string | null;
+      apartment: string | null;
+      pickupPoint: string | null;
+      comment: string | null;
+      deliveryType: string;
+    },
+    after: {
+      firstName: string;
+      lastName: string;
+      phone: string;
+      email: string;
+      cdekCityCode: number | null;
+      street: string | null;
+      apartment: string | null;
+      pickupPoint: string | null;
+      comment: string | null;
+      deliveryType: string;
+    },
     incoming: Prisma.OrderUpdateInput,
   ) {
     const patch: Parameters<DeliveryService['updateCdekOrder']>[1] = {};
@@ -780,18 +976,7 @@ export class AdminOrdersService {
       throw new BadRequestException('Заказ уже возвращён');
     }
 
-    const updated = await this.prisma.order.update({
-      where: { orderNumber },
-      data: {
-        status: OrderStatus.REFUNDED,
-        comment: order.comment
-          ? `${order.comment}\n\n[ВОЗВРАТ]: ${reason}`
-          : `[ВОЗВРАТ]: ${reason}`,
-      },
-    });
-
-    this.logger.warn(`Заказ ${orderNumber} возвращён: ${reason}`);
-    return updated;
+    return this.ordersService.recordRefund(orderNumber, reason);
   }
 
   /**
@@ -869,31 +1054,26 @@ export class AdminOrdersService {
    * Статистика заказов
    */
   async getStats() {
-    const [
-      totalOrders,
-      paidOrders,
-      totalRevenue,
-      byStatus,
-      todayOrders,
-    ] = await Promise.all([
-      this.prisma.order.count(),
-      this.prisma.order.count({ where: { isPaid: true } }),
-      this.prisma.order.aggregate({
-        where: { isPaid: true, status: { not: OrderStatus.CANCELLED } },
-        _sum: { total: true },
-      }),
-      this.prisma.order.groupBy({
-        by: ['status'],
-        _count: true,
-      }),
-      this.prisma.order.count({
-        where: {
-          createdAt: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+    const [totalOrders, paidOrders, totalRevenue, byStatus, todayOrders] =
+      await Promise.all([
+        this.prisma.order.count(),
+        this.prisma.order.count({ where: { isPaid: true } }),
+        this.prisma.order.aggregate({
+          where: { isPaid: true, status: { not: OrderStatus.CANCELLED } },
+          _sum: { total: true },
+        }),
+        this.prisma.order.groupBy({
+          by: ['status'],
+          _count: true,
+        }),
+        this.prisma.order.count({
+          where: {
+            createdAt: {
+              gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            },
           },
-        },
-      }),
-    ]);
+        }),
+      ]);
 
     return {
       totalOrders,
@@ -927,6 +1107,8 @@ export class AdminOrdersService {
         quantity: item.quantity,
         price: item.price,
         discount: item.discount,
+        isPreorder: item.isPreorder,
+        preorderReady: item.preorderReady,
         finalPrice,
         totalPrice: finalPrice * item.quantity,
         imageUrl,

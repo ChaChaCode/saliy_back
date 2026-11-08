@@ -1,0 +1,192 @@
+--- a/src/services/auth.ts
++++ b/src/services/auth.ts
+@@ -1,7 +1,5 @@
+ import { api } from '@/lib/api'
+ import type {
+-	AuthResponse,
+-	MessageResponse,
+ 	SetDeliveryLocationInput,
+ 	UpdateProfileInput,
+ 	User
+@@ -9,27 +7,28 @@
+ 
+ export const authService = {
+ 	async sendCode(email: string) {
+-		const { data } = await api.post<MessageResponse>('/auth/send-code', {
++		const { data } = await api.post<{ success: boolean }>('/session/email-otp/send-verification-otp', {
++			type: 'sign-in',
+ 			email
+ 		})
+ 		return data
+ 	},
+ 
+ 	async verifyCode(email: string, code: string) {
+-		const { data } = await api.post<AuthResponse>('/auth/verify-code', {
++		const { data } = await api.post<unknown>('/session/sign-in/email-otp', {
+ 			email,
+-			code
++			otp: code
+ 		})
+ 		return data
+ 	},
+ 
+-	async refresh() {
+-		const { data } = await api.post<AuthResponse>('/auth/refresh')
++	async getSession() {
++		const { data } = await api.get<{ session: { id: string }; user: { id: string } } | null>('/session/get-session')
+ 		return data
+ 	},
+ 
+ 	async logout() {
+-		const { data } = await api.post<MessageResponse>('/auth/logout')
++		const { data } = await api.post<{ success: boolean }>('/session/sign-out')
+ 		return data
+ 	},
+ 
+--- a/src/context/AuthContext.tsx
++++ b/src/context/AuthContext.tsx
+@@ -73,9 +73,11 @@
+ 	useEffect(() => {
+ 		const loadUser = async () => {
+ 			try {
+-				await authService.refresh()
+-				const user = await authService.me()
+-				dispatch('LOGIN', user)
++				const session = await authService.getSession()
++				if (session?.session) {
++					const user = await authService.me()
++					dispatch('LOGIN', user)
++				}
+ 			} catch {
+ 				// Нет сессии (гость или истёкший refresh) — остаёмся неавторизованными.
+ 			} finally {
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -1,4 +1,4 @@
+-import type { ApiError, AuthResponse } from '@/types/api'
++import type { ApiError } from '@/types/api'
+ 
+ const isServer = typeof window === 'undefined'
+ 
+@@ -68,47 +68,26 @@
+ }
+ 
+ async function parseError(res: Response): Promise<unknown> {
+-	let data: ApiError | undefined
++	let data: (ApiError & { code?: string }) | undefined
+ 	try {
+ 		data = (await res.json()) as ApiError
+ 	} catch {
+ 		data = undefined
+ 	}
+-	if (data?.statusCode) {
++	if (data?.message) {
+ 		const message = Array.isArray(data.message)
+ 			? data.message.join(', ')
+ 			: data.message
+-		return new ApiRequestError(data.statusCode, message, data.error)
++		return new ApiRequestError(data.statusCode ?? res.status, message, data.error ?? data.code ?? res.statusText)
+ 	}
+ 	return new ApiRequestError(res.status, res.statusText, res.statusText)
+-}
+-
+-let isRefreshing: Promise<boolean> | null = null
+-
+-// Обновляет куки сессии. Успех определяется ответом /auth/refresh, а не
+-// токеном в нём: новые куки backend ставит сам.
+-async function refreshSession(): Promise<boolean> {
+-	if (!isRefreshing) {
+-		isRefreshing = request<AuthResponse>('POST', '/auth/refresh', undefined, {
+-			_skipRefresh: true
+-		})
+-			.then(() => true)
+-			.catch(() => {
+-				window.dispatchEvent(new Event('auth:logout'))
+-				return false
+-			})
+-			.finally(() => {
+-				isRefreshing = null
+-			})
+-	}
+-	return isRefreshing
+ }
+ 
+ async function request<T>(
+ 	method: string,
+ 	path: string,
+ 	body?: unknown,
+-	opts?: RequestOptions & { _skipRefresh?: boolean }
++	opts?: RequestOptions
+ ): Promise<T> {
+ 	const res = await fetch(buildUrl(path, opts?.params), {
+ 		method,
+@@ -119,15 +98,8 @@
+ 		cache: 'no-store'
+ 	})
+ 
+-	if (
+-		res.status === 401 &&
+-		!isServer &&
+-		!opts?._skipRefresh &&
+-		!path.includes('/auth/refresh')
+-	) {
+-		if (await refreshSession()) {
+-			return request<T>(method, path, body, { ...opts, _skipRefresh: true })
+-		}
++	if (res.status === 401 && !isServer && !path.startsWith('/session/')) {
++		window.dispatchEvent(new Event('auth:logout'))
+ 	}
+ 
+ 	if (!res.ok) throw await parseError(res)
+--- /dev/null
++++ b/src/services/auth.test.ts
+@@ -0,0 +1,49 @@
++import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
++import { authService } from './auth'
++import { api, ApiRequestError } from '@/lib/api'
++
++const fetchMock = vi.fn()
++function response(body: unknown, status = 200) {
++  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
++}
++beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock) })
++afterEach(() => vi.unstubAllGlobals())
++
++describe('Better Auth storefront contract', () => {
++  it('sends a sign-in email OTP using the current API', async () => {
++    fetchMock.mockResolvedValue(response({ success: true }))
++    await authService.sendCode('buyer@example.com')
++    expect(fetchMock).toHaveBeenCalledTimes(1)
++    expect(fetchMock.mock.calls[0][0]).toMatch(/\/session\/email-otp\/send-verification-otp$/)
++    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ email: 'buyer@example.com', type: 'sign-in' })
++    expect(fetchMock.mock.calls[0][1].credentials).toBe('include')
++  })
++  it('maps the form code to otp for sign-in', async () => {
++    fetchMock.mockResolvedValue(response({ user: { id: 'user' } }))
++    await authService.verifyCode('buyer@example.com', '1234')
++    expect(fetchMock.mock.calls[0][0]).toMatch(/\/session\/sign-in\/email-otp$/)
++    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ email: 'buyer@example.com', otp: '1234' })
++  })
++  it('accepts a null guest session without refreshing tokens', async () => {
++    fetchMock.mockResolvedValue(response(null))
++    expect(await authService.getSession()).toBeNull()
++    expect(fetchMock).toHaveBeenCalledTimes(1)
++    expect(fetchMock.mock.calls[0][0]).toMatch(/\/session\/get-session$/)
++    expect(fetchMock.mock.calls[0][1].method).toBe('GET')
++  })
++  it('signs out using the current API', async () => {
++    fetchMock.mockResolvedValue(response({ success: true }))
++    await authService.logout()
++    expect(fetchMock.mock.calls[0][0]).toMatch(/\/session\/sign-out$/)
++    expect(fetchMock.mock.calls[0][1].method).toBe('POST')
++  })
++  it('preserves Better Auth error messages and codes', async () => {
++    fetchMock.mockResolvedValue(response({ message: 'Invalid OTP', code: 'INVALID_OTP' }, 400))
++    await expect(authService.verifyCode('buyer@example.com', '0000')).rejects.toMatchObject({ message: 'Invalid OTP', statusCode: 400, error: 'INVALID_OTP' })
++  })
++  it('does not retry unauthorized requests against the removed refresh endpoint', async () => {
++    fetchMock.mockResolvedValue(response({ message: 'Unauthorized', statusCode: 401, error: 'Unauthorized' }, 401))
++    await expect(api.get('/cart')).rejects.toBeInstanceOf(ApiRequestError)
++    expect(fetchMock).toHaveBeenCalledTimes(1)
++  })
++})
