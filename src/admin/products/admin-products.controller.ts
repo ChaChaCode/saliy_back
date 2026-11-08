@@ -107,7 +107,7 @@ export class AdminProductsController {
   @Post()
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'images', maxCount: 30 }], {
-      limits: { fileSize: 10 * 1024 * 1024 },
+      limits: { fileSize: 100 * 1024 * 1024 },
       fileFilter: (req, file, callback) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
           return callback(
@@ -170,7 +170,7 @@ export class AdminProductsController {
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'images', maxCount: 30 }], {
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB
+        fileSize: 100 * 1024 * 1024, // 100MB (как client_max_body_size в nginx)
       },
       fileFilter: (req, file, callback) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
@@ -229,7 +229,7 @@ export class AdminProductsController {
   @Post(':id/images')
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'images', maxCount: 30 }], {
-      limits: { fileSize: 10 * 1024 * 1024 },
+      limits: { fileSize: 100 * 1024 * 1024 },
       fileFilter: (_req, file, callback) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
           return callback(
