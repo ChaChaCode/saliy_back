@@ -369,7 +369,12 @@ export class AdminOrdersService {
   async updateStatus(orderNumber: string, status: OrderStatus) {
     if (status === OrderStatus.CANCELLED) return this.cancelOrder(orderNumber);
     if (status === OrderStatus.REFUNDED)
-      return this.refundOrder(orderNumber, 'Возврат администратором');
+      // Смена статуса в списке только отмечает возврат и не трогает деньги:
+      // настоящий возврат через банк — отдельной кнопкой (POST /refund).
+      return this.refundOrder(orderNumber, {
+        reason: 'Статус «Возврат» выставлен администратором',
+        manual: true,
+      });
     const order = await this.prisma.order.findUnique({
       where: { orderNumber },
       include: { items: true },
@@ -880,21 +885,48 @@ export class AdminOrdersService {
   /**
    * Оформить возврат
    */
-  async refundOrder(orderNumber: string, reason: string) {
-    const order = await this.prisma.order.findUnique({
+  /**
+   * Вернуть деньги покупателю: через Т-Банк или отметить ручной возврат.
+   * При полном возврате неотправленного заказа удаляет накладную CDEK.
+   */
+  async refundOrder(
+    orderNumber: string,
+    dto: { reason: string; amount?: number; manual?: boolean },
+  ) {
+    const exists = await this.prisma.order.findUnique({
       where: { orderNumber },
+      select: { id: true },
     });
-    if (!order) {
+    if (!exists) {
       throw new NotFoundException(`Заказ ${orderNumber} не найден`);
     }
-    if (!order.isPaid) {
-      throw new BadRequestException('Нельзя вернуть неоплаченный заказ');
-    }
-    if (order.status === OrderStatus.REFUNDED) {
-      throw new BadRequestException('Заказ уже возвращён');
+
+    const result = await this.ordersService.refundPaidOrder(orderNumber, dto);
+    const order = result.order;
+
+    if (
+      result.refund.stockReturned &&
+      order.cdekUuid &&
+      !this.deliveryService.isCdekShipped(order.cdekStatus)
+    ) {
+      try {
+        await this.deliveryService.deleteCdekOrder(order.cdekUuid);
+        result.order = await this.prisma.order.update({
+          where: { orderNumber },
+          data: {
+            cdekUuid: null, cdekNumber: null, cdekStatus: null,
+            cdekStatusName: null, cdekStatusDate: null,
+          },
+        });
+        this.logger.log(`Накладная CDEK удалена при возврате ${orderNumber}`);
+      } catch (error: any) {
+        this.logger.warn(
+          `Не удалось удалить накладную CDEK при возврате ${orderNumber}: ${error.message} — удалить вручную в кабинете CDEK`,
+        );
+      }
     }
 
-    return this.ordersService.recordRefund(orderNumber, reason);
+    return result;
   }
 
   /**

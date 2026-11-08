@@ -12,7 +12,15 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { OrderStatus } from '@prisma/client';
-import { IsOptional, IsString, IsNotEmpty } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsPositive,
+  IsBoolean,
+  MaxLength,
+} from 'class-validator';
 import { AdminOrdersService } from './admin-orders.service';
 import {
   UpdateOrderStatusDto,
@@ -32,7 +40,11 @@ class UpdateCdekDto {
 }
 
 class RefundOrderDto {
-  @IsString() @IsNotEmpty() reason: string;
+  @IsString() @IsNotEmpty() @MaxLength(500) reason: string;
+  // Сумма возврата в рублях; без неё возвращается весь остаток оплаты
+  @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @IsPositive() amount?: number;
+  // true — деньги вернули вручную (не через Т-Банк), только записать возврат
+  @IsOptional() @IsBoolean() manual?: boolean;
 }
 
 class SendEmailDto {
@@ -215,7 +227,7 @@ export class AdminOrdersController {
     @Param('orderNumber') orderNumber: string,
     @Body() dto: RefundOrderDto,
   ) {
-    return this.adminOrdersService.refundOrder(orderNumber, dto.reason);
+    return this.adminOrdersService.refundOrder(orderNumber, dto);
   }
 
   /**

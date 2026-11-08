@@ -41,6 +41,8 @@ model Order {
   deliveryTotal  Float @default(0) @map("delivery_total")
   discountAmount Float @default(0) @map("discount_amount")
   total          Float
+  // Сколько денег уже вернули покупателю (полный или частичные возвраты)
+  refundedAmount Float @default(0) @map("refunded_amount")
 
   // Статус заказа
   status    OrderStatus @default(PENDING)

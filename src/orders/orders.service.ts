@@ -131,7 +131,8 @@ export class OrdersService {
     const isOnlinePayment = true;
 
     // 🔒 ШАГ 6: СОЗДАНИЕ ЗАКАЗА В ТРАНЗАКЦИИ
-    const order = await this.prisma.$transaction(async (tx) => {
+    const order = await this.withOrderNumberRetry(() =>
+      this.prisma.$transaction(async (tx) => {
       // Генерируем номер заказа
       const orderNumber = await this.generateOrderNumber();
 
@@ -172,7 +173,7 @@ export class OrdersService {
       await this.reserveOrderItems(tx, validatedItems);
 
       return newOrder;
-    });
+    }));
 
     this.logger.log(
       `Заказ создан: ${order.orderNumber}, товаров: ${items.length}, сумма: ${total} RUB`,
@@ -376,7 +377,8 @@ export class OrdersService {
       }
     }
 
-    const order = await this.prisma.$transaction(async (tx) => {
+    const order = await this.withOrderNumberRetry(() =>
+      this.prisma.$transaction(async (tx) => {
       const orderNumber = await this.generateOrderNumber();
       const newOrder = await tx.order.create({
         data: {
@@ -424,7 +426,7 @@ export class OrdersService {
 
       await this.reserveOrderItems(tx, validatedItems);
       return newOrder;
-    });
+    }));
 
     this.logger.log(
       `Ручной заказ создан: ${order.orderNumber}, сумма ${total} RUB`,
@@ -644,6 +646,35 @@ export class OrdersService {
     }
 
     return 0;
+  }
+
+  /**
+   * Номер заказа = последний за день + 1, поэтому два одновременных заказа могут
+   * получить один номер (на дропе это дало 500). При конфликте уникальности
+   * order_number транзакция откатывается целиком (остатки не списаны) и
+   * повторяется со свежим номером.
+   */
+  private async withOrderNumberRetry<T>(fn: () => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        let target = String(error?.message ?? '');
+        try {
+          target += JSON.stringify(error?.meta ?? '');
+        } catch {
+          // meta может содержать циклические ссылки — хватит message
+        }
+        const isNumberConflict =
+          error?.code === 'P2002' &&
+          (target.includes('order_number') || target.includes('orderNumber'));
+        if (!isNumberConflict || attempt >= 5) throw error;
+        this.logger.warn(
+          `Конфликт номера заказа, повтор ${attempt}/5`,
+        );
+        await new Promise((r) => setTimeout(r, 20 + Math.random() * 80));
+      }
+    }
   }
 
   /**
@@ -1017,7 +1048,10 @@ export class OrdersService {
     return this.prisma.order.findUnique({ where: { orderNumber } });
   }
 
-  // Records a completed/manual refund. Bank refunds are performed in the bank account.
+  /**
+   * Банк сообщил о полном возврате (например, возврат сделали в кабинете Т-Банка).
+   * Фиксируем возврат всей суммы и возвращаем товар на склад, если он не уехал.
+   */
   async recordRefund(orderNumber: string, reason?: string) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM orders WHERE order_number = ${orderNumber} FOR UPDATE`;
@@ -1027,15 +1061,176 @@ export class OrdersService {
       });
       if (!order) throw new BadRequestException('Заказ не найден');
       if (order.status === OrderStatus.REFUNDED) return order;
+      const released = await this.releaseStockForRefund(tx, order);
       return tx.order.update({
         where: { orderNumber },
         data: {
           status: OrderStatus.REFUNDED,
           isPaid: false,
+          refundedAmount: order.total,
+          ...(released && { inventoryReleased: true }),
           cancelReason: reason ?? 'Оформлен возврат средств',
         },
       });
     });
+  }
+
+  /**
+   * Вернуть товар на склад при полном возврате денег. Только если резерв ещё
+   * не снят (заказ не отменяли) и посылка не уехала. Возвращает true, если вернул.
+   */
+  private async releaseStockForRefund(
+    tx: any,
+    order: {
+      status: OrderStatus;
+      inventoryReleased: boolean;
+      cdekStatus: string | null;
+      items: Array<{ productId: number | null; size: string | null }>;
+    },
+  ): Promise<boolean> {
+    if (
+      order.inventoryReleased ||
+      order.status === OrderStatus.SHIPPED ||
+      order.status === OrderStatus.DELIVERED ||
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.PAYMENT_FAILED ||
+      this.deliveryService.isCdekShipped(order.cdekStatus)
+    )
+      return false;
+    await lockProducts(
+      tx,
+      order.items.flatMap((item) =>
+        item.productId == null ? [] : [item.productId],
+      ),
+    );
+    for (const item of order.items) {
+      if (item.productId == null) continue;
+      await changeReservedQuantity(
+        tx,
+        { ...item, productId: item.productId, size: item.size ?? '' } as any,
+        true,
+      );
+    }
+    return true;
+  }
+
+  /**
+   * Вернуть деньги покупателю — полностью или частично.
+   *
+   * Заказ, оплаченный через Т-Банк, возвращается через API банка (метод Cancel):
+   * деньги уходят на карту покупателя. Для остальных способов оплаты деньги
+   * возвращают вручную, а здесь только фиксируют возврат (manual: true).
+   *
+   * Строка заказа заблокирована на всё время запроса в банк, поэтому двойное
+   * нажатие не вернёт деньги дважды: второй запрос увидит уже записанный возврат.
+   * Полный возврат переводит заказ в REFUNDED и возвращает товар на склад, если
+   * посылка не уехала; частичный только увеличивает refundedAmount.
+   */
+  async refundPaidOrder(
+    orderNumber: string,
+    params: { reason: string; amount?: number; manual?: boolean },
+  ) {
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM orders WHERE order_number = ${orderNumber} FOR UPDATE`;
+        const order = await tx.order.findUnique({
+          where: { orderNumber },
+          include: { items: true },
+        });
+        if (!order) throw new BadRequestException('Заказ не найден');
+        if (!order.isPaid)
+          throw new BadRequestException(
+            order.status === OrderStatus.REFUNDED
+              ? 'Деньги по заказу уже возвращены полностью'
+              : 'Заказ не оплачен — возвращать нечего',
+          );
+
+        const toKopecks = (rub: number) => Math.round(rub * 100);
+        const remainingKop =
+          toKopecks(order.total) - toKopecks(order.refundedAmount ?? 0);
+        if (remainingKop <= 0)
+          throw new BadRequestException(
+            'Деньги по заказу уже возвращены полностью',
+          );
+        const amountKop =
+          params.amount === undefined ? remainingKop : toKopecks(params.amount);
+        if (!Number.isSafeInteger(amountKop) || amountKop <= 0)
+          throw new BadRequestException('Некорректная сумма возврата');
+        if (amountKop > remainingKop)
+          throw new BadRequestException(
+            `Можно вернуть не больше ${remainingKop / 100} ₽`,
+          );
+
+        const viaBank =
+          !params.manual &&
+          order.paymentMethod === PaymentMethod.CARD_ONLINE &&
+          !!order.paymentId;
+        if (!viaBank && !params.manual)
+          throw new BadRequestException(
+            'Заказ оплачен не через Т-Банк: верните деньги вручную и отметьте возврат с manual: true',
+          );
+        if (viaBank) {
+          await this.tbankPayService.refundPayment(order.paymentId!, amountKop);
+        }
+
+        const refundedKop = toKopecks(order.refundedAmount ?? 0) + amountKop;
+        const full = refundedKop >= toKopecks(order.total);
+        const released = full
+          ? await this.releaseStockForRefund(tx, order)
+          : false;
+        const note = `Возврат ${amountKop / 100} ₽${viaBank ? ' через Т-Банк' : ' (вручную)'}: ${params.reason}`;
+        try {
+          const updated = await tx.order.update({
+            where: { orderNumber },
+            data: {
+              refundedAmount: refundedKop / 100,
+              cancelReason: note.slice(0, 1000),
+              ...(full && { status: OrderStatus.REFUNDED, isPaid: false }),
+              ...(released && { inventoryReleased: true }),
+            },
+          });
+          return { updated, amount: amountKop / 100, full, released, viaBank };
+        } catch (error: any) {
+          // Деньги банк уже вернул, а запись не удалась — это должен увидеть человек.
+          this.logger.error(
+            `ВОЗВРАТ ПРОШЁЛ В БАНКЕ, НО НЕ ЗАПИСАН: ${orderNumber}, ${amountKop / 100} ₽: ${error.message}`,
+          );
+          throw error;
+        }
+      },
+      { timeout: 30000, maxWait: 10000 },
+    );
+
+    this.logger.log(
+      `Возврат по заказу ${orderNumber}: ${result.amount} ₽` +
+        `${result.viaBank ? ' через Т-Банк' : ' вручную'}` +
+        `${result.full ? ', полный' : ', частичный'}` +
+        `${result.released ? ', товар возвращён на склад' : ''}`,
+    );
+
+    const order = result.updated;
+    const amountText = result.amount.toLocaleString('ru-RU');
+    await this.emailService.sendRaw(
+      order.email,
+      `Возврат по заказу #${order.orderNumber} - Saliy Clothes`,
+      `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <p>Здравствуйте!</p>
+        <p>По заказу <strong>#${order.orderNumber}</strong> оформлен возврат <strong>${amountText} ₽</strong>.</p>
+        <p>Деньги вернутся тем же способом, которым был оплачен заказ. Срок зачисления зависит от вашего банка.</p>
+        <p style="color: #666; font-size: 12px;">— Команда Saliy Clothes</p>
+      </div>`,
+    );
+
+    return {
+      order,
+      refund: {
+        amount: result.amount,
+        refundedTotal: order.refundedAmount,
+        full: result.full,
+        stockReturned: result.released,
+        viaBank: result.viaBank,
+      },
+    };
   }
 
   async confirmTbankByApi(
@@ -1053,10 +1248,14 @@ export class OrdersService {
     )
       throw new BadRequestException('Платёж не найден');
     const state = await this.tbankPayService.getState(order.paymentId);
+    // Частичный возврат записывает сам эндпоинт возврата, а сумма платежа после
+    // него уже не совпадает с суммой заказа — уведомление просто принимаем.
+    if (state.Status === 'PARTIAL_REFUNDED') return;
     if (
       String(state.PaymentId) !== order.paymentId ||
       state.OrderId !== orderNumber ||
-      state.Amount !== Math.round(order.total * 100)
+      (state.Status !== 'REFUNDED' &&
+        state.Amount !== Math.round(order.total * 100))
     )
       throw new BadRequestException('Реквизиты платежа не совпадают');
     const mappedStatus = this.tbankPayService.mapStatus(state.Status);

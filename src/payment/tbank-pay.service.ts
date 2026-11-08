@@ -20,6 +20,10 @@ interface BankResponse {
   Amount: number;
   Status: string;
   PaymentURL?: string;
+  Message?: string;
+  Details?: string;
+  OriginalAmount?: number;
+  NewAmount?: number;
 }
 @Injectable()
 export class TbankPayService {
@@ -77,6 +81,7 @@ export class TbankPayService {
   private async request(
     method: string,
     payload: Record<string, unknown>,
+    exposeBankMessage = false,
   ): Promise<BankResponse> {
     if (!this.terminalKey || !this.password)
       throw new BadGatewayException('Т-Банк не настроен');
@@ -91,8 +96,18 @@ export class TbankPayService {
       // Axios errors contain signed requests: do not expose them.
       throw new BadGatewayException('Т-Банк временно недоступен');
     }
-    if (data?.Success !== true || String(data.ErrorCode) !== '0')
-      throw new BadGatewayException('Т-Банк отклонил запрос');
+    if (data?.Success !== true || String(data.ErrorCode) !== '0') {
+      // Текст отказа банка (без подписи и ключей) нужен админу, чтобы понять,
+      // почему не прошёл возврат: например, не хватает оборота на терминале.
+      const reason = exposeBankMessage
+        ? [data?.ErrorCode, data?.Message, data?.Details]
+            .filter((v) => v != null && String(v) !== '' && v !== 'None')
+            .join(', ')
+        : '';
+      throw new BadGatewayException(
+        'Т-Банк отклонил запрос' + (reason ? ': ' + reason.slice(0, 300) : ''),
+      );
+    }
     return data;
   }
   async registerOrder(params: {
@@ -124,6 +139,20 @@ export class TbankPayService {
     if (!data.PaymentId || !data.PaymentURL)
       throw new BadGatewayException('Т-Банк не вернул ссылку на оплату');
     return { paymentId: String(data.PaymentId), paymentUrl: data.PaymentURL };
+  }
+  /**
+   * Возврат денег по оплаченному платежу (метод Cancel). amountKopecks — сколько
+   * вернуть. Полный возврат переводит платёж в REFUNDED, частичный —
+   * в PARTIAL_REFUNDED.
+   */
+  refundPayment(paymentId: string, amountKopecks: number) {
+    if (!Number.isSafeInteger(amountKopecks) || amountKopecks <= 0)
+      throw new Error('Некорректная сумма возврата');
+    return this.request(
+      'Cancel',
+      { PaymentId: paymentId, Amount: amountKopecks },
+      true,
+    );
   }
   getState(paymentId: string) {
     return this.request('GetState', { PaymentId: paymentId });
