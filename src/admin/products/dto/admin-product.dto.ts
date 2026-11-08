@@ -105,10 +105,6 @@ export class CreateProductDto {
   @IsObject()
   stock?: Record<string, number>;
 
-  @IsOptional()
-  @Transform(parseJsonObject)
-  @IsObject()
-  preorderStock?: Record<string, number>;
 
   @IsOptional()
   @Transform(toBoolean)
@@ -177,10 +173,6 @@ export class UpdateProductDto {
   @IsObject()
   stock?: Record<string, number>; // {"S": 10, "M": 5, "L": 0}
 
-  @IsOptional()
-  @Transform(parseJsonObject)
-  @IsObject()
-  preorderStock?: Record<string, number>;
 
   @IsOptional()
   @Transform(toBoolean)

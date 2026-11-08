@@ -1,4 +1,3 @@
-import { validatePreorderConfig } from '../../common/utils/preorder.util';
 import { validateProductPrices } from '../../common/utils/product-price.util';
 import {
   Injectable,
@@ -248,7 +247,6 @@ export class AdminProductsService {
     dto: CreateProductDto,
     imageFiles?: Express.Multer.File[],
   ) {
-    validatePreorderConfig({ stock: {}, ...dto });
     validateProductPrices(dto);
     // Проверяем уникальность slug
     const existing = await this.prisma.product.findUnique({
@@ -385,7 +383,6 @@ export class AdminProductsService {
     if (!existingProduct) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
-    validatePreorderConfig({ ...existingProduct, ...updateProductDto });
     validateProductPrices({ ...existingProduct, ...updateProductDto });
 
     // Объединяем существующие и новые изображения

@@ -1,10 +1,7 @@
 import { OrdersService } from './orders.service';
 import { AdminOrdersService } from '../admin/orders/admin-orders.service';
 import { CartService } from '../cart/cart.service';
-import {
-  purchaseAvailability,
-  validatePreorderConfig,
-} from '../common/utils/preorder.util';
+import { purchaseAvailability } from '../common/utils/preorder.util';
 
 // In-memory database with rollback: failures must undo both counters and order changes.
 function setup() {
@@ -15,8 +12,8 @@ function setup() {
         name: 'Preorder',
         slug: 'pre',
         cardStatus: 'PRE_ORDER',
-        preorderStock: { M: 2 },
-        stock: { M: 0 },
+        // У предзаказа обычный stock: «M — 2» = можно предзаказать 2 штуки.
+        stock: { M: 2 },
         price: 1000,
         discount: 0,
         images: [],
@@ -29,7 +26,6 @@ function setup() {
         name: 'Regular',
         slug: 'regular',
         cardStatus: 'NONE',
-        preorderStock: {},
         stock: { M: 3 },
         price: 500,
         discount: 0,
@@ -166,7 +162,7 @@ function setup() {
 }
 
 describe('Preorders', () => {
-  it('uses preorder limits with zero physical stock without requiring a date', async () => {
+  it('sells a preorder from its regular stock without requiring a date', async () => {
     const t = setup();
     const cart = await new CartService(t.prisma).validateCart([
       { productId: 1, size: 'M', quantity: 1 },
@@ -179,13 +175,6 @@ describe('Preorders', () => {
     expect(
       purchaseAvailability(t.state().products[0], 'M').availableQuantity,
     ).toBe(2);
-    expect(() => validatePreorderConfig(t.state().products[0])).not.toThrow();
-    expect(() =>
-      validatePreorderConfig({ stock: {}, preorderStock: { M: -1 } }),
-    ).toThrow();
-    expect(() =>
-      validatePreorderConfig({ stock: {}, preorderStock: { M: 1.5 } }),
-    ).toThrow();
   });
 
   it('accepts, edits and fulfills a dateless preorder only after manager confirmation', async () => {
@@ -195,9 +184,10 @@ describe('Preorders', () => {
     await t.admin.updateOrderItems(order.orderNumber, [{ productId: 1, size: 'M', quantity: 1 }]);
     expect(t.state().order).toMatchObject({ status: 'AWAITING_PREORDER', isPaid: true });
     expect(t.delivery.createCdekOrder).not.toHaveBeenCalled();
-    t.state().products[0].stock.M = 1;
     await t.admin.markPreorderReady(order.orderNumber);
     expect(t.state().order.status).toBe('CONFIRMED');
+    // Списано один раз при оформлении — отметка «поступил» stock не трогает.
+    expect(t.state().products[0]).toMatchObject({ stock: { M: 1 }, salesCount: 1 });
     expect(t.email.sendRaw).toHaveBeenCalledWith('test@example.com', 'Предзаказ готов к отправке', expect.any(String));
     expect(t.delivery.createCdekOrder).toHaveBeenCalledTimes(1);
   });
@@ -206,8 +196,7 @@ describe('Preorders', () => {
     const t = setup();
     const order = await t.create();
     expect(t.state().products[0]).toMatchObject({
-      stock: { M: 0 },
-      preorderStock: { M: 1 },
+      stock: { M: 1 },
       salesCount: 1,
     });
     expect(order.items[0]).toMatchObject({
@@ -231,14 +220,13 @@ describe('Preorders', () => {
     ).rejects.toThrow();
   });
 
-  it('releases the slot exactly once on timeout and does not add physical stock', async () => {
+  it('returns the unit to stock exactly once on timeout', async () => {
     const t = setup();
     const order = await t.create();
     await t.orders.updatePaymentStatus(order.orderNumber, 'CANCELED');
     await t.orders.updatePaymentStatus(order.orderNumber, 'CANCELED');
     expect(t.state().products[0]).toMatchObject({
-      stock: { M: 0 },
-      preorderStock: { M: 2 },
+      stock: { M: 2 },
       salesCount: 0,
     });
     expect(t.state().order.inventoryReleased).toBe(true);
@@ -253,7 +241,7 @@ describe('Preorders', () => {
       ]),
     ).rejects.toThrow();
     expect(t.state().order).toBeNull();
-    expect(t.state().products[0].preorderStock.M).toBe(2);
+    expect(t.state().products[0].stock.M).toBe(2);
   });
 
   it('creates a payable online preorder and releases the slot if bank registration fails', async () => {
@@ -278,7 +266,7 @@ describe('Preorders', () => {
       });
       if (fail) {
         await expect(pending).rejects.toThrow();
-        expect(t.state().products[0].preorderStock.M).toBe(2);
+        expect(t.state().products[0].stock.M).toBe(2);
         expect(t.state().order).toMatchObject({
           inventoryReleased: true,
           status: 'PAYMENT_FAILED',
@@ -293,7 +281,7 @@ describe('Preorders', () => {
         expect(t.bank.registerOrder).toHaveBeenCalledWith(
           expect.objectContaining({ amount: 1000 }),
         );
-        expect(t.state().products[0].preorderStock.M).toBe(1);
+        expect(t.state().products[0].stock.M).toBe(1);
       }
     }
   });
@@ -305,16 +293,13 @@ describe('Preorders', () => {
     await t.admin.updateOrderItems(order.orderNumber, [
       { productId: 1, size: 'M', quantity: 2 },
     ]);
-    expect(t.state().products[0]).toMatchObject({
-      stock: { M: 0 },
-      preorderStock: { M: 0 },
-    });
+    expect(t.state().products[0]).toMatchObject({ stock: { M: 0 } });
     expect(t.state().order.items[0]).toMatchObject({
       isPreorder: true,
     });
   });
 
-  it('waits for the full mixed order, then allocates physical units and creates one invoice', async () => {
+  it('waits for the manager to confirm arrival, then ships the whole mixed order once', async () => {
     const t = setup();
     const order = await t.create([
       { productId: 1, size: 'M', quantity: 1 },
@@ -322,16 +307,12 @@ describe('Preorders', () => {
     ]);
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
     expect(t.state().products[1].stock.M).toBe(2);
-    await expect(
-      t.admin.markPreorderReady(order.orderNumber),
-    ).rejects.toThrow();
     expect(t.state().order.status).toBe('AWAITING_PREORDER');
     expect(t.state().order.items[0].preorderReady).toBe(false);
-    t.state().products[0].stock.M = 1;
+    expect(t.delivery.createCdekOrder).not.toHaveBeenCalled();
     await t.admin.markPreorderReady(order.orderNumber);
     expect(t.state().products[0]).toMatchObject({
-      stock: { M: 0 },
-      preorderStock: { M: 1 },
+      stock: { M: 1 },
       salesCount: 1,
     });
     expect(t.state().order).toMatchObject({
@@ -355,13 +336,12 @@ describe('Preorders', () => {
     await t.orders.recordRefund(order.orderNumber);
     await t.orders.recordRefund(order.orderNumber);
     expect(t.state().products[0]).toMatchObject({
-      stock: { M: 0 },
-      preorderStock: { M: 2 },
+      stock: { M: 2 },
       salesCount: 0,
     });
   });
 
-  it('releases both inventory buckets on a bank refund before fulfillment', async () => {
+  it('returns preorder and regular units to stock on a bank refund', async () => {
     const t = setup();
     const order = await t.create([
       { productId: 1, size: 'M', quantity: 1 },
@@ -370,7 +350,7 @@ describe('Preorders', () => {
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
     await t.orders.updatePaymentStatus(order.orderNumber, 'REFUNDED');
     await t.orders.updatePaymentStatus(order.orderNumber, 'REFUNDED');
-    expect(t.state().products[0].preorderStock.M).toBe(2);
+    expect(t.state().products[0].stock.M).toBe(2);
     expect(t.state().products[1].stock.M).toBe(3);
     expect(t.state().order).toMatchObject({
       status: 'REFUNDED',
@@ -379,14 +359,13 @@ describe('Preorders', () => {
     });
   });
 
-  it('returns physical units after readiness instead of reopening a consumed preorder slot', async () => {
+  it('returns the unit to stock when a ready preorder is cancelled', async () => {
     const t = setup(); const order = await t.create();
     await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
-    t.state().products[0].stock.M = 1;
     await t.admin.markPreorderReady(order.orderNumber);
     t.delivery.deleteCdekOrder = jest.fn();
     await t.admin.cancelOrder(order.orderNumber);
-    expect(t.state().products[0]).toMatchObject({ stock: { M: 1 }, preorderStock: { M: 1 }, salesCount: 0 });
+    expect(t.state().products[0]).toMatchObject({ stock: { M: 2 }, salesCount: 0 });
     expect(t.email.sendRaw).toHaveBeenCalledTimes(2);
   });
 
@@ -395,14 +374,14 @@ describe('Preorders', () => {
       const t = setup();
       const order = await t.create();
       await t.orders.updatePaymentStatus(order.orderNumber, 'CANCELED');
-      if (soldOut) t.state().products[0].preorderStock.M = 0;
+      if (soldOut) t.state().products[0].stock.M = 0;
       await t.orders.updatePaymentStatus(order.orderNumber, 'PAID');
       expect(t.state().order).toMatchObject({
         isPaid: true,
         inventoryReleased: soldOut,
         status: soldOut ? 'PROCESSING' : 'AWAITING_PREORDER',
       });
-      expect(t.state().products[0].preorderStock.M).toBe(soldOut ? 0 : 1);
+      expect(t.state().products[0].stock.M).toBe(soldOut ? 0 : 1);
       expect(t.delivery.createCdekOrder).not.toHaveBeenCalled();
     }
   });

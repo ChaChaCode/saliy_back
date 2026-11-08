@@ -4,41 +4,25 @@ import { Prisma } from '@prisma/client';
 type AvailabilityProduct = {
   cardStatus?: string;
   stock: unknown;
-  preorderStock?: unknown;
 };
 
+/**
+ * Сколько можно купить. У предзаказа (PRE_ORDER) тот же обычный stock, что и
+ * у остальных товаров: «M — 100» значит, что предзаказать можно 100 штук M.
+ * Предзаказ отличается только тем, что товара ещё нет на руках.
+ */
 export function purchaseAvailability(
   product: AvailabilityProduct,
   size: string,
 ) {
   const isPreorder = product.cardStatus === 'PRE_ORDER';
-  const source = (isPreorder ? product.preorderStock : product.stock) as Record<
-    string,
-    number
-  > | null;
+  const source = product.stock as Record<string, number> | null;
   const value = source?.[size];
   return {
     isPreorder,
     availableQuantity:
       Number.isSafeInteger(value) && value! > 0 ? value! : 0,
   };
-}
-
-export function validatePreorderConfig(product: AvailabilityProduct) {
-  if (product.preorderStock != null) {
-    if (
-      typeof product.preorderStock !== 'object' ||
-      Array.isArray(product.preorderStock) ||
-      Object.values(product.preorderStock).some(
-        (v) => !Number.isSafeInteger(v) || v < 0,
-      )
-    ) {
-      throw new BadRequestException(
-        'Лимиты предзаказа должны быть целыми неотрицательными числами',
-      );
-    }
-  }
-
 }
 
 export const waitingForPreorder = (order: {
@@ -76,9 +60,7 @@ export async function changeReservedQuantity(
     if (release) return;
     throw new BadRequestException('Товар не найден');
   }
-  const field =
-    item.isPreorder && !item.preorderReady ? 'preorderStock' : 'stock';
-  const stock = { ...((product[field] as Record<string, number>) || {}) };
+  const stock = { ...((product.stock as Record<string, number>) || {}) };
   const current = stock[item.size] || 0;
   if (!release && current < item.quantity) {
     throw new BadRequestException(
@@ -89,7 +71,7 @@ export async function changeReservedQuantity(
   await tx.product.update({
     where: { id: product.id },
     data: {
-      [field]: stock,
+      stock,
       salesCount: { increment: release ? -item.quantity : item.quantity },
     },
   });

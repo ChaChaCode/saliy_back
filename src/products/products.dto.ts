@@ -73,9 +73,6 @@ export class CreateProductDto {
   @IsObject()
   stock?: any; // JSON
 
-  @IsOptional()
-  @IsObject()
-  preorderStock?: Record<string, number>;
 
   @IsOptional()
   @IsBoolean()
@@ -135,9 +132,6 @@ export class UpdateProductDto {
   @IsObject()
   stock?: any;
 
-  @IsOptional()
-  @IsObject()
-  preorderStock?: Record<string, number>;
 
   @IsOptional()
   @IsBoolean()

@@ -1,6 +1,5 @@
 import {
   purchaseAvailability,
-  validatePreorderConfig,
 } from '../common/utils/preorder.util';
 import {
   Injectable,
@@ -27,7 +26,6 @@ export class ProductsService {
    * Создать товар
    */
   async createProduct(dto: CreateProductDto) {
-    validatePreorderConfig({ stock: {}, ...dto });
     const { categoryIds, ...productData } = dto;
 
     // Проверяем уникальность slug
@@ -118,7 +116,6 @@ export class ProductsService {
   async updateProduct(id: number, dto: UpdateProductDto) {
     // Проверяем существование
     const oldProduct = await this.getProductById(id);
-    validatePreorderConfig({ ...oldProduct, ...dto });
 
     const { categoryIds, ...productData } = dto;
 

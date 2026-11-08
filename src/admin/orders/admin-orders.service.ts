@@ -429,30 +429,8 @@ export class AdminOrdersService {
           'Заказ не ожидает поступления оплаченного предзаказа',
         );
       }
-      const items = order.items.filter(
-        (item) => item.isPreorder && !item.preorderReady,
-      );
-      await lockProducts(
-        tx,
-        items.flatMap((item) =>
-          item.productId == null ? [] : [item.productId],
-        ),
-      );
-      for (const item of items) {
-        if (item.productId == null)
-          throw new BadRequestException('Товар предзаказа удалён');
-        // Incoming units are allocated from physical stock; the preorder slot stays consumed.
-        await changeReservedQuantity(tx, {
-          ...item,
-          productId: item.productId,
-          size: item.size ?? '',
-          preorderReady: true,
-        });
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { salesCount: { decrement: item.quantity } },
-        });
-      }
+      // Товар списан из stock ещё при оформлении предзаказа — здесь только
+      // отмечаем, что он поступил и заказ можно отправлять.
       await tx.orderItem.updateMany({
         where: { orderId: order.id, isPreorder: true },
         data: { preorderReady: true },
