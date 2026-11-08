@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsBoolean, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsEnum,
+  MaxLength,
+} from 'class-validator';
 import { Transform } from 'class-transformer';
 import { category_type } from '@prisma/client';
 
@@ -14,6 +20,11 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsEnum(category_type)
   type?: category_type;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string;
 
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
@@ -33,6 +44,11 @@ export class UpdateCategoryDto {
   @IsOptional()
   @IsEnum(category_type)
   type?: category_type;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  description?: string;
 
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
