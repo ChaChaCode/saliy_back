@@ -559,8 +559,10 @@ export class AdminProductsService {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
 
-    if (!Array.isArray(images) || images.length === 0) {
-      throw new BadRequestException('images не может быть пустым');
+    // Пустой массив допустим: админка удаляет фото по одному, а затем шлёт
+    // итоговый порядок — после удаления всех фото он пустой.
+    if (!Array.isArray(images)) {
+      throw new BadRequestException('images должен быть массивом');
     }
 
     const current = (product.images as unknown as ProductImage[]) || [];
