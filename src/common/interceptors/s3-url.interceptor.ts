@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { orderSizes } from '../utils/size-order';
 
 const S3_BASE_URL = (
   `${process.env.YANDEX_ENDPOINT || 'https://storage.yandexcloud.net'}/${process.env.YANDEX_BUCKET || 'saliy-shop'}`
@@ -46,6 +47,10 @@ export class S3UrlInterceptor implements NestInterceptor {
         if (this.isUrlField(key) && typeof value === 'string') {
           transformed[key] = this.addBaseUrl(value);
         }
+        // Остатки по размерам — в порядке XS, S, M, L, XL (jsonb их переставляет)
+        else if (key === 'stock' && this.isPlainObject(value)) {
+          transformed[key] = orderSizes(value);
+        }
         // Рекурсивно обрабатываем вложенные объекты (но не Date)
         else if (typeof value === 'object' && value !== null && !(value instanceof Date)) {
           transformed[key] = this.transformUrls(value);
@@ -60,6 +65,15 @@ export class S3UrlInterceptor implements NestInterceptor {
     }
 
     return data;
+  }
+
+  private isPlainObject(value: unknown): value is Record<string, unknown> {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      !(value instanceof Date)
+    );
   }
 
   private isUrlField(key: string): boolean {
