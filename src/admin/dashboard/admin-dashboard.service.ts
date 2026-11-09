@@ -192,16 +192,18 @@ export class AdminDashboardService {
    * Топ продаваемых товаров
    */
   async getTopProducts(limit = 10) {
-    // Группировка по productId в OrderItem из оплаченных заказов
+    // Позиции оплаченных заказов; удалённые товары (в т. ч. тестовые) в топ
+    // не попадают — показывать по ним нечего, кроме «Товар удалён».
+    const soldWhere = {
+      product: { deletedAt: null },
+      order: {
+        isPaid: true,
+        status: { not: OrderStatus.CANCELLED },
+      },
+    };
     const topItems = await this.prisma.orderItem.groupBy({
       by: ['productId'],
-      where: {
-        productId: { not: null },
-        order: {
-          isPaid: true,
-          status: { not: OrderStatus.CANCELLED },
-        },
-      },
+      where: soldWhere,
       _sum: {
         quantity: true,
       },
@@ -229,30 +231,23 @@ export class AdminDashboardService {
       },
     });
 
-    // Считаем выручку по каждому товару
-    const revenueByProduct = await this.prisma.orderItem.groupBy({
-      by: ['productId'],
-      where: {
-        productId: { in: productIds },
-        order: {
-          isPaid: true,
-          status: { not: OrderStatus.CANCELLED },
-        },
-      },
-      _sum: {
-        quantity: true,
-      },
+    // Выручка — по цене, за которую товар реально купили (снимок в позиции
+    // заказа), а не по нынешней цене товара: цена и скидка могли меняться.
+    const soldItems = await this.prisma.orderItem.findMany({
+      where: { ...soldWhere, productId: { in: productIds } },
+      select: { productId: true, price: true, discount: true, quantity: true },
     });
 
     const revenueMap = new Map<number, number>();
-    for (const item of revenueByProduct) {
+    for (const item of soldItems) {
       if (item.productId === null) continue;
-      const product = products.find((p) => p.id === item.productId);
-      if (!product) continue;
       const finalPrice = Math.floor(
-        product.price - (product.price * product.discount) / 100,
+        item.price - (item.price * (item.discount ?? 0)) / 100,
       );
-      revenueMap.set(item.productId, finalPrice * (item._sum.quantity || 0));
+      revenueMap.set(
+        item.productId,
+        (revenueMap.get(item.productId) ?? 0) + finalPrice * item.quantity,
+      );
     }
 
     return topItems.map((item) => {
