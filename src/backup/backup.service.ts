@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import { openAsBlob } from 'fs';
 import { stat, unlink, readdir, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { telegramApiBase, TELEGRAM_TIMEOUT_MS } from '../common/utils/telegram-api';
 
 const execAsync = promisify(exec);
 
@@ -130,7 +131,8 @@ export class BackupService {
       return;
     }
     try {
-      await fetch(`https://api.telegram.org/bot${this.botToken}/sendMessage`, {
+      await fetch(`${telegramApiBase()}/bot${this.botToken}/sendMessage`, {
+        signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: this.dumpChatId, text }),
@@ -152,7 +154,8 @@ export class BackupService {
       const blob = await openAsBlob(filePath, { type: 'application/gzip' });
       form.append('document', blob, filePath.split('/').pop() || 'backup.sql.gz');
 
-      const res = await fetch(`https://api.telegram.org/bot${this.botToken}/sendDocument`, {
+      const res = await fetch(`${telegramApiBase()}/bot${this.botToken}/sendDocument`, {
+        signal: AbortSignal.timeout(120_000),
         method: 'POST',
         body: form,
       });

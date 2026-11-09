@@ -11,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { SimpleCacheService } from '../cache/simple-cache.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getAdminSecret } from '../utils/jwt-secrets';
+import { telegramApiBase, TELEGRAM_TIMEOUT_MS } from '../utils/telegram-api';
 
 interface FailedAttempt {
   count: number;
@@ -285,8 +286,9 @@ export class AdminGuard implements CanActivate {
 
     try {
       const response = await fetch(
-        `https://api.telegram.org/bot${botToken}/sendMessage`,
+        `${telegramApiBase()}/bot${botToken}/sendMessage`,
         {
+        signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

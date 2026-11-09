@@ -9,6 +9,7 @@ import {
 import { AdminAuthService } from '../auth/admin-auth.service';
 import { SimpleCacheService } from '../../common/cache/simple-cache.service';
 import { BackupService } from '../../backup/backup.service';
+import { telegramApiBase, TELEGRAM_TIMEOUT_MS } from '../../common/utils/telegram-api';
 
 interface TelegramUpdate {
   update_id: number;
@@ -320,7 +321,8 @@ export class TelegramWebhookController {
   private async sendMessage(chatId: number, text: string) {
     if (!TELEGRAM_BOT_TOKEN) return;
     try {
-      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      await fetch(`${telegramApiBase()}/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text }),
@@ -343,8 +345,9 @@ export class TelegramWebhookController {
 
     try {
       await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`,
+        `${telegramApiBase()}/bot${TELEGRAM_BOT_TOKEN}/editMessageText`,
         {
+        signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -369,8 +372,9 @@ export class TelegramWebhookController {
 
     try {
       await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
+        `${telegramApiBase()}/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
         {
+        signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS),
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

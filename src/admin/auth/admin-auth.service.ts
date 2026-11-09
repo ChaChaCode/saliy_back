@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SimpleCacheService } from '../../common/cache/simple-cache.service';
 import { getAdminSecret } from '../../common/utils/jwt-secrets';
 import * as crypto from 'crypto';
+import { telegramApiBase } from '../../common/utils/telegram-api';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHANNEL_ID = '-1003644248789';
@@ -275,7 +276,7 @@ export class AdminAuthService {
     for (let attempt = 1; attempt <= TELEGRAM_SEND_ATTEMPTS; attempt++) {
       try {
         const response = await fetch(
-          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+          `${telegramApiBase()}/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
           {
             method: 'POST',
             signal: AbortSignal.timeout(TELEGRAM_ATTEMPT_TIMEOUT_MS),

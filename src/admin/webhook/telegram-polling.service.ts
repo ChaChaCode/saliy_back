@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { TelegramWebhookController } from './telegram-webhook.controller';
+import { telegramApiBase, TELEGRAM_TIMEOUT_MS } from '../../common/utils/telegram-api';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 // Включить long-polling вместо webhook. На РФ-хостинге входящие webhook от
@@ -44,7 +45,8 @@ export class TelegramPollingService implements OnModuleInit, OnModuleDestroy {
   private async deleteWebhook() {
     try {
       const res = await fetch(
-        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=false`,
+        `${telegramApiBase()}/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=false`,
+        { signal: AbortSignal.timeout(TELEGRAM_TIMEOUT_MS) },
       );
       const data = await res.json();
       this.logger.log(`deleteWebhook: ${JSON.stringify(data)}`);
@@ -87,8 +89,9 @@ export class TelegramPollingService implements OnModuleInit, OnModuleDestroy {
    */
   private async getUpdates(): Promise<any[]> {
     const res = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`,
+      `${telegramApiBase()}/bot${TELEGRAM_BOT_TOKEN}/getUpdates`,
       {
+        signal: AbortSignal.timeout(45_000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
