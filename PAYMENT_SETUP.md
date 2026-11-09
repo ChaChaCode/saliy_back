@@ -42,12 +42,7 @@
 
 ### Email (уже настроено)
 
-```env
-EMAIL_USER=mezovt123@gmail.com
-EMAIL_PASS=lxxpzcdmftsswkqj
-EMAIL_HOST=smtp.gmail.com
-EMAIL_FROM=mezovt123@gmail.com
-```
+Почта настроена в `.env` на сервере: основной ящик `EMAIL_USER`/`EMAIL_PASS`/`EMAIL_FROM`, запасной `EMAIL_FALLBACK_USER`/`EMAIL_FALLBACK_PASS`/`EMAIL_FALLBACK_FROM`. Список переменных — в `.env.example`. Пароли в репозиторий не записывать.
 
 ### Альфа-Банк
 

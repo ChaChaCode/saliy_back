@@ -2,61 +2,138 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 
+interface MailAccount {
+  name: 'основной' | 'запасной';
+  from: string;
+  transporter: nodemailer.Transporter;
+  // До какого момента ящик не используем: Gmail ответил, что лимит исчерпан
+  pausedUntil: number;
+}
+
+/**
+ * Ответ Gmail, после которого ящик бессмысленно дёргать какое-то время:
+ * 550-5.4.5 — исчерпан суточный лимит отправки (снимается через 1–24 ч);
+ * 454-4.7.0 / 421 — слишком много входов или соединений (минуты).
+ */
+function pauseMsFor(error: unknown): number {
+  const text = error instanceof Error ? error.message : String(error);
+  if (/5\.4\.5|sending limit/i.test(text)) return 60 * 60 * 1000;
+  if (/4\.7\.0|Too many login|^421|\b421\b/i.test(text)) return 10 * 60 * 1000;
+  return 0;
+}
+
+/** Код в теме письма (например «1234 — код для входа») в лог не пишем. */
+const maskSubject = (subject: unknown) =>
+  String(subject ?? '').replace(/\d{4,8}/g, '****');
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: nodemailer.Transporter;
+  private readonly accounts: MailAccount[] = [];
 
   constructor() {
-    const transportOptions: SMTPTransport.Options = {
+    if (!process.env.EMAIL_HOST) {
+      this.logger.warn('EMAIL_HOST не задан — отправка писем отключена');
+      return;
+    }
+    // Основной ящик — EMAIL_USER/EMAIL_PASS. Запасной (EMAIL_FALLBACK_*) —
+    // на случай, если у основного Gmail исчерпал суточный лимит.
+    this.addAccount(
+      'основной',
+      process.env.EMAIL_USER,
+      process.env.EMAIL_PASS,
+      process.env.EMAIL_FROM,
+    );
+    this.addAccount(
+      'запасной',
+      process.env.EMAIL_FALLBACK_USER,
+      process.env.EMAIL_FALLBACK_PASS,
+      process.env.EMAIL_FALLBACK_FROM,
+    );
+  }
+
+  private addAccount(
+    name: MailAccount['name'],
+    user?: string,
+    pass?: string,
+    from?: string,
+  ) {
+    if (!user || !pass) return;
+    const options: SMTPTransport.Options = {
       host: process.env.EMAIL_HOST,
       port: parseInt(process.env.EMAIL_PORT || '587'),
       secure: process.env.EMAIL_SECURE === 'true',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+      auth: { user, pass },
+      // Одно постоянное соединение вместо входа на каждое письмо: на дропе
+      // вход на каждое письмо упёрся в «Too many login attempts» Gmail.
+      ...({ pool: true, maxConnections: 2, maxMessages: 100 } as Record<
+        string,
+        unknown
+      >),
       // Принудительно IPv4: на сервере исходящий IPv6 не работает, а
       // smtp.gmail.com резолвится и в IPv6 → connect ENETUNREACH на 587.
       // family отсутствует в типах @types/nodemailer, но поддерживается
       // nodemailer в рантайме — добавляем через приведение.
       ...({ family: 4 } as Record<string, unknown>),
     };
-    this.transporter = nodemailer.createTransport(transportOptions);
+    const account: MailAccount = {
+      name,
+      // Gmail всё равно подставляет адрес ящика, поэтому from = сам ящик.
+      from: from || user,
+      transporter: nodemailer.createTransport(options),
+      pausedUntil: 0,
+    };
+    this.accounts.push(account);
 
-    // Проверяем SMTP-соединение при старте — чтобы проблема с почтой
-    // была видна сразу в логах, а не при первой отправке.
-    if (process.env.EMAIL_HOST) {
-      this.transporter
-        .verify()
-        .then(() => this.logger.log('SMTP-соединение готово'))
-        .catch((e) =>
-          this.logger.error(
-            `SMTP не настроен/недоступен: ${e instanceof Error ? e.message : String(e)}`,
-          ),
-        );
-    } else {
-      this.logger.warn('EMAIL_HOST не задан — отправка писем отключена');
-    }
+    // Проверяем вход при старте — чтобы проблема была видна сразу в логах.
+    account.transporter
+      .verify()
+      .then(() => this.logger.log(`SMTP (${name} ящик) готов`))
+      .catch((e) =>
+        this.logger.error(
+          `SMTP (${name} ящик) недоступен: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
   }
 
   /**
    * Безопасная отправка: ошибка SMTP логируется, но НЕ роняет бизнес-операцию
    * (заказ/регистрация не должны падать из-за недоставленного письма).
+   * Сначала основной ящик; если Gmail ответил лимитом — ящик ставится на паузу
+   * и письмо уходит с запасного. Массовые рассылки (bulk) запасной не трогают,
+   * чтобы он оставался для кодов входа и писем о заказах.
    * Возвращает true при успехе.
    */
   private async safeSend(
     options: nodemailer.SendMailOptions,
+    { bulk = false }: { bulk?: boolean } = {},
   ): Promise<boolean> {
-    try {
-      await this.transporter.sendMail(options);
-      return true;
-    } catch (e) {
+    const candidates = (bulk ? this.accounts.slice(0, 1) : this.accounts)
+      .filter((a) => a.pausedUntil <= Date.now());
+    if (candidates.length === 0) {
       this.logger.error(
-        `Не удалось отправить письмо "${options.subject}" на ${options.to}: ${e instanceof Error ? e.message : String(e)}`,
+        `Письмо "${maskSubject(options.subject)}" не отправлено: ` +
+          (this.accounts.length
+            ? 'у почтовых ящиков исчерпан лимит Gmail'
+            : 'почта не настроена'),
       );
       return false;
     }
+    for (const account of candidates) {
+      try {
+        await account.transporter.sendMail({ ...options, from: account.from });
+        return true;
+      } catch (e) {
+        const pauseMs = pauseMsFor(e);
+        if (pauseMs) account.pausedUntil = Date.now() + pauseMs;
+        this.logger.error(
+          `Не удалось отправить письмо "${maskSubject(options.subject)}" ` +
+            `(${account.name} ящик${pauseMs ? `, пауза ${pauseMs / 60000} мин` : ''}): ` +
+            `${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+    return false;
   }
 
   async sendVerificationCode(email: string, code: string): Promise<void> {
@@ -317,12 +394,12 @@ export class EmailService {
   /**
    * Отправить произвольное письмо (для админа — рассылки, уведомления)
    */
-  async sendRaw(to: string, subject: string, html: string): Promise<boolean> {
-    return this.safeSend({
-      from: process.env.EMAIL_FROM,
-      to,
-      subject,
-      html,
-    });
+  async sendRaw(
+    to: string,
+    subject: string,
+    html: string,
+    { bulk = false }: { bulk?: boolean } = {},
+  ): Promise<boolean> {
+    return this.safeSend({ to, subject, html }, { bulk });
   }
 }

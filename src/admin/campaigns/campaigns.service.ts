@@ -333,6 +333,9 @@ export class CampaignsService {
             r.email,
             subject,
             this.buildHtmlForRecipient(html, r),
+            // Рассылка только с основного ящика: запасной бережём для
+            // кодов входа и писем о заказах.
+            { bulk: true },
           ),
         ),
       );
