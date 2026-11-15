@@ -7,6 +7,7 @@ import {
   IsObject,
   Min,
   IsInt,
+  MaxLength,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
@@ -37,6 +38,16 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(3000)
+  modelParameters?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(3000)
+  compositionCare?: string | null;
 
   @IsOptional()
   @IsEnum(CardStatus)
@@ -96,6 +107,16 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(3000)
+  modelParameters?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(3000)
+  compositionCare?: string | null;
 
   @IsOptional()
   @IsEnum(CardStatus)

@@ -49,6 +49,8 @@
 | `name` | string | Название товара |
 | `slug` | string | URL-friendly идентификатор |
 | `description` | string | Описание товара |
+| `modelParameters` | string / null | Параметры модели: рост, размер на модели; до 3000 символов |
+| `compositionCare` | string / null | Состав и уход; до 3000 символов |
 | `cardStatus` | CardStatus | Статус карточки |
 | `gender` | GenderType | Для какого пола |
 | `color` | string | Цвет товара |
@@ -104,6 +106,8 @@ Content-Type: `multipart/form-data`. Поддерживает загрузку �
 | `name` | string | Да | Название товара |
 | `slug` | string | Да | Уникальный слаг (URL) |
 | `description` | string | Нет | Описание |
+| `modelParameters` | string | Нет | Параметры модели, обычный текст до 3000 символов |
+| `compositionCare` | string | Нет | Состав и уход, обычный текст до 3000 символов |
 | `price` | number | Да | Цена в рублях (>= 0) |
 | `discount` | number | Нет | Скидка 0-100 |
 | `cardStatus` | enum | Нет | NONE / NEW / SALE / SOLD_OUT / PRE_ORDER / COMING_SOON |
@@ -210,6 +214,8 @@ Content-Type: `multipart/form-data`. Поддерживает загрузку �
 | `name` | string | Название |
 | `slug` | string | Уникальный слаг (URL) |
 | `description` | string | Описание |
+| `modelParameters` | string / null | Параметры модели; до 3000 символов |
+| `compositionCare` | string / null | Состав и уход; до 3000 символов |
 | `cardStatus` | CardStatus | Статус карточки |
 | `gender` | GenderType | Пол |
 | `color` | string | Цвет |

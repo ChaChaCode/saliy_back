@@ -26,6 +26,8 @@ model Product {
   slug        String        @unique
 
   description String?
+  modelParameters String? @map("model_parameters")
+  compositionCare String? @map("composition_care")
 
   // Статусы и характеристики
   cardStatus  card_status   @default(NONE) @map("card_status")
