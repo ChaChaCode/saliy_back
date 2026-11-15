@@ -197,7 +197,7 @@ export class EmailService {
     // Преобразуем enum в читаемый текст
     const paymentMethodNames: Record<string, string> = {
       SBP_TOCHKA: 'СБП (БАНК ТОЧКА)',
-      YANDEX_PAY: 'ЯНДЕКС СПЛИТ',
+      YANDEX_PAY: 'ЯНДЕКС ПЭЙ / СПЛИТ',
       CARD_ONLINE: 'Т-БАНК',
       CARD_MANUAL: 'ОПЛАТА КАРТОЙ ЧЕРЕЗ МЕНЕДЖЕРА',
       CRYPTO: 'КРИПТОВАЛЮТА',

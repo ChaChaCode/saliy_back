@@ -82,6 +82,7 @@ export class TbankPayService {
     method: string,
     payload: Record<string, unknown>,
     exposeBankMessage = false,
+    acceptDeclineCode = false,
   ): Promise<BankResponse> {
     if (!this.terminalKey || !this.password)
       throw new BadGatewayException('Т-Банк не настроен');
@@ -96,7 +97,10 @@ export class TbankPayService {
       // Axios errors contain signed requests: do not expose them.
       throw new BadGatewayException('Т-Банк временно недоступен');
     }
-    if (data?.Success !== true || String(data.ErrorCode) !== '0') {
+    if (
+      data?.Success !== true ||
+      (!acceptDeclineCode && String(data.ErrorCode) !== '0')
+    ) {
       // Текст отказа банка (без подписи и ключей) нужен админу, чтобы понять,
       // почему не прошёл возврат: например, не хватает оборота на терминале.
       const reason = exposeBankMessage
@@ -154,8 +158,31 @@ export class TbankPayService {
       true,
     );
   }
+  // Пока покупатель пробует оплатить, GetState отклонённой попытки отвечает
+  // Success=true с кодом отказа в ErrorCode. Это состояние платежа, а не сбой
+  // запроса: раньше такой ответ считался ошибкой, и отказ не доходил до заказа.
   getState(paymentId: string) {
-    return this.request('GetState', { PaymentId: paymentId });
+    return this.request('GetState', { PaymentId: paymentId }, false, true);
+  }
+
+  /**
+   * Причина отказа из уведомления или GetState: «Текст (код N)». У успешных
+   * и ещё не оплаченных платежей ErrorCode = 0 — тогда причины нет.
+   */
+  describeDecline(data: {
+    ErrorCode?: unknown;
+    Message?: unknown;
+    Details?: unknown;
+  }): string | undefined {
+    const code = data.ErrorCode == null ? '' : String(data.ErrorCode);
+    if (!code || code === '0') return undefined;
+    const text = [data.Message, data.Details].find(
+      (v): v is string => typeof v === 'string' && v.trim() !== '' && v !== 'None',
+    );
+    return `${(text ?? 'Отказ банка').trim().replace(/\.$/, '')} (код ${code})`.slice(
+      0,
+      300,
+    );
   }
   mapStatus(status: string): PaymentStatus {
     switch (status) {

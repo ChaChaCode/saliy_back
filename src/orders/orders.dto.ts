@@ -57,7 +57,7 @@ export class CreateOrderDto {
   deliveryType: DeliveryType;
 
   // Метод оплаты
-  @IsIn([PaymentMethod.CARD_ONLINE])
+  @IsIn([PaymentMethod.CARD_ONLINE, PaymentMethod.YANDEX_PAY])
   paymentMethod: PaymentMethod;
 
   // Адрес (опционально, зависит от типа доставки)

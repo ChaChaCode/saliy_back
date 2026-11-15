@@ -30,8 +30,9 @@ Query параметры:
 Ответ: объект с полями `deliveryTypes` (массив доступных типов доставки), `paymentMethods` (массив доступных методов оплаты) и `country` (переданный код страны).
 
 Примеры:
-- Для `country=RU`: `deliveryTypes = ["CDEK_PICKUP"]`, `paymentMethods = ["CARD_ONLINE"]`.
-- Для `country=PL`: `deliveryTypes = ["STANDARD"]`, `paymentMethods = ["CARD_ONLINE"]`.
+- Для `country=RU`: `deliveryTypes = ["CDEK_PICKUP"]`, `paymentMethods = ["CARD_ONLINE", "YANDEX_PAY"]`.
+- Для `country=PL`: `deliveryTypes = ["STANDARD"]`, `paymentMethods = ["CARD_ONLINE", "YANDEX_PAY"]`.
+- `YANDEX_PAY` есть в списке, только когда на сервере настроен Яндекс Пэй. Показывать способы оплаты строго по этому списку.
 
 ---
 

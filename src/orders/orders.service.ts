@@ -4,6 +4,8 @@ import {
   changeReservedQuantity,
 } from '../common/utils/preorder.util';
 import { TbankPayService } from '../payment/tbank-pay.service';
+import { YandexPayService } from '../payment/yandex-pay.service';
+import { buildYandexCart } from '../payment/yandex-pay.cart';
 import {
   Injectable,
   BadRequestException,
@@ -35,6 +37,7 @@ export class OrdersService {
     private readonly settingsService: AdminSettingsService,
     private readonly tbankPayService: TbankPayService,
     private readonly deliveryService: DeliveryService,
+    private readonly yandexPayService: YandexPayService,
   ) {}
 
   /**
@@ -42,8 +45,11 @@ export class OrdersService {
    * ВАЖНО: Валидация товаров и цен на сервере!
    */
   async createOrder(dto: CreateOrderDto, userId?: string) {
-    if (dto.paymentMethod !== PaymentMethod.CARD_ONLINE)
-      throw new BadRequestException('Доступна только оплата через Т-Банк');
+    if (
+      dto.paymentMethod === PaymentMethod.YANDEX_PAY &&
+      !this.yandexPayService.isConfigured()
+    )
+      throw new BadRequestException('Оплата через Яндекс Пэй сейчас недоступна');
     const { items, promoCode, ...orderInfo } = dto;
 
     // 🔒 ШАГ 0: ВАЛИДАЦИЯ АДРЕСА ДОСТАВКИ
@@ -195,13 +201,33 @@ export class OrdersService {
       const failUrl = `${frontendBase}/order/${order.orderNumber}?payment=fail`;
 
       try {
-        const payment = await this.tbankPayService.registerOrder({
-          orderNumber: order.orderNumber,
-          amount: total,
-          successUrl,
-          failUrl,
-          ttlMinutes: this.getPaymentLinkTtlMin(),
-        });
+        const payment =
+          dto.paymentMethod === PaymentMethod.YANDEX_PAY
+            ? await this.yandexPayService.registerOrder({
+                orderNumber: order.orderNumber,
+                cart: buildYandexCart(
+                  validatedItems.map((item) => ({
+                    productId: `${item.productId}-${item.size}`,
+                    title: `${item.productName}${item.size ? `, ${item.size}` : ''}`,
+                    quantity: item.quantity,
+                    totalKop: Math.round(item.totalPrice * 100),
+                  })),
+                  Math.round(discountAmount * 100),
+                  Math.round(deliveryPrice * 100),
+                  Math.round(total * 100),
+                ),
+                successUrl,
+                failUrl,
+                ttlMinutes: this.getPaymentLinkTtlMin(),
+                phone: dto.phone,
+              })
+            : await this.tbankPayService.registerOrder({
+                orderNumber: order.orderNumber,
+                amount: total,
+                successUrl,
+                failUrl,
+                ttlMinutes: this.getPaymentLinkTtlMin(),
+              });
         paymentUrl = payment.paymentUrl;
         await this.prisma.order.update({
           where: { id: order.id },
@@ -901,6 +927,7 @@ export class OrdersService {
     orderNumber: string,
     paymentStatus: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELED' | 'REFUNDED',
     rawStatus?: string,
+    detail?: string,
   ) {
     const statusMap: Record<string, OrderStatus> = {
       PENDING: OrderStatus.PENDING,
@@ -921,7 +948,7 @@ export class OrdersService {
     };
     const cancelReason =
       reasonMap[paymentStatus] != null
-        ? `${reasonMap[paymentStatus]}${rawStatus ? ` (статус: ${rawStatus})` : ''}`
+        ? `${reasonMap[paymentStatus]}${rawStatus ? ` (статус: ${rawStatus})` : ''}${detail ? `: ${detail}` : ''}`
         : undefined;
 
     // Запоминаем предыдущее состояние, чтобы понять — это ПЕРЕХОД в paid или повторный вебхук.
@@ -1034,6 +1061,9 @@ export class OrdersService {
         orderStatus,
         cancelReason,
       );
+      // Заказ уже отменён по таймауту, а банк только сейчас сообщил причину
+      // отказа — дописываем её, чтобы в админке было видно, почему не оплатили.
+      if (!released && detail) await this.appendCancelReason(orderNumber, detail);
       this.logger.log(
         released
           ? `Статус заказа обновлен: ${orderNumber}, status=${orderStatus}, товар возвращён на склад`
@@ -1236,6 +1266,7 @@ export class OrdersService {
   async confirmTbankByApi(
     orderNumber: string,
     paymentId?: string,
+    declineReason?: string,
   ): Promise<void> {
     const order = await this.prisma.order.findUnique({
       where: { orderNumber },
@@ -1245,8 +1276,12 @@ export class OrdersService {
       order.paymentMethod !== PaymentMethod.CARD_ONLINE ||
       !order.paymentId ||
       (paymentId !== undefined && order.paymentId !== paymentId)
-    )
+    ) {
+      this.logger.warn(
+        `Т-Банк: платёж не найден — заказ ${orderNumber}${order ? `, метод ${order.paymentMethod}, paymentId ${order.paymentId}` : ' отсутствует'}, в уведомлении ${paymentId ?? '—'}`,
+      );
       throw new BadRequestException('Платёж не найден');
+    }
     const state = await this.tbankPayService.getState(order.paymentId);
     // Частичный возврат записывает сам эндпоинт возврата, а сумма платежа после
     // него уже не совпадает с суммой заказа — уведомление просто принимаем.
@@ -1259,11 +1294,79 @@ export class OrdersService {
     )
       throw new BadRequestException('Реквизиты платежа не совпадают');
     const mappedStatus = this.tbankPayService.mapStatus(state.Status);
+    const reason = declineReason ?? this.tbankPayService.describeDecline(state);
     if (
       mappedStatus !== 'PENDING' &&
       (!order.isPaid || mappedStatus === 'REFUNDED')
     )
-      await this.updatePaymentStatus(orderNumber, mappedStatus, state.Status);
+      await this.updatePaymentStatus(
+        orderNumber,
+        mappedStatus,
+        state.Status,
+        reason,
+      );
+    else if (reason && !order.isPaid)
+      await this.noteDeclinedAttempt(orderNumber, reason);
+  }
+
+  /**
+   * Попытка оплаты отклонена, но покупатель ещё может попробовать снова
+   * (AUTH_FAIL): заказ остаётся в ожидании, причина видна в админке и
+   * сохраняется при автоотмене.
+   */
+  private async noteDeclinedAttempt(orderNumber: string, reason: string) {
+    await this.prisma.order.updateMany({
+      where: { orderNumber, status: OrderStatus.PENDING, isPaid: false },
+      data: { cancelReason: `Попытка оплаты отклонена: ${reason}` },
+    });
+  }
+
+  private async appendCancelReason(orderNumber: string, text: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { orderNumber },
+      select: { cancelReason: true, isPaid: true },
+    });
+    if (!order || order.isPaid || order.cancelReason?.includes(text)) return;
+    await this.prisma.order.update({
+      where: { orderNumber },
+      data: {
+        cancelReason: (order.cancelReason
+          ? `${order.cancelReason}. Банк: ${text}`
+          : text
+        ).slice(0, 1000),
+      },
+    });
+  }
+
+  /**
+   * Статус оплаты Яндекс Пэй берём только из API Яндекса, не из уведомления.
+   * Неизвестный или чужой заказ пропускаем молча: повтор уведомления это не
+   * исправит, а Яндекс повторяет до суток всё, что не получило 200.
+   */
+  async confirmYandexByApi(orderNumber: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({ where: { orderNumber } });
+    if (!order || order.paymentMethod !== PaymentMethod.YANDEX_PAY) {
+      this.logger.warn(`Яндекс Пэй: заказ ${orderNumber} не найден среди заказов Яндекса`);
+      return;
+    }
+    const remote = await this.yandexPayService.getOrder(orderNumber);
+    const mappedStatus = this.yandexPayService.mapStatus(remote.paymentStatus);
+    if (
+      mappedStatus === 'PAID' &&
+      (remote.orderAmount === null ||
+        Math.round(remote.orderAmount * 100) !== Math.round(order.total * 100))
+    )
+      throw new BadRequestException('Сумма платежа Яндекс Пэй не совпадает с заказом');
+    if (
+      mappedStatus !== 'PENDING' &&
+      (!order.isPaid || mappedStatus === 'REFUNDED')
+    )
+      await this.updatePaymentStatus(
+        orderNumber,
+        mappedStatus,
+        remote.paymentStatus ?? undefined,
+        remote.reason ?? undefined,
+      );
   }
 
   /**
@@ -1389,6 +1492,32 @@ export class OrdersService {
     }
   }
 
+  // Подстраховка к уведомлениям: Яндекс может не достучаться до сервера.
+  @Cron(CronExpression.EVERY_MINUTE, { name: 'poll-yandex-payments' })
+  async pollYandexPayments(): Promise<void> {
+    if (
+      process.env.YANDEX_POLLING_ENABLED === 'false' ||
+      !this.yandexPayService.isConfigured()
+    )
+      return;
+    const pending = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.PENDING,
+        isPaid: false,
+        paymentMethod: PaymentMethod.YANDEX_PAY,
+        paymentId: { not: null },
+      },
+      select: { orderNumber: true },
+    });
+    for (const order of pending) {
+      try {
+        await this.confirmYandexByApi(order.orderNumber);
+      } catch {
+        this.logger.warn('Не удалось проверить платёж Яндекс Пэй: ' + order.orderNumber);
+      }
+    }
+  }
+
   @Cron(CronExpression.EVERY_MINUTE, { name: 'cancel-expired-orders' })
   async cancelExpiredOrders(): Promise<void> {
     const timeoutMin = this.getPendingTimeoutMin();
@@ -1407,7 +1536,7 @@ export class OrdersService {
           ],
         },
       },
-      select: { orderNumber: true },
+      select: { orderNumber: true, cancelReason: true },
     });
 
     if (expired.length === 0) {
@@ -1416,10 +1545,11 @@ export class OrdersService {
 
     for (const order of expired) {
       try {
+        // Причину отклонённой попытки (noteDeclinedAttempt) не затираем.
         const cancelled = await this.releaseUnpaidOrder(
           order.orderNumber,
           OrderStatus.CANCELLED,
-          `Не оплачен в течение ${timeoutMin} мин — автоотмена`,
+          `Не оплачен в течение ${timeoutMin} мин — автоотмена${order.cancelReason ? `. ${order.cancelReason}` : ''}`.slice(0, 1000),
         );
         if (!cancelled) {
           this.logger.log(

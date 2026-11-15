@@ -90,4 +90,54 @@ describe('TbankPayService', () => {
       else process.env.BACKEND_URL = previousBackend;
     }
   });
+
+  it('describes a decline from a notification or GetState, not a success', () => {
+    expect(
+      service.describeDecline({
+        ErrorCode: '77',
+        Message: 'Оплата иностранной картой недоступна.',
+        Details: 'Воспользуйтесь картой российского банка',
+      }),
+    ).toBe('Оплата иностранной картой недоступна (код 77)');
+    expect(service.describeDecline({ ErrorCode: 1065, Details: 'Превышен дневной лимит' })).toBe(
+      'Превышен дневной лимит (код 1065)',
+    );
+    expect(service.describeDecline({ ErrorCode: '1012', Message: 'None' })).toBe(
+      'Отказ банка (код 1012)',
+    );
+    expect(service.describeDecline({ ErrorCode: '0', Message: 'OK' })).toBeUndefined();
+    expect(service.describeDecline({})).toBeUndefined();
+  });
+
+  it('GetState of a declined attempt is a state, not a failed request', async () => {
+    const post = jest.spyOn((service as any).http, 'post').mockResolvedValue({
+      data: {
+        Success: true,
+        ErrorCode: '77',
+        Message: 'Оплата иностранной картой недоступна.',
+        Status: 'REJECTED',
+        PaymentId: '1',
+        OrderId: 'N',
+        Amount: 100,
+      },
+    });
+    try {
+      const state = await service.getState('1');
+      expect(state.Status).toBe('REJECTED');
+      expect(service.describeDecline(state)).toBe('Оплата иностранной картой недоступна (код 77)');
+    } finally {
+      post.mockRestore();
+    }
+  });
+
+  it('other methods still treat a non-zero ErrorCode as a failure', async () => {
+    const post = jest.spyOn((service as any).http, 'post').mockResolvedValue({
+      data: { Success: true, ErrorCode: '9999', Message: 'Ошибка' },
+    });
+    try {
+      await expect(service.refundPayment('1', 100)).rejects.toThrow('Т-Банк отклонил запрос');
+    } finally {
+      post.mockRestore();
+    }
+  });
 });

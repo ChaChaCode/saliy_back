@@ -9,13 +9,17 @@ import {
   Req,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
+import { YandexPayService } from '../payment/yandex-pay.service';
 import { CreateOrderDto } from './orders.dto';
 import { CustomerAuthGuard } from '../auth/guards/customer-auth.guard';
 import { OptionalCustomerAuthGuard } from '../auth/guards/optional-customer-auth.guard';
 
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly yandexPayService: YandexPayService,
+  ) {}
 
   /**
    * Получить доступные методы доставки и оплаты для страны
@@ -33,8 +37,11 @@ export class OrdersController {
       ? ['CDEK_PICKUP', 'STANDARD']
       : ['STANDARD'];
 
-    // Единственный способ оплаты: Т-Банк.
-    const paymentMethods = ['CARD_ONLINE'];
+    // Т-Банк всегда; Яндекс Пэй — только когда заданы мерчант и ключ.
+    const paymentMethods = [
+      'CARD_ONLINE',
+      ...(this.yandexPayService.isConfigured() ? ['YANDEX_PAY'] : []),
+    ];
 
     return {
       deliveryTypes,
