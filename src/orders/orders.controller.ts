@@ -13,6 +13,7 @@ import { YandexPayService } from '../payment/yandex-pay.service';
 import { CreateOrderDto } from './orders.dto';
 import { CustomerAuthGuard } from '../auth/guards/customer-auth.guard';
 import { OptionalCustomerAuthGuard } from '../auth/guards/optional-customer-auth.guard';
+import { deliveryTypesFor } from '../delivery/cdek-countries';
 
 @Controller('orders')
 export class OrdersController {
@@ -28,14 +29,8 @@ export class OrdersController {
   @Get('delivery-options')
   async getDeliveryOptions(@Query('country') countryCode: string) {
     // Почтовая доставка (STANDARD) доступна для любой страны.
-    // Для России и Беларуси дополнительно доступен самовывоз из ПВЗ CDEK.
-    const isRussiaBelarus = ['RU', 'BY', 'RUS', 'BLR'].includes(
-      countryCode?.toUpperCase(),
-    );
-
-    const deliveryTypes = isRussiaBelarus
-      ? ['CDEK_PICKUP', 'STANDARD']
-      : ['STANDARD'];
+    // В странах СДЭК (RU, BY, KZ — см. cdek-countries.ts) ещё и самовывоз из ПВЗ.
+    const deliveryTypes = deliveryTypesFor(countryCode);
 
     // Т-Банк всегда; Яндекс Пэй — только когда заданы мерчант и ключ.
     const paymentMethods = [

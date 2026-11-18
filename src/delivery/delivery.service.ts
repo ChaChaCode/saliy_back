@@ -10,6 +10,11 @@ import { firstValueFrom } from 'rxjs';
 import * as countries from 'i18n-iso-countries';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  cdekCountries,
+  deliveryTypesFor,
+  isCdekCountry,
+} from './cdek-countries';
 
 @Injectable()
 export class DeliveryService {
@@ -137,29 +142,25 @@ export class DeliveryService {
 
   /**
    * Получить список всех стран с поддержкой типов доставки
-   * Россия и Беларусь отображаются первыми
+   * Страны со СДЭК (см. cdek-countries.ts) отображаются первыми
    */
   // deliveryTypes совпадает с GET /orders/delivery-options: почта (STANDARD)
-  // доступна в любой стране, самовывоз СДЭК — дополнительно в RU и BY.
+  // доступна в любой стране, самовывоз СДЭК — дополнительно в странах СДЭК.
   getCountries(lang: string = 'ru') {
     const allCodes = Object.keys(countries.getAlpha2Codes());
-    const cdekCountries = ['RU', 'BY'];
-    const priorityCountries = ['RU', 'BY'];
+    const priorityCountries = cdekCountries();
 
     const allCountriesList = allCodes.map((code) => {
       const name = countries.getName(code, lang) || code;
-      const isCdekSupported = cdekCountries.includes(code);
 
       return {
         code,
         name,
-        deliveryTypes: isCdekSupported
-          ? ['CDEK_PICKUP', 'STANDARD']
-          : ['STANDARD'],
+        deliveryTypes: deliveryTypesFor(code),
       };
     });
 
-    // Разделяем на приоритетные (RU, BY) и остальные
+    // Разделяем на приоритетные (страны СДЭК) и остальные
     const priority = allCountriesList.filter((country) =>
       priorityCountries.includes(country.code),
     );
@@ -182,15 +183,10 @@ export class DeliveryService {
       return null;
     }
 
-    const cdekCountries = ['RU', 'BY'];
-    const isCdekSupported = cdekCountries.includes(countryCode);
-
     return {
       code: countryCode,
       name,
-      deliveryTypes: isCdekSupported
-        ? ['CDEK_PICKUP', 'STANDARD']
-        : ['STANDARD'],
+      deliveryTypes: deliveryTypesFor(countryCode),
     };
   }
 
@@ -198,8 +194,7 @@ export class DeliveryService {
    * Проверить, поддерживает ли страна доставку CDEK
    */
   isCdekSupported(countryCode: string): boolean {
-    const cdekCountries = ['RU', 'BY'];
-    return cdekCountries.includes(countryCode);
+    return isCdekCountry(countryCode);
   }
 
   /**

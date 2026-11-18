@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { DeliveryService } from './delivery.service';
+import { isCdekCountry } from './cdek-countries';
 
 @Controller('delivery')
 export class DeliveryController {
@@ -71,11 +72,11 @@ export class DeliveryController {
       return { error: 'Country code is required' };
     }
 
-    // Для CDEK стран (RU, BY) требуем либо regionCode, либо search
-    const isCdekCountry = ['RU', 'BY'].includes(countryCode.toUpperCase());
-    if (isCdekCountry && !regionCode && !search) {
+    // Для стран СДЭК требуем либо regionCode, либо search: список всех
+    // городов страны слишком большой
+    if (isCdekCountry(countryCode) && !regionCode && !search) {
       return {
-        error: 'For CDEK countries (RU, BY) regionCode or search is required',
+        error: 'For CDEK countries regionCode or search is required',
         hint: 'Use /delivery/regions?countryCode=RU to get list of regions first'
       };
     }
