@@ -92,6 +92,8 @@ export class YandexPayService {
     paymentStatus: string | null;
     orderAmount: number | null;
     reason: string | null;
+    // Сумма успешных возвратов (операции REFUND со статусом SUCCESS), ₽
+    refundedAmount: number;
   }> {
     try {
       const { data } = await this.http.get(
@@ -99,7 +101,16 @@ export class YandexPayService {
         { headers: { Authorization: `Api-Key ${this.apiKey}` } },
       );
       const order = data?.data?.order;
+      const operations: Array<{
+        operationType?: string;
+        status?: string;
+        amount?: string | number;
+      }> = Array.isArray(data?.data?.operations) ? data.data.operations : [];
+      const refundedKop = operations
+        .filter((op) => op.operationType === 'REFUND' && op.status === 'SUCCESS')
+        .reduce((sum, op) => sum + Math.round(Number(op.amount ?? 0) * 100), 0);
       return {
+        refundedAmount: refundedKop / 100,
         paymentStatus: order?.paymentStatus ?? null,
         orderAmount: order?.orderAmount != null ? Number(order.orderAmount) : null,
         reason: order?.reasonCode

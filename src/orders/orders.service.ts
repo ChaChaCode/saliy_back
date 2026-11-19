@@ -1202,6 +1202,21 @@ export class OrdersService {
         if (viaBank) {
           await this.tbankPayService.refundPayment(order.paymentId!, amountKop);
         }
+        // Яндекс Пэй: деньги возвращают в кабинете Яндекса, здесь только
+        // отмечают. Не даём отметить больше, чем Яндекс реально вернул, —
+        // иначе заказ станет «Возвращён», а покупатель ничего не получит.
+        if (order.paymentMethod === PaymentMethod.YANDEX_PAY) {
+          const { refundedAmount } =
+            await this.yandexPayService.getOrder(orderNumber);
+          const availableKop =
+            toKopecks(refundedAmount) - toKopecks(order.refundedAmount ?? 0);
+          if (amountKop > availableKop)
+            throw new BadRequestException(
+              availableKop <= 0
+                ? 'Деньги в Яндекс Пэй ещё не возвращены. Сначала сделайте возврат в кабинете Яндекс Пэй, потом отметьте его здесь'
+                : `В Яндекс Пэй возвращено только ${availableKop / 100} ₽ сверх уже отмеченного. Сначала верните остальное в кабинете Яндекс Пэй`,
+            );
+        }
 
         const refundedKop = toKopecks(order.refundedAmount ?? 0) + amountKop;
         const full = refundedKop >= toKopecks(order.total);

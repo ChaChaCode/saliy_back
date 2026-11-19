@@ -69,6 +69,9 @@ function setup(order: Record<string, any> = {}) {
   const bank: any = {
     refundPayment: jest.fn().mockResolvedValue({ Success: true }),
   };
+  const yandex: any = {
+    getOrder: jest.fn().mockResolvedValue({ refundedAmount: 0 }),
+  };
   const orders = new OrdersService(
     prisma,
     email,
@@ -77,9 +80,10 @@ function setup(order: Record<string, any> = {}) {
     {} as any,
     bank,
     delivery,
+    yandex,
   );
   const admin = new AdminOrdersService(prisma, email, delivery, orders);
-  return { orders, admin, bank, delivery, email, state: () => state };
+  return { orders, admin, bank, yandex, delivery, email, state: () => state };
 }
 
 describe('Возврат денег', () => {
@@ -196,5 +200,50 @@ describe('Возврат денег', () => {
     await expect(
       t.admin.refundOrder('SALIY1', { reason: 'r' }),
     ).rejects.toThrow('не оплачен');
+  });
+
+  describe('Яндекс Пэй', () => {
+    const yp = { paymentMethod: 'YANDEX_PAY', paymentId: 'SALIY1' };
+
+    it('нельзя отметить возврат, пока Яндекс деньги не вернул', async () => {
+      const t = setup(yp);
+      await expect(
+        t.admin.refundOrder('SALIY1', { reason: 'r', manual: true }),
+      ).rejects.toThrow('ещё не возвращены');
+      expect(t.state().order).toMatchObject({ status: 'CONFIRMED', refundedAmount: 0 });
+      expect(t.bank.refundPayment).not.toHaveBeenCalled();
+    });
+
+    it('статус «Возврат» из списка тоже не проходит без возврата в Яндексе', async () => {
+      const t = setup(yp);
+      await expect(t.admin.updateStatus('SALIY1', 'REFUNDED' as any)).rejects.toThrow(
+        'ещё не возвращены',
+      );
+      expect(t.state().order.status).toBe('CONFIRMED');
+    });
+
+    it('после частичного возврата в Яндексе можно отметить не больше возвращённого', async () => {
+      const t = setup(yp);
+      t.yandex.getOrder.mockResolvedValue({ refundedAmount: 5000 });
+      await expect(
+        t.admin.refundOrder('SALIY1', { reason: 'r', manual: true }),
+      ).rejects.toThrow('возвращено только 5000');
+      const res = await t.admin.refundOrder('SALIY1', {
+        reason: 'r',
+        manual: true,
+        amount: 5000,
+      });
+      expect(res.refund).toMatchObject({ full: false, viaBank: false });
+      expect(t.state().order).toMatchObject({ status: 'CONFIRMED', refundedAmount: 5000 });
+    });
+
+    it('после полного возврата в Яндексе отметка проходит и товар возвращается', async () => {
+      const t = setup(yp);
+      t.yandex.getOrder.mockResolvedValue({ refundedAmount: 18700 });
+      const res = await t.admin.refundOrder('SALIY1', { reason: 'r', manual: true });
+      expect(res.refund).toMatchObject({ full: true, stockReturned: true });
+      expect(t.state().order.status).toBe('REFUNDED');
+      expect(t.bank.refundPayment).not.toHaveBeenCalled();
+    });
   });
 });
