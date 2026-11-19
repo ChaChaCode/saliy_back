@@ -35,6 +35,8 @@ model Order {
   currency      String        @default("RUB")
   isPaid        Boolean       @default(false) @map("is_paid")
   paymentId     String?       @map("payment_id")
+  // Чем именно платили внутри способа: для Яндекс Пэй — CARD, SPLIT или SBP
+  paymentMethodDetail String? @map("payment_method_detail")
 
   // Суммы
   subtotal       Float @default(0)

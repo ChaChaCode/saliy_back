@@ -1366,6 +1366,12 @@ export class OrdersService {
     }
     const remote = await this.yandexPayService.getOrder(orderNumber);
     const mappedStatus = this.yandexPayService.mapStatus(remote.paymentStatus);
+    // Сохраняем, чем платили (карта / Сплит / СБП) — админке нужно это видеть.
+    if (remote.methodType && remote.methodType !== order.paymentMethodDetail)
+      await this.prisma.order.update({
+        where: { orderNumber },
+        data: { paymentMethodDetail: remote.methodType },
+      });
     if (
       mappedStatus === 'PAID' &&
       (remote.orderAmount === null ||

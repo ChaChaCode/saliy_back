@@ -12,6 +12,7 @@ import { EmailService } from '../../common/email/email.service';
 import { DeliveryService } from '../../delivery/delivery.service';
 import { OrdersService } from '../../orders/orders.service';
 import { pickMainImage } from '../../common/utils/product-image.util';
+import { paymentMethodLabel } from '../../common/utils/payment-label';
 import {
   changeReservedQuantity,
   lockProducts,
@@ -973,6 +974,7 @@ export class AdminOrdersService {
       'Товаров',
       'Сумма',
       'Валюта',
+      'Способ оплаты',
       'Доставка',
       'Промокод',
     ].join(';');
@@ -992,6 +994,7 @@ export class AdminOrdersService {
         items,
         o.total,
         o.currency,
+        paymentMethodLabel(o.paymentMethod, o.paymentMethodDetail),
         o.deliveryType,
         promo,
       ].join(';');
@@ -1072,6 +1075,11 @@ export class AdminOrdersService {
 
     return {
       ...order,
+      // «Яндекс Пэй · Сплит» и т. п. — готовая подпись для админки
+      paymentMethodLabel: paymentMethodLabel(
+        order.paymentMethod,
+        order.paymentMethodDetail,
+      ),
       items: formattedItems,
       originalSubtotal,
       promoCode:

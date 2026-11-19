@@ -94,6 +94,8 @@ export class YandexPayService {
     reason: string | null;
     // Сумма успешных возвратов (операции REFUND со статусом SUCCESS), ₽
     refundedAmount: number;
+    // Чем платил покупатель: CARD, SPLIT, SBP… (paymentMethod.methodType)
+    methodType: string | null;
   }> {
     try {
       const { data } = await this.http.get(
@@ -111,6 +113,10 @@ export class YandexPayService {
         .reduce((sum, op) => sum + Math.round(Number(op.amount ?? 0) * 100), 0);
       return {
         refundedAmount: refundedKop / 100,
+        methodType:
+          typeof order?.paymentMethod?.methodType === 'string'
+            ? order.paymentMethod.methodType.slice(0, 32)
+            : null,
         paymentStatus: order?.paymentStatus ?? null,
         orderAmount: order?.orderAmount != null ? Number(order.orderAmount) : null,
         reason: order?.reasonCode
